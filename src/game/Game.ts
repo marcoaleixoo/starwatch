@@ -22,6 +22,10 @@ export class Game {
   private scanRadius = 1000; // km
   private logicTimer: number | null = null;
   private worker: Worker | null = null;
+  private mode: 'play' | 'sector' = 'play';
+  private prevCam: { alpha: number; beta: number; radius: number; target: Vector3; fogMode: number; fogStart?: number; fogEnd?: number; fogDensity?: number; panning?: number } | null = null;
+  private labelMeshes: Mesh[] = [];
+  private sun?: Mesh;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
@@ -187,6 +191,52 @@ export class Game {
     this.spawnSector();
     // Save immediately
     this.save();
+  }
+
+  enterSectorMap() {
+    if (this.mode === 'sector') return;
+    this.mode = 'sector';
+    this.prevCam = {
+      alpha: this.camera.alpha,
+      beta: this.camera.beta,
+      radius: this.camera.radius,
+      target: this.camera.target.clone(),
+      fogMode: this.scene.fogMode!,
+      fogStart: (this.scene as any).fogStart,
+      fogEnd: (this.scene as any).fogEnd,
+      fogDensity: (this.scene as any).fogDensity,
+      panning: this.camera.panningSensibility,
+    };
+    // Top-down zoomed out
+    this.camera.setTarget(new Vector3(0, 0, 0));
+    this.camera.alpha = Math.PI / 2;
+    this.camera.beta = 0.0001;
+    this.camera.radius = this.world.bounds * 1.8;
+    this.camera.panningSensibility = 0;
+    // Disable fog for clarity
+    this.scene.fogMode = Scene.FOGMODE_NONE as any;
+    // Create labels
+    this.createSectorLabels();
+  }
+
+  exitSectorMap() {
+    if (this.mode !== 'sector') return;
+    this.mode = 'play';
+    // Restore camera and fog
+    if (this.prevCam) {
+      this.camera.setTarget(this.prevCam.target);
+      this.camera.alpha = this.prevCam.alpha;
+      this.camera.beta = this.prevCam.beta;
+      this.camera.radius = this.prevCam.radius;
+      if (this.prevCam.panning != null) this.camera.panningSensibility = this.prevCam.panning;
+      this.scene.fogMode = this.prevCam.fogMode as any;
+      (this.scene as any).fogStart = this.prevCam.fogStart;
+      (this.scene as any).fogEnd = this.prevCam.fogEnd;
+      (this.scene as any).fogDensity = this.prevCam.fogDensity;
+    }
+    // Dispose labels
+    for (const m of this.labelMeshes) m.dispose(false, true);
+    this.labelMeshes = [];
   }
 
   runScript(job: ScriptJob) {
@@ -558,6 +608,46 @@ export class Game {
     light.intensity = 0.7;
     light.range = 10000;
     (sun as any).applyFog = false;
+    this.sun = sun;
+  }
+
+  private createSectorLabels() {
+    // Cluster labels
+    for (const c of this.world.clusters) {
+      const text = `${c.id} (${c.type})`;
+      const m = this.makeLabelMesh(`lbl:${c.id}`, text, new Color3(0.6, 0.8, 1));
+      m.position = new Vector3(c.center.x, (c.center.y || 0) + 120, c.center.z);
+      this.labelMeshes.push(m);
+    }
+    // Sun label (if exists)
+    if (this.sun) {
+      const m = this.makeLabelMesh('lbl:sun', 'Star', new Color3(1, 0.9, 0.6));
+      m.position = this.sun.position.add(new Vector3(0, 800, 0));
+      this.labelMeshes.push(m);
+    }
+  }
+
+  private makeLabelMesh(id: string, text: string, color: Color3) {
+    const dt = new DynamicTexture(`dt:${id}`, { width: 256, height: 64 }, this.scene, true);
+    const ctx = dt.getContext();
+    ctx.clearRect(0, 0, 256, 64);
+    ctx.fillStyle = 'rgba(13,19,36,0.7)';
+    ctx.fillRect(0, 0, 256, 64);
+    ctx.strokeStyle = 'rgba(36,52,90,0.9)';
+    ctx.strokeRect(0.5, 0.5, 255, 63);
+    ctx.fillStyle = '#d3e0ff';
+    ctx.font = 'bold 22px system-ui';
+    ctx.fillText(text, 10, 40);
+    dt.update(true);
+    const plane = MeshBuilder.CreatePlane(id, { width: 22, height: 5.5 }, this.scene);
+    const mat = new StandardMaterial(`mat:${id}`, this.scene);
+    mat.disableLighting = true;
+    mat.emissiveTexture = dt as unknown as Texture;
+    mat.backFaceCulling = false;
+    plane.material = mat;
+    plane.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    (plane as any).isPickable = false;
+    return plane;
   }
 
   private tryLoad(): boolean {

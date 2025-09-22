@@ -5,12 +5,13 @@ import { MonacoEditor } from './ui/MonacoEditor';
 import { HalLLM } from './hal/halLLM';
 
 type Tab = 'chat' | 'scripts' | 'status';
+type ViewMode = 'play' | 'sector' | 'galaxy';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [game, setGame] = useState<Game | null>(null);
   const [tab, setTab] = useState<Tab>('chat');
-  const [mapMode, setMapMode] = useState<'sector' | 'galaxy'>('sector');
+  const [viewMode, setViewMode] = useState<ViewMode>('play');
   const [scriptCode, setScriptCode] = useState<string>(() => `// patrol.js\n// Exemplo de patrulha simples entre dois pontos\n// A API disponível no worker: Game.moveTo({x, y, z}), Memory.get/set, sleep(ms)\n(async () => {\n  const A = { x: 500, y: 0, z: 250 };\n  const B = { x: 200, y: 0, z: -200 };\n  while (true) {\n    await Game.moveTo(A);\n    await sleep(3000);\n    await Game.moveTo(B);\n    await sleep(3000);\n  }\n})();\n`);
 
   // Setup Game
@@ -19,6 +20,22 @@ export default function App() {
     const g = new Game(canvasRef.current);
     setGame(g);
     return () => g.dispose();
+  }, []);
+
+  // Handle view mode transitions (sector map zoom-out and back)
+  useEffect(() => {
+    if (!game) return;
+    if (viewMode === 'sector') game.enterSectorMap();
+    else game.exitSectorMap();
+  }, [viewMode, game]);
+
+  // ESC closes map views
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setViewMode('play');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   // Settings for AI
@@ -74,9 +91,9 @@ export default function App() {
       </aside>
       <main style={{ flex: 1, position: 'relative' }}>
         <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', background: '#060a15' }} />
-        <TopHUD game={game} mapMode={mapMode} onChangeMap={setMapMode} />
+        <TopHUD game={game} viewMode={viewMode} onChangeMap={setViewMode} />
         <RightPanel game={game} />
-        {mapMode === 'galaxy' && <GalaxyOverlay game={game} onClose={() => setMapMode('sector')} />}
+        {viewMode === 'galaxy' && <GalaxyOverlay game={game} onClose={() => setViewMode('play')} />}
       </main>
     </div>
   );
@@ -214,7 +231,7 @@ function GalaxyOverlay({ game, onClose }: { game: Game | null; onClose: () => vo
   );
 }
 
-function TopHUD({ game, mapMode, onChangeMap }: { game: Game | null; mapMode: 'sector' | 'galaxy'; onChangeMap: (m: 'sector' | 'galaxy') => void }) {
+function TopHUD({ game, viewMode, onChangeMap }: { game: Game | null; viewMode: ViewMode; onChangeMap: (m: ViewMode) => void }) {
   const [hud, setHud] = useState({
     sectorName: '—',
     iron: 0,
@@ -249,8 +266,8 @@ function TopHUD({ game, mapMode, onChangeMap }: { game: Game | null; mapMode: 's
         <span style={{ color: '#9bb0d9' }}>Vel: {hud.speed} km/s</span>
       </div>
       <div style={{ display: 'flex', gap: 0, pointerEvents: 'auto', border: '1px solid #1c2541', borderRadius: 8, overflow: 'hidden', background: '#0d1324' }}>
-        <button onClick={() => onChangeMap('sector')} style={{ ...switchBtn(mapMode==='sector') }}>Sector Map</button>
-        <button onClick={() => onChangeMap('galaxy')} style={{ ...switchBtn(mapMode==='galaxy') }}>Galaxy Map</button>
+        <button onClick={() => onChangeMap(viewMode==='sector'?'play':'sector')} style={{ ...switchBtn(viewMode==='sector') }}>Sector Map</button>
+        <button onClick={() => onChangeMap(viewMode==='galaxy'?'play':'galaxy')} style={{ ...switchBtn(viewMode==='galaxy') }}>Galaxy Map</button>
       </div>
       <div style={{ display: 'flex', gap: 10, background: 'rgba(13,19,36,0.7)', border: '1px solid #1c2541', borderRadius: 8, padding: '6px 10px', pointerEvents: 'auto' }}>
         <span>Fe: <strong style={{ color: '#e3ecff' }}>{hud.iron}</strong></span>
