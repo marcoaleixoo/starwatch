@@ -60,6 +60,7 @@ export default function App() {
       startMining: async (resource: 'iron' | 'silicon' | 'uranium') => game?.startMining(resource) ?? { ok: false, error: 'Game not ready' },
       stopMining: async () => game?.stopMining() ?? { ok: false },
       performScan: async () => game?.performScan() ?? [],
+      getMiningStatus: async () => (game as any)?.getMiningStatus?.() ?? { state: 'idle' },
       runScript: async (name: string, code: string) => {
         if (!game) return { ok: false, error: 'Game not ready' } as const;
         game.runScript({ name, code });
@@ -283,11 +284,15 @@ function RightPanel({ game }: { game: Game | null }) {
   const [clusters, setClusters] = useState<any[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [asteroidsByCluster, setAsteroidsByCluster] = useState<Record<string, any[]>>({});
+  const [following, setFollowing] = useState<boolean>(false);
 
   useEffect(() => {
     const id = setInterval(() => {
       setFleet(game?.getFleet() || []);
-      setClusters(game?.getClustersOverview(true) || []);
+      // Apenas clusters com algo descoberto
+      const all = game?.getClustersOverview(true) || [];
+      setClusters(all.filter((c: any) => (c.discovered || 0) > 0));
+      setFollowing(!!game?.isFollowingShip?.());
     }, 800);
     return () => clearInterval(id);
   }, [game]);
@@ -312,17 +317,35 @@ function RightPanel({ game }: { game: Game | null }) {
             <div style={{ fontWeight: 600 }}>{s.name}</div>
             <div style={{ fontSize: 12, opacity: 0.8 }}>Pos: {s.position.x.toFixed(0)}, {s.position.y.toFixed(0)}, {s.position.z.toFixed(0)} km</div>
           </div>
-          <button onClick={() => game?.focusCameraOn && game.focusCameraOn({ x: s.position.x, y: s.position.y, z: s.position.z }, 80)} style={{ ...smallBtn, padding: '6px 8px' }}>Focar</button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => game?.focusCameraOn && game.focusCameraOn({ x: s.position.x, y: s.position.y, z: s.position.z }, 80)} style={{ ...smallBtn, padding: '6px 8px' }}>Focar</button>
+            <button
+              onClick={() => {
+                if (!game?.setFollowShip) return;
+                const next = !following;
+                game.setFollowShip(next);
+                setFollowing(next);
+              }}
+              style={{ ...smallBtn, padding: '6px 8px', background: following ? '#26446e' : '#1a2a4a' }}
+            >{following ? 'Seguindo' : 'Seguir'}</button>
+          </div>
         </div>
       ))}
       <div style={{ marginTop: 10, marginBottom: 6, fontWeight: 700 }}>Asteroid Clusters</div>
+      {clusters.length === 0 && (
+        <div style={{ fontSize: 12, opacity: 0.75 }}>Nenhum cluster descoberto ainda. Aproxime-se e use o Com‑Link “Escaneie o setor”.</div>
+      )}
       {clusters.map((c) => (
         <div key={c.id} style={{ marginBottom: 6 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => expandCluster(c.id)}>
-            <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div onClick={() => expandCluster(c.id)} style={{ cursor: 'pointer' }}>
               <span style={{ fontWeight: 600 }}>{c.id}</span> <span style={{ opacity: 0.8 }}>({c.type})</span>
             </div>
-            <div style={{ opacity: 0.8 }}>Descobertos: {c.discovered}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ opacity: 0.8 }}>Descobertos: {c.discovered}</div>
+              <button onClick={() => game?.focusCameraOn && game.focusCameraOn(c.center, Math.max(120, Math.min(600, c.radius * 1.5)))} style={{ ...smallBtn, padding: '4px 6px', fontSize: 12 }}>Focar</button>
+              <button onClick={() => game?.moveTo && game.moveTo(c.center)} style={{ ...smallBtn, padding: '4px 6px', fontSize: 12 }}>Ir</button>
+            </div>
           </div>
           {expanded[c.id] && (
             <div style={{ marginTop: 4, paddingLeft: 8 }}>

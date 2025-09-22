@@ -24,10 +24,12 @@ export function Chat({ hal, defaultScript }: Props) {
     const text = input.trim();
     if (!text) return;
     setInput('');
+    // Otimista: mostra já a fala do usuário
     setMessages((m) => [...m, { role: 'user', content: text }]);
     try {
       const reply = await hal.send(text, 'patrol.js', defaultScript);
-      setMessages((m) => [...m, reply]);
+      // Substitui pelo histórico real do HAL (inclui tool cards)
+      setMessages(hal.getHistory());
     } catch (e) {
       setMessages((m) => [
         ...m,
@@ -49,10 +51,29 @@ export function Chat({ hal, defaultScript }: Props) {
       <div ref={listRef} style={{ flex: 1, overflow: 'auto', padding: 12 }}>
         {messages.map((m, i) => (
           <div key={i} style={{ marginBottom: 10, whiteSpace: 'pre-wrap' }}>
-            <div style={{ color: m.role === 'user' ? '#9bb0d9' : '#e3ecff' }}>
-              <strong>{m.role === 'user' ? 'Comandante' : 'HAL'}</strong>
-            </div>
-            <div>{m.content}</div>
+            {m.role !== 'tool' ? (
+              <>
+                <div style={{ color: m.role === 'user' ? '#9bb0d9' : '#e3ecff' }}>
+                  <strong>{m.role === 'user' ? 'Comandante' : 'HAL'}</strong>
+                </div>
+                <div>{m.content}</div>
+              </>
+            ) : (
+              <div style={{ background: 'rgba(26,42,74,0.65)', border: '1px solid #24345a', borderRadius: 8, padding: 8 }}>
+                <div style={{ fontSize: 12, opacity: 0.85, color: '#9bb0d9' }}>Tool call</div>
+                <div style={{ fontWeight: 700, color: '#e3ecff' }}>{m.meta?.name || 'tool'}</div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, opacity: 0.8 }}>Input</div>
+                    <pre style={preBox}>{JSON.stringify(m.meta?.input ?? {}, null, 2)}</pre>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, opacity: 0.8 }}>Output</div>
+                    <pre style={preBox}>{JSON.stringify(m.meta?.output ?? {}, null, 2)}</pre>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -79,4 +100,16 @@ const btnStyle: React.CSSProperties = {
   padding: '8px 12px',
   borderRadius: 6,
   cursor: 'pointer',
+};
+
+const preBox: React.CSSProperties = {
+  margin: 0,
+  padding: 8,
+  background: '#0b1120',
+  color: '#d3e0ff',
+  border: '1px solid #1c2541',
+  borderRadius: 6,
+  maxHeight: 160,
+  overflow: 'auto',
+  fontSize: 12,
 };

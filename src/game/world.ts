@@ -63,39 +63,41 @@ function nameFromSeed(seed: number): string {
 
 export function generateSector(seed = Math.floor(Math.random() * 2 ** 31)): Sector {
   const rng = mulberry32(seed);
-  const bounds = 1500; // overall sector radius
+  // Setor significativamente maior; escala de base ~6000 km de raio
+  const bounds = 6000; // overall sector radius
 
   // Generate a few clusters
-  const clustersCount = Math.floor(rng() * 3) + 3; // 3..5
+  // Mais clusters, distribuídos pelo setor
+  const clustersCount = Math.floor(rng() * 5) + 7; // 7..11
   const clusters: ClusterDef[] = [];
   const resourceBias: ResourceType[] = ['iron', 'silicon', 'uranium'];
 
   for (let i = 0; i < clustersCount; i++) {
     const angle = rng() * Math.PI * 2;
-    const dist = (0.35 + rng() * 0.55) * bounds; // not too close to center
+    const dist = (0.28 + rng() * 0.66) * bounds; // not too close to center
     const x = Math.cos(angle) * dist;
     const z = Math.sin(angle) * dist;
     // vertical layering by type
     const type = resourceBias[i % resourceBias.length]!;
     let yCenter = 0;
-    if (type === 'iron') yCenter = (rng() - 0.5) * 120; // around midplane
-    if (type === 'silicon') yCenter = 120 + rng() * 180; // upper layers
-    if (type === 'uranium') yCenter = -200 - rng() * 200; // deeper layers
-    const r = 180 + rng() * 220; // cluster radius
+    if (type === 'iron') yCenter = (rng() - 0.5) * 400; // around midplane
+    if (type === 'silicon') yCenter = 300 + rng() * 500; // upper layers
+    if (type === 'uranium') yCenter = -450 - rng() * 600; // deeper layers
+    const r = 350 + rng() * 550; // cluster radius maior
     clusters.push({ id: `cl-${i}`, type, center: { x, y: yCenter, z }, radius: r });
   }
 
   const asteroids: AsteroidDef[] = [];
 
   // Distribute asteroids: background sparse + clusters dense
-  const backgroundCount = 40 + Math.floor(rng() * 20); // 40..60
+  const backgroundCount = 140 + Math.floor(rng() * 80); // 140..220
   for (let i = 0; i < backgroundCount; i++) {
     const angle = rng() * Math.PI * 2;
     const dist = rng() * bounds;
     const x = Math.cos(angle) * dist;
     const z = Math.sin(angle) * dist;
-    const y = (rng() - 0.5) * 600; // spread in height
-    const radius = 2 + rng() * 4;
+    const y = (rng() - 0.5) * 1400; // spread in height
+    const radius = 2 + rng() * 5;
     const resource = weightedPick(rng, [
       { v: 'iron' as const, w: 6 },
       { v: 'silicon' as const, w: 3 },
@@ -108,7 +110,7 @@ export function generateSector(seed = Math.floor(Math.random() * 2 ** 31)): Sect
   // Clustered asteroids
   let aid = 0;
   for (const c of clusters) {
-    const count = 40 + Math.floor(rng() * 40); // 40..80 per cluster
+    const count = 35 + Math.floor(rng() * 45); // 35..80 per cluster
     for (let i = 0; i < count; i++) {
       // random in circle
       const a = rng() * Math.PI * 2;
@@ -117,9 +119,9 @@ export function generateSector(seed = Math.floor(Math.random() * 2 ** 31)): Sect
       const z = c.center.z + Math.sin(a) * d;
       // vertical distribution per type
       let y = c.center.y;
-      const thickness = c.type === 'iron' ? 80 : c.type === 'silicon' ? 140 : 200;
+      const thickness = c.type === 'iron' ? 180 : c.type === 'silicon' ? 300 : 380;
       y += (rng() - 0.5) * thickness;
-      const radius = 3 + rng() * 7;
+      const radius = 3 + rng() * 9;
       const resource = weightedPick(rng, [
         { v: c.type, w: 8 },
         { v: 'iron' as const, w: c.type === 'iron' ? 4 : 2 },

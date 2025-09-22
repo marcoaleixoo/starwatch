@@ -12,9 +12,10 @@ export type BridgeTools = {
   stopMining: () => Promise<{ ok: boolean }>;
   runScript: (name: string, code: string) => Promise<{ ok: boolean; error?: string }>;
   performScan: () => Promise<string[]>; // returns newly discovered ids
+  getMiningStatus: () => Promise<any>;
 };
 
-export type ChatMessage = { role: 'user' | 'assistant'; content: string };
+export type ChatMessage = { role: 'user' | 'assistant' | 'tool'; content: string; meta?: any };
 
 export type HalConfig = {
   apiKey?: string;
@@ -33,13 +34,14 @@ As ações disponíveis são:
 - ship_status {}
 - scan_sector { resource?: 'iron'|'silicon'|'uranium', limit?: number }
 - perform_scan {}
+- mining_status {}
 - get_resources {}
 - start_mining { resource: 'iron'|'silicon'|'uranium' }
 - stop_mining {}
 - run_script { name?: string, code?: string }
 Não invente parâmetros; infira apenas o que for pedido. Quando apropriado, explique sucintamente seu plano.
 Se pedirem para executar um script sem fornecer código, use o código padrão disponível.`;
-// Observação: para "varredura ativa" use a ação perform_scan (não use run_script).
+// Observação: para "varredura ativa" use a ação perform_scan (não use run_script). Para checar mineração, use mining_status.
 
   constructor(private tools: BridgeTools, private cfg: HalConfig) {}
 
@@ -83,6 +85,7 @@ Se pedirem para executar um script sem fornecer código, use o código padrão d
           z.object({ name: z.literal('get_resources'), input: z.object({}).optional() }),
           z.object({ name: z.literal('start_mining'), input: z.object({ resource: z.enum(['iron', 'silicon', 'uranium']) }) }),
           z.object({ name: z.literal('stop_mining'), input: z.object({}).optional() }),
+          z.object({ name: z.literal('mining_status'), input: z.object({}).optional() }),
           z.object({ name: z.literal('run_script'), input: z.object({ name: z.string().optional(), code: z.string().optional() }).optional() }),
         ])
         .nullish(),
@@ -101,41 +104,70 @@ Se pedirem para executar um script sem fornecer código, use o código padrão d
     const model: any = (provider as any)(modelId);
     const { object } = await generateObject({ model, schema: intentSchema, prompt });
 
+    const logTool = (name: string, input: any, output: any) => {
+      this.history.push({ role: 'tool', content: `tool:${name}`, meta: { name, input, output } });
+    };
+
     if (object.call) {
       const c = object.call as any;
       if (c.name === 'move') {
-        await this.tools.moveTo(c.input);
+        const out = await this.tools.moveTo(c.input);
+        logTool('move', c.input, out);
       } else if (c.name === 'ship_status') {
         const st = await this.tools.getShipStatus();
+        logTool('ship_status', {}, st);
         const extra = st
           ? ` Posição ${st.position.x.toFixed(1)}, ${st.position.y.toFixed(1)}, ${st.position.z.toFixed(1)}. Velocidade ${st.speed.toFixed(2)}.`
           : '';
         object.say = `${object.say}${extra}`.trim();
       } else if (c.name === 'scan_sector') {
         const newly = await this.tools.performScan();
+        logTool('perform_scan', {}, newly);
         const list = await this.tools.scanSector(c.input);
+        logTool('scan_sector', c.input || {}, list);
         const lines = list
           .map((e: any) => `• ${e.resource} @ (${e.position.x.toFixed(0)}, ${e.position.y.toFixed(0)}, ${e.position.z.toFixed(0)}) [${e.distance.toFixed(0)} km]`)
           .join('\n');
         const discovered = newly?.length ? ` Descobertas: ${newly.length}.` : '';
-        object.say = `${object.say}${discovered}\nAlvos próximos (escaneados):\n${lines}`.trim();
+        if (list.length === 0) {
+          const res = c.input?.resource ? ` de ${c.input.resource}` : '';
+          object.say = `${object.say}${discovered} Nenhum asteroide${res} escaneado neste raio.`.trim();
+        } else {
+          object.say = `${object.say}${discovered}\nAlvos próximos (escaneados):\n${lines}`.trim();
+        }
       } else if (c.name === 'perform_scan') {
         const newly = await this.tools.performScan();
+        logTool('perform_scan', {}, newly);
         object.say = `${object.say} Varredura ativa concluída. Novos objetos: ${newly.length}.`;
       } else if (c.name === 'get_resources') {
         const r = await this.tools.getResources();
+        logTool('get_resources', {}, r);
         object.say = `${object.say} Recursos: Fe=${r.iron.toFixed(1)}, Si=${r.silicon.toFixed(1)}, U=${r.uranium.toFixed(1)}.`;
       } else if (c.name === 'start_mining') {
         const res = await this.tools.startMining(c.input.resource);
+        logTool('start_mining', c.input, res);
         if (res.ok) object.say = `${object.say} Engajando mineração de ${c.input.resource}. Indo para o alvo.`;
         else object.say = `${object.say} Falha ao iniciar mineração: ${res.error}`;
       } else if (c.name === 'stop_mining') {
-        await this.tools.stopMining();
+        const out = await this.tools.stopMining();
+        logTool('stop_mining', {}, out);
         object.say = `${object.say} Mineração pausada.`;
+      } else if (c.name === 'mining_status') {
+        const s = await this.tools.getMiningStatus();
+        logTool('mining_status', {}, s);
+        if (s.state === 'idle') {
+          const last = s.lastEvent === 'depleted' && s.lastTarget ? ` O último alvo (${s.lastTarget.resource}) foi esgotado.` : '';
+          object.say = `${object.say} A mineração não está ativa.${last}`.trim();
+        } else if (s.state === 'approaching') {
+          object.say = `${object.say} Rumo ao alvo (${s.resource}). Distância ${s.distance?.toFixed?.(0)} km.`;
+        } else if (s.state === 'mining') {
+          object.say = `${object.say} Extraindo ${s.resource}. Restante ~${s.remaining?.toFixed?.(1)} t a ${s.rate} t/s.`;
+        }
       } else if (c.name === 'run_script') {
         const name = c.input?.name || defaultScriptName;
         const code = c.input?.code ?? defaultScriptCode;
-        await this.tools.runScript(name, code);
+        const out = await this.tools.runScript(name, code);
+        logTool('run_script', { name }, out);
       }
     }
 

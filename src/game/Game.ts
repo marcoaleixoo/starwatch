@@ -17,15 +17,17 @@ export class Game {
   private selected: { type: 'ship' | 'asteroid' | null; id?: string } = { type: null };
   private selectedPrevEmissive: Color3 | null = null;
   private inventory = { iron: 0, silicon: 0, uranium: 0 };
-  private mining = { targetId: null as string | null, active: false, range: 10, rate: 5 }; // tons per second
+  private mining = { targetId: null as string | null, active: false, range: 10, rate: 5 };
+  private miningLog: { lastEvent: 'none' | 'depleted' | 'stopped'; lastTarget?: { id: string; resource: ResourceType } } = { lastEvent: 'none' };
   private scanned = new Set<string>();
-  private scanRadius = 1000; // km
+  private scanRadius = 1000; // km (redefinido após carregar o setor)
   private logicTimer: number | null = null;
   private worker: Worker | null = null;
   private mode: 'play' | 'sector' = 'play';
-  private prevCam: { alpha: number; beta: number; radius: number; target: Vector3; fogMode: number; fogStart?: number; fogEnd?: number; fogDensity?: number; panning?: number } | null = null;
+  private prevCam: { alpha: number; beta: number; radius: number; target: Vector3; fogMode: number; fogStart?: number; fogEnd?: number; fogDensity?: number; panning?: number; lockedTarget?: any; followingShip?: boolean } | null = null;
   private labelMeshes: Mesh[] = [];
   private sun?: Mesh;
+  private followingShip = false;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
@@ -59,6 +61,8 @@ export class Game {
     if (!loaded) {
       this.world = generateSector();
     }
+    // Ajustar parâmetros dependentes da escala do setor
+    this.configureScaleFromWorld();
     this.spawnSector();
 
     // Background: starfield skybox + subtle dust + sun
@@ -91,6 +95,20 @@ export class Game {
 
   moveTo(v: Vec3) {
     this.ship.destination = new Vector3(v.x, v.y, v.z);
+  }
+
+  setFollowShip(on: boolean) {
+    this.followingShip = on;
+    if (on) {
+      // Segue a nave usando lockedTarget
+      this.camera.lockedTarget = this.ship.mesh;
+    } else {
+      this.camera.lockedTarget = null as any;
+    }
+  }
+
+  isFollowingShip() {
+    return this.followingShip;
   }
 
   getShipStatus() {
@@ -162,12 +180,14 @@ export class Game {
     this.mining.targetId = nearest.id;
     this.mining.active = false; // will activate when in range
     this.ship.destination = new Vector3(nearest.position.x, nearest.position.y, nearest.position.z);
+    this.miningLog.lastEvent = 'none';
     return { ok: true as const, targetId: nearest.id, position: nearest.position };
   }
 
   stopMining() {
     this.mining.targetId = null;
     this.mining.active = false;
+    this.miningLog.lastEvent = 'stopped';
     return { ok: true as const };
   }
 
@@ -206,7 +226,11 @@ export class Game {
       fogEnd: (this.scene as any).fogEnd,
       fogDensity: (this.scene as any).fogDensity,
       panning: this.camera.panningSensibility,
+      lockedTarget: (this.camera as any).lockedTarget,
+      followingShip: this.followingShip,
     };
+    // Desliga follow para visão do mapa do setor
+    this.setFollowShip(false);
     // Top-down zoomed out
     this.camera.setTarget(new Vector3(0, 0, 0));
     this.camera.alpha = Math.PI / 2;
@@ -233,6 +257,9 @@ export class Game {
       (this.scene as any).fogStart = this.prevCam.fogStart;
       (this.scene as any).fogEnd = this.prevCam.fogEnd;
       (this.scene as any).fogDensity = this.prevCam.fogDensity;
+      // Restaura lockTarget/follow ship
+      if (this.prevCam.followingShip) this.setFollowShip(true);
+      else this.camera.lockedTarget = this.prevCam.lockedTarget ?? null;
     }
     // Dispose labels
     for (const m of this.labelMeshes) m.dispose(false, true);
@@ -330,6 +357,13 @@ export class Game {
     }
     pos.addInPlace(this.ship.velocity.scale(dt));
 
+    // Se está seguindo a nave e não estamos no mapa de setor, garante lock ativo
+    if (this.followingShip && this.mode === 'play') {
+      if ((this.camera as any).lockedTarget !== this.ship.mesh) {
+        this.camera.lockedTarget = this.ship.mesh;
+      }
+    }
+
     // Mining auto-activation and extraction
     if (this.mining.targetId) {
       const a = this.world.asteroids.find((x) => x.id === this.mining.targetId);
@@ -362,6 +396,8 @@ export class Game {
             }
             this.mining.targetId = null;
             this.mining.active = false;
+            this.miningLog.lastEvent = 'depleted';
+            this.miningLog.lastTarget = { id: a.id, resource: a.resource };
           }
         }
       } else {
@@ -414,6 +450,7 @@ export class Game {
         const mesh = pickInfo.pickedMesh as Mesh;
         if (mesh.id === this.ship.mesh.id) {
           this.selected = { type: 'ship' };
+          // foco na nave; manter follow se já ativo
           this.focusCameraOn(this.ship.mesh.position);
         } else if (mesh.id.startsWith('ast:')) {
           const aId = this.meshToAsteroidId.get(mesh.id);
@@ -482,8 +519,11 @@ export class Game {
   focusCameraOn(target: Vector3 | { x: number; y: number; z: number }, radius: number = 100) {
     const t = target instanceof Vector3 ? target : new Vector3(target.x, target.y, target.z);
     // Smoothly move camera target and radius
+    // Qualquer foco manual desliga follow
+    this.setFollowShip(false);
     this.camera.setTarget(t);
-    this.camera.radius = Math.max(40, Math.min(radius, 1000));
+    const maxR = Math.max(1000, this.world?.bounds ? this.world.bounds * 0.25 : 1000);
+    this.camera.radius = Math.max(40, Math.min(radius, maxR));
   }
 
   getFleet() {
@@ -497,6 +537,38 @@ export class Game {
         script: this.worker ? 'custom' : null,
       },
     ];
+  }
+
+  getMiningStatus() {
+    const targetId = this.mining.targetId;
+    if (targetId) {
+      const a = this.world.asteroids.find((x) => x.id === targetId);
+      const pos = this.ship.mesh.position;
+      let distance = 0;
+      let remaining = 0;
+      let resource: ResourceType | undefined = undefined;
+      if (a) {
+        distance = Vector3.Distance(new Vector3(a.position.x, a.position.y, a.position.z), pos);
+        remaining = a.amount;
+        resource = a.resource;
+      }
+      return {
+        state: this.mining.active ? 'mining' : 'approaching',
+        targetId,
+        resource,
+        remaining,
+        distance,
+        inRange: this.mining.active,
+        rate: this.mining.rate,
+        lastEvent: this.miningLog.lastEvent,
+        lastTarget: this.miningLog.lastTarget ?? null,
+      } as const;
+    }
+    return {
+      state: 'idle' as const,
+      lastEvent: this.miningLog.lastEvent,
+      lastTarget: this.miningLog.lastTarget ?? null,
+    };
   }
 
   getClustersOverview(onlyScanned = true) {
@@ -524,7 +596,7 @@ export class Game {
   }
 
   private createStarfield() {
-    const size = 8192; // big box
+    const size = Math.max(8192, this.world.bounds * 4); // escala com o setor
     const sky = MeshBuilder.CreateBox('sky', { size, sideOrientation: Mesh.BACKSIDE }, this.scene);
     const texSize = 1024;
     const dt = new DynamicTexture('stars', { width: texSize, height: texSize }, this.scene, false);
@@ -589,15 +661,18 @@ export class Game {
     ps.blendMode = ParticleSystem.BLENDMODE_ADD;
     ps.direction1 = new Vector3(-0.2, 0, 0.2);
     ps.direction2 = new Vector3(0.2, 0, -0.2);
-    ps.minEmitBox = new Vector3(-3000, -3000, -3000);
-    ps.maxEmitBox = new Vector3(3000, 3000, 3000);
+    const box = Math.max(3000, this.world.bounds * 1.2);
+    ps.minEmitBox = new Vector3(-box, -box, -box);
+    ps.maxEmitBox = new Vector3(box, box, box);
     ps.gravity = new Vector3(0, 0, 0);
     ps.start();
   }
 
   private createSun() {
-    const sun = MeshBuilder.CreateSphere('sun', { diameter: 600 }, this.scene);
-    sun.position = new Vector3(3000, 500, -2500);
+    const size = Math.max(600, this.world.bounds * 0.1);
+    const sun = MeshBuilder.CreateSphere('sun', { diameter: size }, this.scene);
+    const dist = Math.max(3000, this.world.bounds * 2.0);
+    sun.position = new Vector3(dist, size, -dist * 0.85);
     const mat = new StandardMaterial('sunMat', this.scene);
     mat.emissiveColor = new Color3(1.0, 0.9, 0.7);
     mat.disableLighting = true;
@@ -652,10 +727,11 @@ export class Game {
 
   private tryLoad(): boolean {
     try {
-      const raw = localStorage.getItem('starwatch.v010.save');
+      const raw = localStorage.getItem('starwatch.v020.save');
       if (!raw) return false;
       const data = JSON.parse(raw);
       this.world = generateSector(data.world.seed);
+      this.configureScaleFromWorld();
       // restore asteroid amounts
       const byId = new Map<string, number>(Object.entries(data.world.asteroidAmounts || {}));
       for (const a of this.world.asteroids) {
@@ -696,10 +772,22 @@ export class Game {
           destination: this.ship.destination ? { x: this.ship.destination.x, y: this.ship.destination.y, z: this.ship.destination.z } : null,
         },
       };
-      localStorage.setItem('starwatch.v010.save', JSON.stringify(data));
+      localStorage.setItem('starwatch.v020.save', JSON.stringify(data));
     } catch (e) {
       console.warn('Save failed', e);
     }
+  }
+
+  private configureScaleFromWorld() {
+    // Define velocidade da nave para atravessar o diâmetro do setor em ~30min
+    // speed = (2*bounds) / (30*60)
+    this.ship.maxSpeed = (2 * this.world.bounds) / 1800;
+    // Ajusta limites de câmera e neblina proporcionalmente
+    this.camera.upperRadiusLimit = Math.max(1000, this.world.bounds * 2.5);
+    (this.scene as any).fogStart = Math.max(2500, this.world.bounds * 0.6);
+    (this.scene as any).fogEnd = Math.max(9000, this.world.bounds * 2.0);
+    // Raio de scanner relativo ao tamanho
+    this.scanRadius = Math.max(800, Math.min(5000, Math.floor(this.world.bounds * 0.18)));
   }
 }
 
