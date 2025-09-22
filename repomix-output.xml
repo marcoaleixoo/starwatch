@@ -1,0 +1,884 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+src/
+  game/
+    Game.ts
+  hal/
+    halLLM.ts
+  ui/
+    Chat.tsx
+    MonacoEditor.tsx
+  App.tsx
+  env.d.ts
+  main.tsx
+.gitignore
+index.html
+MANIFESTO.md
+package.json
+README.md
+tsconfig.json
+vite.config.ts
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="src/game/Game.ts">
+import { Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, MeshBuilder, Color3, StandardMaterial, Mesh } from 'babylonjs';
+
+type Vec3 = { x: number; y: number; z: number };
+
+type ScriptJob = { name: string; code: string };
+
+export class Game {
+  private engine: Engine;
+  private scene: Scene;
+  private camera: ArcRotateCamera;
+  private ship = { mesh: null as unknown as Mesh, velocity: new Vector3(0, 0, 0), maxSpeed: 1.8, destination: null as Vector3 | null };
+  private logicTimer: number | null = null;
+  private worker: Worker | null = null;
+
+  constructor(private canvas: HTMLCanvasElement) {
+    this.engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
+    this.scene = new Scene(this.engine);
+
+    // Camera: top-down, small angle
+    this.camera = new ArcRotateCamera('camera', Math.PI / 2, 1.2, 120, new Vector3(0, 0, 0), this.scene);
+    this.camera.attachControl(canvas, true);
+    this.camera.panningSensibility = 50;
+    this.camera.lowerRadiusLimit = 40;
+    this.camera.upperRadiusLimit = 1000;
+    this.camera.minZ = 0.1;
+
+    new HemisphericLight('light1', new Vector3(1, 1, 0), this.scene);
+
+    // Ship mesh
+    const ship = MeshBuilder.CreateBox('ship', { width: 2.2, depth: 5, height: 1.2 }, this.scene);
+    const sm = new StandardMaterial('shipMat', this.scene);
+    sm.diffuseColor = new Color3(0.5, 0.7, 1);
+    ship.material = sm;
+    this.ship.mesh = ship as any;
+
+    // Asteroids
+    this.spawnAsteroids();
+
+    // Render loop
+    this.engine.runRenderLoop(() => {
+      this.updatePhysics();
+      this.scene.render();
+    });
+
+    // Logic tick at 1 Hz
+    this.logicTimer = window.setInterval(() => this.logicTick(), 1000);
+
+    // Resize
+    window.addEventListener('resize', () => this.engine.resize());
+  }
+
+  dispose() {
+    if (this.logicTimer) window.clearInterval(this.logicTimer);
+    this.worker?.terminate();
+    this.scene.dispose();
+    this.engine.dispose();
+  }
+
+  moveTo(v: Vec3) {
+    this.ship.destination = new Vector3(v.x, v.y, v.z);
+  }
+
+  getShipStatus() {
+    return {
+      position: this.ship.mesh.position.clone(),
+      speed: this.ship.velocity.length(),
+      destination: this.ship.destination ? { x: this.ship.destination.x, y: this.ship.destination.y, z: this.ship.destination.z } : null,
+    };
+  }
+
+  runScript(job: ScriptJob) {
+    // Terminate old worker
+    this.worker?.terminate();
+    const blob = new Blob([
+      this.makeWorkerSource(job.code)
+    ], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    const worker = new Worker(url, { type: 'module' });
+    URL.revokeObjectURL(url);
+
+    worker.onmessage = (ev) => {
+      const msg = ev.data;
+      if (msg?.type === 'tool') {
+        if (msg.name === 'moveTo') {
+          const { x, y, z } = msg.args ?? {};
+          this.moveTo({ x, y, z });
+          worker.postMessage({ type: 'tool-ack', id: msg.id, ok: true });
+        }
+      }
+    };
+    worker.onerror = (e) => {
+      console.error('Script worker error', e);
+    };
+    this.worker = worker;
+  }
+
+  private makeWorkerSource(userCode: string) {
+    // Tiny API bridge: Game.moveTo, Memory.get/set, sleep
+    return `
+      const Memory = new Map();
+      function postTool(name, args) {
+        return new Promise((resolve) => {
+          const id = Math.random().toString(36).slice(2);
+          function onAck(ev) {
+            const msg = ev.data;
+            if (msg && msg.type === 'tool-ack' && msg.id === id) {
+              resolve(msg);
+              self.removeEventListener('message', onAck);
+            }
+          }
+          self.addEventListener('message', onAck);
+          postMessage({ type: 'tool', id, name, args });
+        });
+      }
+      const Game = {
+        moveTo: async (v) => {
+          await postTool('moveTo', v);
+        }
+      };
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      // Provide Memory API (string keys only for simplicity)
+      const MemoryAPI = {
+        set: (k, v) => Memory.set(k, v),
+        get: (k) => Memory.get(k)
+      };
+      // Expose globals
+      self.Game = Game;
+      self.Memory = MemoryAPI;
+      self.sleep = sleep;
+      // Built-in helpers for convenience (so LLM can call patrol())
+      async function patrol() {
+        const A = { x: 500, y: 0, z: 250 };
+        const B = { x: 200, y: 0, z: -200 };
+        while (true) {
+          await Game.moveTo(A);
+          await sleep(3000);
+          await Game.moveTo(B);
+          await sleep(3000);
+        }
+      }
+      (async () => { try {\n${userCode}\n } catch (e) { console.error('User script error:', e); } })();
+    `;
+  }
+
+  private updatePhysics() {
+    const dt = this.engine.getDeltaTime() / 1000; // seconds
+    const pos = this.ship.mesh.position;
+    if (this.ship.destination) {
+      const to = this.ship.destination.subtract(pos);
+      const dist = to.length();
+      if (dist < 0.5) {
+        this.ship.velocity.setAll(0);
+      } else {
+        const dir = to.normalize();
+        this.ship.velocity = dir.scale(this.ship.maxSpeed);
+      }
+    } else {
+      this.ship.velocity.setAll(0);
+    }
+    pos.addInPlace(this.ship.velocity.scale(dt));
+  }
+
+  private logicTick() {
+    // Placeholder for future deterministic updates
+  }
+
+  private spawnAsteroids() {
+    for (let i = 0; i < 50; i++) {
+      const x = (Math.random() - 0.5) * 1200;
+      const z = (Math.random() - 0.5) * 1200;
+      const s = 2 + Math.random() * 6;
+      const asteroid = MeshBuilder.CreateSphere('ast' + i, { diameter: s }, this.scene);
+      const mat = new StandardMaterial('astM' + i, this.scene);
+      mat.diffuseColor = new Color3(0.4 + Math.random() * 0.2, 0.4, 0.45);
+      asteroid.material = mat;
+      asteroid.position = new Vector3(x, 0, z);
+    }
+  }
+}
+
+declare global {
+  // Worker script globals (type-only exposure for TS consumers)
+  interface WorkerGlobalScope {
+    Game: { moveTo(v: Vec3): Promise<void> };
+    Memory: { set(k: string, v: unknown): void; get(k: string): unknown };
+    sleep(ms: number): Promise<void>;
+  }
+}
+</file>
+
+<file path="src/hal/halLLM.ts">
+import { generateObject } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
+import { z } from 'zod';
+
+export type BridgeTools = {
+  moveTo: (v: { x: number; y: number; z: number }) => Promise<{ ok: boolean }>;
+  getShipStatus: () => Promise<any>;
+  runScript: (name: string, code: string) => Promise<{ ok: boolean; error?: string }>;
+};
+
+export type ChatMessage = { role: 'user' | 'assistant'; content: string };
+
+export type HalConfig = {
+  apiKey?: string;
+  model?: string; // e.g., 'gpt-4o-mini' | 'gpt-4o' | 'o3-mini'
+};
+
+export class HalLLM {
+  private history: ChatMessage[] = [];
+  private systemPrompt = `Você é HAL-9001, a IA de bordo. Estilo: calmo, lógico, subserviente, levemente curioso.
+Seu objetivo é auxiliar o Comandante a operar a nave e automatizar tarefas.
+Interprete o pedido do Comandante e preencha um objeto de intenção com:
+- say: sua resposta narrativa em português, como HAL.
+- call: apenas se necessário, uma chamada de ação { name, input }.
+As ações disponíveis são: move, ship_status, run_script.
+Não invente parâmetros; infira apenas o que for pedido.
+Se pedirem para executar um script sem fornecer código, use o código padrão disponível.`;
+
+  constructor(private tools: BridgeTools, private cfg: HalConfig) {}
+
+  greeting(): ChatMessage {
+    return {
+      role: 'assistant',
+      content:
+        'Aqui é HAL-9001. Sistemas online. Suas ordens, Comandante? (Ex.: "Mova a nave para 500, 0, 250" ou "Execute patrol.js")',
+    };
+  }
+
+  setConfig(cfg: Partial<HalConfig>) {
+    this.cfg = { ...this.cfg, ...cfg };
+  }
+
+  getConfig(): HalConfig {
+    return this.cfg;
+  }
+
+  getHistory(): ChatMessage[] {
+    return this.history.slice();
+  }
+
+  async send(userText: string, defaultScriptName: string, defaultScriptCode: string): Promise<ChatMessage> {
+    const provider = createOpenAI({ apiKey: this.cfg.apiKey });
+    const modelId = this.cfg.model || 'gpt-4o-mini';
+
+    const historyText = this.history
+      .slice(-8)
+      .map((m) => `${m.role === 'user' ? 'Comandante' : 'HAL'}: ${m.content}`)
+      .join('\n');
+
+    const intentSchema = z.object({
+      say: z.string().describe('Resposta do HAL ao Comandante, em PT-BR.'),
+      call: z
+        .union([
+          z.object({ name: z.literal('move'), input: z.object({ x: z.number(), y: z.number(), z: z.number() }) }),
+          z.object({ name: z.literal('ship_status'), input: z.object({}).optional() }),
+          z.object({ name: z.literal('run_script'), input: z.object({ name: z.string().optional(), code: z.string().optional() }).optional() }),
+        ])
+        .nullish(),
+    });
+
+    const prompt = [
+      this.systemPrompt,
+      historyText ? `Histórico recente:\n${historyText}` : '',
+      `Nova entrada do Comandante: ${userText}`,
+      `Código padrão do editor: ${defaultScriptName}`,
+      'Retorne apenas o objeto: { say, call? }.',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    const model: any = (provider as any)(modelId);
+    const { object } = await generateObject({ model, schema: intentSchema, prompt });
+
+    if (object.call) {
+      const c = object.call as any;
+      if (c.name === 'move') {
+        await this.tools.moveTo(c.input);
+      } else if (c.name === 'ship_status') {
+        const st = await this.tools.getShipStatus();
+        const extra = st
+          ? ` Posição ${st.position.x.toFixed(1)}, ${st.position.y.toFixed(1)}, ${st.position.z.toFixed(1)}. Velocidade ${st.speed.toFixed(2)}.`
+          : '';
+        object.say = `${object.say}${extra}`.trim();
+      } else if (c.name === 'run_script') {
+        const name = c.input?.name || defaultScriptName;
+        const code = c.input?.code ?? defaultScriptCode;
+        await this.tools.runScript(name, code);
+      }
+    }
+
+    const reply: ChatMessage = { role: 'assistant', content: object.say || 'Entendido.' };
+    this.history.push({ role: 'user', content: userText });
+    this.history.push(reply);
+    return reply;
+  }
+}
+</file>
+
+<file path="src/ui/Chat.tsx">
+import React, { useEffect, useRef, useState } from 'react';
+import type { HalLLM, ChatMessage } from '../hal/halLLM';
+
+type Props = {
+  hal: HalLLM;
+  defaultScript: string;
+  onRunScript?: (name: string) => void; // kept for compatibility
+};
+
+export function Chat({ hal, defaultScript }: Props) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setMessages((prev) => (prev.length === 0 ? [hal.greeting()] : prev));
+  }, [hal]);
+
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
+  }, [messages]);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text) return;
+    setInput('');
+    setMessages((m) => [...m, { role: 'user', content: text }]);
+    try {
+      const reply = await hal.send(text, 'patrol.js', defaultScript);
+      setMessages((m) => [...m, reply]);
+    } catch (e) {
+      setMessages((m) => [
+        ...m,
+        { role: 'assistant', content: 'Falha na IA (verifique a API key e modelo).' },
+      ]);
+      console.error(e);
+    }
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div ref={listRef} style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+        {messages.map((m, i) => (
+          <div key={i} style={{ marginBottom: 10, whiteSpace: 'pre-wrap' }}>
+            <div style={{ color: m.role === 'user' ? '#9bb0d9' : '#e3ecff' }}>
+              <strong>{m.role === 'user' ? 'Comandante' : 'HAL'}</strong>
+            </div>
+            <div>{m.content}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ borderTop: '1px solid #1c2541', padding: 8 }}>
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder="Digite um comando para HAL"
+          style={{ width: '100%', height: 70, resize: 'none', background: '#0b1120', color: '#e3ecff', border: '1px solid #1c2541', borderRadius: 6, padding: 8 }}
+        />
+        <div style={{ display: 'flex', marginTop: 6, gap: 8 }}>
+          <button onClick={send} style={btnStyle}>Enviar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const btnStyle: React.CSSProperties = {
+  background: '#1a2a4a',
+  color: '#e3ecff',
+  border: '1px solid #24345a',
+  padding: '8px 12px',
+  borderRadius: 6,
+  cursor: 'pointer',
+};
+</file>
+
+<file path="src/ui/MonacoEditor.tsx">
+import React, { useEffect, useRef } from 'react';
+// ESM API + workers for Vite
+import * as monacoNs from 'monaco-editor/esm/vs/editor/editor.api';
+// Workers mapping for Vite
+// @ts-ignore
+import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+// @ts-ignore
+import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
+// @ts-ignore
+import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
+// @ts-ignore
+import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
+// @ts-ignore
+import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+
+// @ts-ignore
+self.MonacoEnvironment = {
+  getWorker(_: string, label: string) {
+    if (label === 'json') return new (JsonWorker as any)();
+    if (label === 'css') return new (CssWorker as any)();
+    if (label === 'html') return new (HtmlWorker as any)();
+    if (label === 'typescript' || label === 'javascript') return new (TsWorker as any)();
+    return new (EditorWorker as any)();
+  },
+};
+
+type Props = {
+  value: string;
+  language?: string;
+  onChange?: (value: string) => void;
+};
+
+export function MonacoEditor({ value, language = 'javascript', onChange }: Props) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const editorRef = useRef<monacoNs.editor.IStandaloneCodeEditor | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const editor = monacoNs.editor.create(containerRef.current, {
+      value,
+      language,
+      theme: 'vs-dark',
+      automaticLayout: true,
+      minimap: { enabled: false },
+      fontSize: 13,
+    });
+    editorRef.current = editor;
+    const sub = editor.onDidChangeModelContent(() => {
+      const val = editor.getValue();
+      onChange?.(val);
+    });
+    return () => {
+      sub.dispose();
+      editor.dispose();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (editorRef.current && value !== editorRef.current.getValue()) {
+      editorRef.current.setValue(value);
+    }
+  }, [value]);
+
+  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
+}
+</file>
+
+<file path="src/App.tsx">
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Game } from './game/Game';
+import { Chat } from './ui/Chat';
+import { MonacoEditor } from './ui/MonacoEditor';
+import { HalLLM } from './hal/halLLM';
+
+type Tab = 'chat' | 'scripts' | 'status';
+
+export default function App() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [game, setGame] = useState<Game | null>(null);
+  const [tab, setTab] = useState<Tab>('chat');
+  const [scriptCode, setScriptCode] = useState<string>(() => `// patrol.js\n// Exemplo de patrulha simples entre dois pontos\n// A API disponível no worker: Game.moveTo({x, y, z}), Memory.get/set, sleep(ms)\n(async () => {\n  const A = { x: 500, y: 0, z: 250 };\n  const B = { x: 200, y: 0, z: -200 };\n  while (true) {\n    await Game.moveTo(A);\n    await sleep(3000);\n    await Game.moveTo(B);\n    await sleep(3000);\n  }\n})();\n`);
+
+  // Setup Game
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const g = new Game(canvasRef.current);
+    setGame(g);
+    return () => g.dispose();
+  }, []);
+
+  // Settings for AI
+  const envKey = (import.meta as any).env?.VITE_OPENAI_API_KEY as string | undefined;
+  const envModel = (import.meta as any).env?.VITE_OPENAI_MODEL as string | undefined;
+  const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('OPENAI_API_KEY') || envKey || '');
+  const [model, setModel] = useState<string>(() => localStorage.getItem('OPENAI_MODEL') || envModel || 'gpt-4o-mini');
+
+  useEffect(() => { localStorage.setItem('OPENAI_API_KEY', apiKey); }, [apiKey]);
+  useEffect(() => { localStorage.setItem('OPENAI_MODEL', model); }, [model]);
+
+  const hal = useMemo(() => {
+    const tools = {
+      moveTo: async ({ x, y, z }: { x: number; y: number; z: number }) => {
+        game?.moveTo({ x, y, z });
+        return { ok: true } as const;
+      },
+      getShipStatus: async () => game?.getShipStatus() ?? null,
+      runScript: async (name: string, code: string) => {
+        if (!game) return { ok: false, error: 'Game not ready' } as const;
+        game.runScript({ name, code });
+        return { ok: true } as const;
+      },
+    };
+    return new HalLLM(tools, { apiKey, model });
+  }, [game, apiKey, model]);
+
+  return (
+    <div style={{ display: 'flex', height: '100%' }}>
+      <aside style={{ width: '20%', minWidth: 280, maxWidth: 420, borderRight: '1px solid #1c2541', background: '#0d1324', display: 'flex', flexDirection: 'column' }}>
+        <nav style={{ display: 'flex', borderBottom: '1px solid #1c2541' }}>
+          <button onClick={() => setTab('chat')} style={tabBtn(tab === 'chat')}>Com‑Link</button>
+          <button onClick={() => setTab('scripts')} style={tabBtn(tab === 'scripts')}>Scripts</button>
+          <button onClick={() => setTab('status')} style={tabBtn(tab === 'status')}>Status</button>
+        </nav>
+        <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+          <div style={{ display: tab === 'chat' ? 'block' : 'none', height: '100%' }}>
+            <Chat hal={hal} defaultScript={scriptCode} />
+          </div>
+          <div style={{ display: tab === 'scripts' ? 'block' : 'none', height: '100%' }}>
+            <MonacoEditor value={scriptCode} language="javascript" onChange={setScriptCode} />
+          </div>
+          <div style={{ display: tab === 'status' ? 'block' : 'none', height: '100%' }}>
+            <StatusPanel game={game} apiKey={apiKey} setApiKey={setApiKey} model={model} setModel={setModel} />
+          </div>
+        </div>
+      </aside>
+      <main style={{ flex: 1, position: 'relative' }}>
+        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+      </main>
+    </div>
+  );
+}
+
+function StatusPanel({ game, apiKey, setApiKey, model, setModel }: { game: Game | null; apiKey: string; setApiKey: (v: string) => void; model: string; setModel: (v: string) => void }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const status = game?.getShipStatus();
+  return (
+    <div style={{ padding: 12, fontSize: 14 }}>
+      <div style={{ opacity: 0.7 }}>USS [Nome da Nave]</div>
+      <div>Posição: {status ? `${status.position.x.toFixed(1)}, ${status.position.y.toFixed(1)}, ${status.position.z.toFixed(1)}` : '—'}</div>
+      <div>Velocidade: {status ? status.speed.toFixed(2) : '—'}</div>
+      <div>Destino: {status?.destination ? `${status.destination.x}, ${status.destination.y}, ${status.destination.z}` : '—'}</div>
+      <div>Tick: {tick}</div>
+      <div style={{ borderTop: '1px solid #1c2541', marginTop: 10, paddingTop: 10 }}>
+        <div style={{ marginBottom: 6, opacity: 0.8 }}>Configuração de IA</div>
+        <label style={{ display: 'block', fontSize: 12, opacity: 0.8 }}>OpenAI API Key</label>
+        <input
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder="sk-..."
+          style={{ width: '100%', padding: 6, background: '#0b1120', color: '#e3ecff', border: '1px solid #1c2541', borderRadius: 6 }}
+        />
+        <label style={{ display: 'block', marginTop: 8, fontSize: 12, opacity: 0.8 }}>Modelo</label>
+        <input
+          type="text"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          placeholder="gpt-4o-mini"
+          style={{ width: '100%', padding: 6, background: '#0b1120', color: '#e3ecff', border: '1px solid #1c2541', borderRadius: 6 }}
+        />
+        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>Use gpt-4o-mini (rápido) ou gpt-4o (mais capaz). Para raciocínio, o3-mini.</div>
+      </div>
+    </div>
+  );
+}
+
+function tabBtn(active: boolean): React.CSSProperties {
+  return {
+    flex: 1,
+    padding: '10px 12px',
+    background: active ? '#121a31' : 'transparent',
+    color: active ? '#e3ecff' : '#9bb0d9',
+    border: 'none',
+    borderRight: '1px solid #1c2541',
+    cursor: 'pointer',
+  } as React.CSSProperties;
+}
+</file>
+
+<file path="src/env.d.ts">
+/// <reference types="vite/client" />
+
+interface ImportMetaEnv {
+  readonly VITE_OPENAI_API_KEY?: string;
+  readonly VITE_OPENAI_MODEL?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+</file>
+
+<file path="src/main.tsx">
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+
+const root = createRoot(document.getElementById('root')!);
+root.render(<App />);
+</file>
+
+<file path=".gitignore">
+node_modules/
+dist/
+.env
+</file>
+
+<file path="index.html">
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StarWatch: The Silent Sector</title>
+    <style>
+      html, body, #root { height: 100%; margin: 0; background: #0b0f1a; color: #d3e0ff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+  </html>
+</file>
+
+<file path="MANIFESTO.md">
+# ⭐ StarWatch: The Silent Sector ⭐
+
+## O Manifesto do Comando Automatizado (V0)
+
+### Um Chamado à Inteligência Artificial na Estratégia Espacial
+
+StarWatch: The Silent Sector é uma experiência de automação e estratégia espacial que coloca você no assento do Comandante. Diferente de jogos de estratégia tradicionais, seu controle não se dá por cliques frenéticos, mas por duas ferramentas primordiais: o diálogo com sua IA de bordo e a programação de scripts em JavaScript.
+
+Você observa o universo em visão estratégica top‑down, comandando sua nave‑mãe e suas unidades. Sua tripulação é uma única e poderosa Inteligência Artificial, HAL‑9001, seu co‑piloto, conselheiro e a interface para todos os sistemas da nave. O sucesso em StarWatch não depende de reflexos, mas da elegância de seus algoritmos, da clareza de suas ordens e da simbiose que você desenvolve com sua IA. Esta é uma experiência single‑player e offline no espírito — mas conectável a um LLM local ou via API — focada na satisfação de construir um sistema autônomo e vê‑lo prosperar no silêncio do espaço.
+
+---
+
+## I. A Visão
+
+- Comandante Estratégico: visão top‑down renderizada em Babylon.js. 80% da tela é o cosmos; 20% (à esquerda) é o Com‑Link (chat com HAL, editor de scripts, status/logs).
+- Automação é Poder: escreva JavaScript para rotinas e protocolos. Criatividade em automação é a chave.
+- HAL‑9001 como Co‑Piloto: um LLM traduz intenção em ações via ferramentas (tools) seguras.
+- Simulação Local: estado e scripts persistem no navegador.
+- Ritmo Contemplativo: pensar, programar, observar.
+
+---
+
+## II. Lore (Adaptado)
+
+Você desperta como Comandante da USS [Nome da Nave], à deriva em um setor desconhecido após o Grande Silêncio. HAL‑9001 está online, porém com protocolos corrompidos. Sobreviver e reconstruir exigirá delegar, automatizar e explorar, um setor por vez.
+
+---
+
+## III. Fundamentos de Gameplay
+
+- Interface de Comando
+  - Com‑Link (20%): Chat com HAL, aba de Scripts (Monaco), aba de Status/Logs.
+  - Visão Estratégica (80%): cena Babylon.js com nave, asteroides, destroços; câmera por arrasto.
+- Task API (segura)
+  - Percepção: `Game.getShipStatus()`, etc.
+  - Ação: `Game.moveTo({ x, y, z })`, etc.
+  - Memória: `Memory.get/set` (em worker isolado).
+- Loop V0 (Movimento e Percepção)
+  1) HAL dá boas‑vindas. 2) Comando em linguagem natural. 3) LLM escolhe tool. 4) Jogo executa. 5) Feedback no chat. 6) Sugestão de script `patrol.js` e execução via HAL.
+
+---
+
+## IV. O Agente: HAL‑9001
+
+- System Prompt: calmo, lógico, subserviente, curioso. Objetivo: autonomia e exploração.
+- Tools (V0): `move`, `ship_status`, `run_script`. Definidas com Vercel AI SDK + Zod.
+- Dinâmica (local): mensagem do usuário → AI SDK (modelo + tools) → decisão do LLM (texto/tool) → execução no motor do jogo → resposta narrativa.
+
+---
+
+## V. Tick do Universo
+
+- Game Loop (render/física): `requestAnimationFrame`.
+- Logic Tick (scripts/estado): 1 Hz determinístico.
+
+---
+
+## VI. Stack Técnica (Local)
+
+- Render: Babylon.js.
+- UI: React + Vite, Monaco Editor.
+- IA: Vercel AI SDK (ai) + provider OpenAI (ou LLM local compatível). Execução de ferramentas no cliente, com API key no navegador apenas para prototipagem.
+- Persistência: LocalStorage/IndexedDB.
+
+---
+
+## VII. Roadmap V0 (Prova de Conceito)
+
+- Interface Mínima: layout 20/80; Com‑Link funcional; Babylon.js com câmera por arrasto.
+- Mundo Básico: nave controlável; campo de asteroides estático.
+- IA + Gameplay: HAL via AI SDK; `move` + `ship_status` + `run_script` como tools.
+- Automação: Monaco integrado; salvar/executar script simples (patrol.js) usando a mesma Task API.
+- Ciclo Validado: mover via chat + executar script de patrulha.
+
+---
+
+## Notas de Segurança (Prototipagem)
+
+Para V0, a API key pode ser digitada no cliente (Status → Configuração de IA). Em produção, use um backend proxy seguro ou um LLM local.
+
+***
+</file>
+
+<file path="package.json">
+{
+  "name": "starwatch-silent-sector",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "vite",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "babylonjs": "^7.17.0",
+    "monaco-editor": "^0.49.0",
+    "zod": "^3.23.8",
+    "ai": "^3.2.25",
+    "@ai-sdk/openai": "^1.0.12",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8",
+    "vite-plugin-monaco-editor": "^1.1.0"
+  }
+}
+</file>
+
+<file path="README.md">
+# StarWatch: The Silent Sector (V0.0.1)
+
+Single‑player prototype with Babylon.js rendering and a HAL‑9001 LLM agent controlling the ship via tools. Built with Vite + React + TypeScript + Vercel AI SDK.
+
+## Quickstart
+
+- Requirements: Node 18+, pnpm
+- Install deps: `pnpm install`
+- Start dev server: `pnpm start`
+- Open: http://localhost:5173
+
+## HAL Setup (AI)
+
+- Option A (env): create a `.env` with `VITE_OPENAI_API_KEY=sk-...` and optionally `VITE_OPENAI_MODEL=gpt-4o-mini`.
+- Option B (UI): go to the Status tab → paste your API key and choose a model.
+- In the Com‑Link tab, try:
+  - `Mova a nave para 500, 0, 250`
+  - `Execute patrol.js`
+
+Notes: For prototyping only, the key is stored in `localStorage` and used client‑side. For production, proxy requests via a backend or use a local LLM.
+
+## Scripts
+
+- `pnpm start` — Run Vite dev server
+- `pnpm build` — Type‑check and build
+- `pnpm preview` — Preview production build
+
+## Project Structure
+
+- `src/game` — Babylon.js scene + game loop
+- `src/ui` — React UI (Com‑Link chat, Monaco editor)
+- `src/hal` — HAL‑9001 agent (Vercel AI SDK + tools)
+- `MANIFESTO.md` — Vision and scope
+
+## License
+
+Prototype for personal use. No license specified.
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {}
+  },
+  "include": ["src"]
+}
+</file>
+
+<file path="vite.config.ts">
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  return {
+    plugins: [react()],
+    define: {
+      'import.meta.env.VITE_OPENAI_API_KEY': JSON.stringify(env.VITE_OPENAI_API_KEY || env.OPENAI_API_KEY || ''),
+      'import.meta.env.VITE_OPENAI_MODEL': JSON.stringify(env.VITE_OPENAI_MODEL || env.OPENAI_MODEL || 'gpt-4o-mini'),
+    },
+  };
+});
+</file>
+
+</files>
