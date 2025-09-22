@@ -59,33 +59,33 @@ export function Chat({ hal, defaultScript }: Props) {
                 <div>{m.content}</div>
               </>
             ) : (
-              <div style={{ background: 'rgba(26,42,74,0.65)', border: '1px solid #24345a', borderRadius: 8, padding: 8 }}>
-                <div style={{ fontSize: 12, opacity: 0.85, color: '#9bb0d9' }}>Tool call</div>
-                <div style={{ fontWeight: 700, color: '#e3ecff' }}>{m.meta?.name || 'tool'}</div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, opacity: 0.8 }}>Input</div>
-                    <pre style={preBox}>{JSON.stringify(m.meta?.input ?? {}, null, 2)}</pre>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, opacity: 0.8 }}>Output</div>
-                    <pre style={preBox}>{JSON.stringify(m.meta?.output ?? {}, null, 2)}</pre>
-                  </div>
+              <div style={toolCardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: 6, background: '#122039', border: '1px solid #24345a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9bb0d9', fontSize: 12 }}>🛠️</div>
+                  <div style={{ fontWeight: 700, color: '#e3ecff' }}>{m.meta?.name || 'tool'}</div>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Input</div>
+                  <pre style={{ ...preBox, width: '100%' }}>{JSON.stringify(m.meta?.input ?? {}, null, 2)}</pre>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Output</div>
+                  <pre style={{ ...preBox, width: '100%' }}>{JSON.stringify(m.meta?.output ?? {}, null, 2)}</pre>
                 </div>
               </div>
             )}
           </div>
         ))}
       </div>
-      <div style={{ borderTop: '1px solid #1c2541', padding: 8 }}>
+      <div style={{ borderTop: '1px solid #1c2541', padding: 8, boxSizing: 'border-box', width: '100%' }}>
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder="Digite um comando para HAL"
-          style={{ width: '100%', height: 70, resize: 'none', background: '#0b1120', color: '#e3ecff', border: '1px solid #1c2541', borderRadius: 6, padding: 8 }}
+          style={{ width: '100%', maxWidth: '100%', display: 'block', height: 70, resize: 'none', background: '#0b1120', color: '#e3ecff', border: '1px solid #1c2541', borderRadius: 6, padding: 8, boxSizing: 'border-box' }}
         />
-        <div style={{ display: 'flex', marginTop: 6, gap: 8 }}>
+        <div style={{ display: 'flex', marginTop: 6, gap: 8, width: '100%' }}>
           <button onClick={send} style={btnStyle}>Enviar</button>
         </div>
       </div>
@@ -102,6 +102,15 @@ const btnStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+const toolCardStyle: React.CSSProperties = {
+  background: 'rgba(26,42,74,0.65)',
+  border: '1px solid #24345a',
+  borderRadius: 10,
+  padding: 10,
+  overflow: 'hidden',
+  boxSizing: 'border-box',
+};
+
 const preBox: React.CSSProperties = {
   margin: 0,
   padding: 8,
@@ -112,4 +121,8 @@ const preBox: React.CSSProperties = {
   maxHeight: 160,
   overflow: 'auto',
   fontSize: 12,
+  width: '100%',
+  maxWidth: '100%',
+  boxSizing: 'border-box',
+  display: 'block',
 };
