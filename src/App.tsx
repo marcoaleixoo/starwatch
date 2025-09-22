@@ -10,6 +10,7 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [game, setGame] = useState<Game | null>(null);
   const [tab, setTab] = useState<Tab>('chat');
+  const [mapMode, setMapMode] = useState<'sector' | 'galaxy'>('sector');
   const [scriptCode, setScriptCode] = useState<string>(() => `// patrol.js\n// Exemplo de patrulha simples entre dois pontos\n// A API disponível no worker: Game.moveTo({x, y, z}), Memory.get/set, sleep(ms)\n(async () => {\n  const A = { x: 500, y: 0, z: 250 };\n  const B = { x: 200, y: 0, z: -200 };\n  while (true) {\n    await Game.moveTo(A);\n    await sleep(3000);\n    await Game.moveTo(B);\n    await sleep(3000);\n  }\n})();\n`);
 
   // Setup Game
@@ -36,6 +37,12 @@ export default function App() {
         return { ok: true } as const;
       },
       getShipStatus: async () => game?.getShipStatus() ?? null,
+      getSectorInfo: async () => game?.getSectorInfo() ?? null,
+      scanSector: async (filter?: { resource?: 'iron' | 'silicon' | 'uranium'; limit?: number }) => game?.scanSector(filter) ?? [],
+      getResources: async () => game?.getResources() ?? { iron: 0, silicon: 0, uranium: 0 },
+      startMining: async (resource: 'iron' | 'silicon' | 'uranium') => game?.startMining(resource) ?? { ok: false, error: 'Game not ready' },
+      stopMining: async () => game?.stopMining() ?? { ok: false },
+      performScan: async () => game?.performScan() ?? [],
       runScript: async (name: string, code: string) => {
         if (!game) return { ok: false, error: 'Game not ready' } as const;
         game.runScript({ name, code });
@@ -66,7 +73,10 @@ export default function App() {
         </div>
       </aside>
       <main style={{ flex: 1, position: 'relative' }}>
-        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', background: '#060a15' }} />
+        <TopHUD game={game} mapMode={mapMode} onChangeMap={setMapMode} />
+        <RightPanel game={game} />
+        {mapMode === 'galaxy' && <GalaxyOverlay game={game} onClose={() => setMapMode('sector')} />}
       </main>
     </div>
   );
@@ -83,9 +93,12 @@ function StatusPanel({ game, apiKey, setApiKey, model, setModel }: { game: Game 
     <div style={{ padding: 12, fontSize: 14 }}>
       <div style={{ opacity: 0.7 }}>USS [Nome da Nave]</div>
       <div>Posição: {status ? `${status.position.x.toFixed(1)}, ${status.position.y.toFixed(1)}, ${status.position.z.toFixed(1)}` : '—'}</div>
-      <div>Velocidade: {status ? status.speed.toFixed(2) : '—'}</div>
+      <div>Velocidade: {status ? status.speed.toFixed(2) : '—'} km/s</div>
       <div>Destino: {status?.destination ? `${status.destination.x}, ${status.destination.y}, ${status.destination.z}` : '—'}</div>
       <div>Tick: {tick}</div>
+      <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+        <button onClick={() => game?.resetSector()} style={panelBtnStyle}>Resetar Setor</button>
+      </div>
       <div style={{ borderTop: '1px solid #1c2541', marginTop: 10, paddingTop: 10 }}>
         <div style={{ marginBottom: 6, opacity: 0.8 }}>Configuração de IA</div>
         <label style={{ display: 'block', fontSize: 12, opacity: 0.8 }}>OpenAI API Key</label>
@@ -120,4 +133,196 @@ function tabBtn(active: boolean): React.CSSProperties {
     borderRight: '1px solid #1c2541',
     cursor: 'pointer',
   } as React.CSSProperties;
+}
+
+const panelBtnStyle: React.CSSProperties = {
+  background: '#1a2a4a',
+  color: '#e3ecff',
+  border: '1px solid #24345a',
+  padding: '8px 12px',
+  borderRadius: 6,
+  cursor: 'pointer',
+};
+
+function switchBtn(active: boolean): React.CSSProperties {
+  return {
+    padding: '6px 12px',
+    background: active ? '#121a31' : 'transparent',
+    color: active ? '#e3ecff' : '#9bb0d9',
+    border: 'none',
+    borderRight: '1px solid #1c2541',
+    cursor: 'pointer',
+  } as React.CSSProperties;
+}
+
+function GalaxyOverlay({ game, onClose }: { game: Game | null; onClose: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [seed, setSeed] = useState<number | null>(null);
+  useEffect(() => {
+    const info = game?.getSectorInfo();
+    setSeed(info?.seed ?? null);
+  }, [game]);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    function rngFromSeed(s: number) {
+      let a = s >>> 0;
+      return () => {
+        a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    const s = seed ?? 1;
+    const rnd = rngFromSeed(s);
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0,0,W,H);
+    // Background
+    ctx.fillStyle = '#060a15'; ctx.fillRect(0,0,W,H);
+    // Stars field
+    for (let i = 0; i < 800; i++) {
+      const x = rnd()*W, y = rnd()*H; const r = rnd()*1.2+0.2;
+      ctx.fillStyle = rnd()<0.25 ? 'rgba(200,220,255,0.9)' : 'rgba(240,245,255,0.9)';
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    }
+    // Nodes (mock galaxy map)
+    const nodes: {x:number;y:number;name:string;current?:boolean}[] = [];
+    for (let i=0;i<18;i++){ const x = 80 + rnd()*(W-160); const y = 80 + rnd()*(H-160); nodes.push({x,y,name:`S-${(i+1).toString().padStart(2,'0')}`}); }
+    // Current sector highlighted at center-ish
+    nodes[0].current = true; nodes[0].x = W*0.5; nodes[0].y = H*0.5; nodes[0].name = 'Atual';
+    ctx.strokeStyle = 'rgba(80,120,200,0.3)';
+    for (let i=0;i<nodes.length;i++){ for(let j=i+1;j<nodes.length;j++){ if (rnd()<0.08){ ctx.beginPath(); ctx.moveTo(nodes[i].x,nodes[i].y); ctx.lineTo(nodes[j].x,nodes[j].y); ctx.stroke(); } } }
+    for (const n of nodes){
+      ctx.beginPath(); ctx.arc(n.x,n.y,n.current?6:4,0,Math.PI*2); ctx.fillStyle = n.current?'#7eb6ff':'#9fb6ff'; ctx.fill();
+      ctx.fillStyle = 'rgba(220,230,255,0.85)'; ctx.font = '12px system-ui'; ctx.fillText(n.name, n.x+8, n.y-8);
+    }
+  }, [seed]);
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, background: 'rgba(8,12,24,0.86)', backdropFilter: 'blur(2px)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 10 }}>
+        <div style={{ color: '#e3ecff', fontWeight: 700 }}>Galaxy Map</div>
+        <button onClick={onClose} style={panelBtnStyle}>Voltar ao Setor</button>
+      </div>
+      <div style={{ flex: 1, padding: 10 }}>
+        <canvas ref={canvasRef} width={900} height={520} style={{ width: '100%', height: '100%', border: '1px solid #1c2541', borderRadius: 8, background: '#060a15' }} />
+      </div>
+      <div style={{ padding: 10, color: '#9bb0d9', fontSize: 13 }}>Protótipo do mapa galáctico: nós gerados por seed para visualização. Viagens e setores múltiplos virão em próximas versões.</div>
+    </div>
+  );
+}
+
+function TopHUD({ game, mapMode, onChangeMap }: { game: Game | null; mapMode: 'sector' | 'galaxy'; onChangeMap: (m: 'sector' | 'galaxy') => void }) {
+  const [hud, setHud] = useState({
+    sectorName: '—',
+    iron: 0,
+    silicon: 0,
+    uranium: 0,
+    pos: '—',
+    speed: '—',
+  });
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const sec = game?.getSectorInfo();
+      const res = game?.getResources();
+      const st = game?.getShipStatus();
+      setHud({
+        sectorName: sec?.name ?? '—',
+        iron: Number(res?.iron?.toFixed?.(1) ?? 0),
+        silicon: Number(res?.silicon?.toFixed?.(1) ?? 0),
+        uranium: Number(res?.uranium?.toFixed?.(1) ?? 0),
+        pos: st ? `${st.position.x.toFixed(0)}, ${st.position.y.toFixed(0)}, ${st.position.z.toFixed(0)}` : '—',
+        speed: st ? st.speed.toFixed(2) : '—',
+      });
+    }, 500);
+    return () => clearInterval(id);
+  }, [game]);
+
+  return (
+    <div style={{ position: 'absolute', top: 10, left: 10, right: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', pointerEvents: 'auto', zIndex: 5 }}>
+      <div style={{ display: 'flex', gap: 14, background: 'rgba(13,19,36,0.7)', border: '1px solid #1c2541', borderRadius: 8, padding: '6px 10px', pointerEvents: 'auto' }}>
+        <strong style={{ color: '#e3ecff' }}>Setor: {hud.sectorName}</strong>
+        <span style={{ color: '#9bb0d9' }}>Pos: {hud.pos} km</span>
+        <span style={{ color: '#9bb0d9' }}>Vel: {hud.speed} km/s</span>
+      </div>
+      <div style={{ display: 'flex', gap: 0, pointerEvents: 'auto', border: '1px solid #1c2541', borderRadius: 8, overflow: 'hidden', background: '#0d1324' }}>
+        <button onClick={() => onChangeMap('sector')} style={{ ...switchBtn(mapMode==='sector') }}>Sector Map</button>
+        <button onClick={() => onChangeMap('galaxy')} style={{ ...switchBtn(mapMode==='galaxy') }}>Galaxy Map</button>
+      </div>
+      <div style={{ display: 'flex', gap: 10, background: 'rgba(13,19,36,0.7)', border: '1px solid #1c2541', borderRadius: 8, padding: '6px 10px', pointerEvents: 'auto' }}>
+        <span>Fe: <strong style={{ color: '#e3ecff' }}>{hud.iron}</strong></span>
+        <span>Si: <strong style={{ color: '#e3ecff' }}>{hud.silicon}</strong></span>
+        <span>U: <strong style={{ color: '#e3ecff' }}>{hud.uranium}</strong></span>
+      </div>
+    </div>
+  );
+}
+
+function RightPanel({ game }: { game: Game | null }) {
+  const [fleet, setFleet] = useState<any[]>([]);
+  const [clusters, setClusters] = useState<any[]>([]);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [asteroidsByCluster, setAsteroidsByCluster] = useState<Record<string, any[]>>({});
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setFleet(game?.getFleet() || []);
+      setClusters(game?.getClustersOverview(true) || []);
+    }, 800);
+    return () => clearInterval(id);
+  }, [game]);
+
+  const expandCluster = (cid: string) => {
+    const open = !expanded[cid];
+    setExpanded({ ...expanded, [cid]: open });
+    if (open) {
+      const list = game?.getAsteroidsInCluster(cid, true) || [];
+      setAsteroidsByCluster((m) => ({ ...m, [cid]: list }));
+    }
+  };
+
+  const smallBtn: React.CSSProperties = { background: '#1a2a4a', color: '#e3ecff', border: '1px solid #24345a', borderRadius: 6, cursor: 'pointer' };
+
+  return (
+    <div style={{ position: 'absolute', top: 56, right: 10, width: 300, maxHeight: '60%', overflow: 'auto', background: 'rgba(13,19,36,0.85)', border: '1px solid #1c2541', borderRadius: 8, padding: 10, color: '#d3e0ff', pointerEvents: 'auto', zIndex: 5 }}>
+      <div style={{ marginBottom: 8, fontWeight: 700 }}>Naves</div>
+      {fleet.map((s) => (
+        <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1c2541' }}>
+          <div>
+            <div style={{ fontWeight: 600 }}>{s.name}</div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>Pos: {s.position.x.toFixed(0)}, {s.position.y.toFixed(0)}, {s.position.z.toFixed(0)} km</div>
+          </div>
+          <button onClick={() => game?.focusCameraOn && game.focusCameraOn({ x: s.position.x, y: s.position.y, z: s.position.z }, 80)} style={{ ...smallBtn, padding: '6px 8px' }}>Focar</button>
+        </div>
+      ))}
+      <div style={{ marginTop: 10, marginBottom: 6, fontWeight: 700 }}>Asteroid Clusters</div>
+      {clusters.map((c) => (
+        <div key={c.id} style={{ marginBottom: 6 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => expandCluster(c.id)}>
+            <div>
+              <span style={{ fontWeight: 600 }}>{c.id}</span> <span style={{ opacity: 0.8 }}>({c.type})</span>
+            </div>
+            <div style={{ opacity: 0.8 }}>Descobertos: {c.discovered}</div>
+          </div>
+          {expanded[c.id] && (
+            <div style={{ marginTop: 4, paddingLeft: 8 }}>
+              {(asteroidsByCluster[c.id] || []).map((a) => (
+                <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '2px 0' }}>
+                  <span>{a.resource} @ ({Math.round(a.position.x)}, {Math.round(a.position.y)}, {Math.round(a.position.z)})</span>
+                  <button onClick={() => game?.focusCameraOn && game.focusCameraOn({ x: a.position.x, y: a.position.y, z: a.position.z }, 70)} style={{ ...smallBtn, padding: '2px 6px', fontSize: 12 }}>Ir</button>
+                </div>
+              ))}
+              {(asteroidsByCluster[c.id] || []).length === 0 && (
+                <div style={{ fontSize: 12, opacity: 0.75 }}>Nenhum asteroide escaneado neste cluster.</div>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+      <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>Dica: use o Com‑Link “Escaneie o setor” para revelar asteroides próximos.</div>
+    </div>
+  );
 }
