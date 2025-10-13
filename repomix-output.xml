@@ -40,9 +40,13 @@ The content is organized as follows:
 </file_summary>
 
 <directory_structure>
+releases/
+  v0.1.0.md
+  v0.2.0.md
 src/
   game/
     Game.ts
+    world.ts
   hal/
     halLLM.ts
   ui/
@@ -52,10 +56,10 @@ src/
   env.d.ts
   main.tsx
 .gitignore
+AGENTS.md
 index.html
 MANIFESTO.md
 package.json
-README.md
 tsconfig.json
 vite.config.ts
 </directory_structure>
@@ -63,8 +67,1061 @@ vite.config.ts
 <files>
 This section contains the contents of the repository's files.
 
+<file path="src/ui/MonacoEditor.tsx">
+import React, { useEffect, useRef } from 'react';
+// ESM API + workers for Vite
+import * as monacoNs from 'monaco-editor/esm/vs/editor/editor.api';
+// Workers mapping for Vite
+// @ts-ignore
+import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+// @ts-ignore
+import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
+// @ts-ignore
+import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
+// @ts-ignore
+import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
+// @ts-ignore
+import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+
+// @ts-ignore
+self.MonacoEnvironment = {
+  getWorker(_: string, label: string) {
+    if (label === 'json') return new (JsonWorker as any)();
+    if (label === 'css') return new (CssWorker as any)();
+    if (label === 'html') return new (HtmlWorker as any)();
+    if (label === 'typescript' || label === 'javascript') return new (TsWorker as any)();
+    return new (EditorWorker as any)();
+  },
+};
+
+type Props = {
+  value: string;
+  language?: string;
+  onChange?: (value: string) => void;
+};
+
+export function MonacoEditor({ value, language = 'javascript', onChange }: Props) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const editorRef = useRef<monacoNs.editor.IStandaloneCodeEditor | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const editor = monacoNs.editor.create(containerRef.current, {
+      value,
+      language,
+      theme: 'vs-dark',
+      automaticLayout: true,
+      minimap: { enabled: false },
+      fontSize: 13,
+    });
+    editorRef.current = editor;
+    const sub = editor.onDidChangeModelContent(() => {
+      const val = editor.getValue();
+      onChange?.(val);
+    });
+    return () => {
+      sub.dispose();
+      editor.dispose();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (editorRef.current && value !== editorRef.current.getValue()) {
+      editorRef.current.setValue(value);
+    }
+  }, [value]);
+
+  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
+}
+</file>
+
+<file path="src/env.d.ts">
+/// <reference types="vite/client" />
+
+interface ImportMetaEnv {
+  readonly VITE_OPENAI_API_KEY?: string;
+  readonly VITE_OPENAI_MODEL?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+</file>
+
+<file path="src/main.tsx">
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+
+const root = createRoot(document.getElementById('root')!);
+root.render(<App />);
+</file>
+
+<file path="AGENTS.md">
+# Repository Guidelines
+
+## Project Structure & Module Organization
+- `src/` – application code
+  - `src/ui/` React views (`Chat.tsx`, `MonacoEditor.tsx`)
+  - `src/game/` Babylon.js gameplay (`Game.ts`, `world.ts`)
+  - `src/hal/` LLM bridge (`halLLM.ts`)
+  - `src/main.tsx`, `src/App.tsx` app entry
+- `index.html` Vite HTML entry
+- `vite.config.ts`, `tsconfig.json` build/config
+- `dist/` build output (ignored)
+- `docs/` reference docs
+- `releases/` release notes
+
+## Build, Run & Environment
+- Install: `pnpm install` (pnpm is preferred; lockfile present)
+- Dev server: `pnpm dev` (Vite at http://localhost:5173)
+- Build: `pnpm build` (TypeScript compile + Vite bundle)
+- Preview build: `pnpm preview`
+- Node 18+ recommended. Environment: set `OPENAI_API_KEY` (or `VITE_OPENAI_API_KEY`) and optional `OPENAI_MODEL` (default `gpt-4o-mini`). Example `.env`:
+  
+  OPENAI_API_KEY=sk-...
+  OPENAI_MODEL=gpt-4o-mini
+
+## Coding Style & Naming Conventions
+- TypeScript strict; avoid `any`. Two-space indentation.
+- React function components; components PascalCase (`App.tsx`), files in `ui/` follow this pattern.
+- Variables/functions camelCase; folders lowercase.
+- Keep inline styles consistent with existing code; prefer local, focused modules and explicit types.
+
+## Testing Guidelines
+- No automated tests yet. If adding:
+  - Use Vitest; React Testing Library for UI.
+  - Name tests `*.test.ts`/`*.test.tsx` near sources or in `src/__tests__/`.
+  - Prioritize fast unit tests for `world.ts` (determinism) and `halLLM.ts` (intent handling).
+
+## Commit & Pull Request Guidelines
+- Follow Conventional Commits (seen in history): `feat: ...`, `fix: ...`, `chore: ...`.
+- Branch naming: `feat/<scope>`, `fix/<scope>`.
+- PRs include: clear description, linked issues, screenshots/GIFs for UI, and manual test steps (dev server or preview).
+- Keep PRs focused; update docs or release notes when relevant.
+
+## Security & Configuration Tips
+- Do not commit real secrets. `.env` is git-ignored.
+- Vite maps `OPENAI_*` → `import.meta.env.VITE_OPENAI_*`; verify in `vite.config.ts`.
+- For contributors, consider adding a sanitized `.env.example` with required keys.
+
+## Architecture Overview
+- Game: Babylon.js scene, sector generation, mining and scanning (`src/game/*`).
+- HAL: LLM intent → game tool calls (`src/hal/halLLM.ts`).
+- UI: Chat/Editor panels + canvas HUD (`src/ui/*`, `App.tsx`).
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {}
+  },
+  "include": ["src"]
+}
+</file>
+
+<file path="vite.config.ts">
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  return {
+    plugins: [react()],
+    define: {
+      'import.meta.env.VITE_OPENAI_API_KEY': JSON.stringify(env.VITE_OPENAI_API_KEY || env.OPENAI_API_KEY || ''),
+      'import.meta.env.VITE_OPENAI_MODEL': JSON.stringify(env.VITE_OPENAI_MODEL || env.OPENAI_MODEL || 'gpt-4o-mini'),
+    },
+  };
+});
+</file>
+
+<file path="releases/v0.1.0.md">
+# StarWatch v0.1.0 — Sector Genesis
+
+Data: 2025-09-22
+
+Primeiro salto pós-v0: setores gerados proceduralmente, HUD básico, seleção de asteroides e mineração inicial com integração ao HAL — agora com visual espacial, scan real, clusters 3D, mapas (Sector/Galaxy) e persistência.
+
+Principais mudanças
+- Remoção de “The Silent Sector” do nome e título do projeto.
+- Geração de Setor (seeded):
+  - Novo módulo `src/game/world.ts` com PRNG seeded e geração de asteroides em clusters e fundo.
+  - Setores têm nome procedural (ex.: Elysion-347-VI), seed e limites.
+  - Clusters possuem altura (Y) por tipo: ferro (faixa média), silício (camadas superiores), urânio (camadas profundas).
+- Asteroides com recursos:
+  - Cada asteroide possui tipo de recurso (`iron`, `silicon`, `uranium`) e quantidade (tons).
+  - Cores distintas por recurso e redução visual conforme são minerados.
+- Mineração básica:
+  - Nova lógica no `Game` para minerar quando a nave está no raio de mineração.
+  - Taxa inicial: 5 t/s, alcance ~10u. Quando esgota, o asteroide é removido.
+  - Inventário do jogador: Fe/Si/U acumulando conforme mineração.
+- Seleção e interação:
+  - Ray picking para selecionar asteroides; realce por emissive color.
+- Scan real e descoberta:
+  - Ação `perform_scan` executa varredura ativa de até ~1000 km em torno da nave.
+  - Listagens e o painel de clusters só mostram asteroides já descobertos.
+  - Removida a via duplicada (botão de scan no Status) — escaneamento agora é apenas via HAL/comandos.
+- HUD (Top Bar):
+  - Nome do setor, posição e velocidade da nave, totais de Fe/Si/U.
+- Painel lateral direito (flutuante):
+  - Seção “Naves” com botão “Focar” (aproxima câmera).
+  - Seção “Asteroid Clusters” com expansão de asteroides escaneados por cluster e botão “Ir”.
+- Visual do espaço:
+  - Céu com starfield procedural (estrelas azuladas/brancas) e poeira estelar sutil via partículas.
+  - Sol (mega estrela) emissivo com bloom e luz pontual distante.
+  - Fundo escuro e fog linear mais suave (maior alcance de visão).
+- Mapa:
+  - Alternância “Sector Map / Galaxy Map” no HUD superior.
+  - Sector Map: zoom‑out top‑down real da cena do setor (sem fog), com labels 3D para clusters e posição da estrela; ESC ou clicar novamente retorna ao jogo.
+  - Galaxy Map: overlay 2D (protótipo) gerado por seed com nós, conexões e destaque do setor atual.
+- Formas e cores dos asteroides:
+  - Formas aleatórias por tipo (rochosos, cristalinos, alongados) com ruído determinístico por id.
+  - Mapeamento de cores consistente: ferro = verde, silício = azul‑acinzentado, urânio = âmbar.
+- Persistência de sessão:
+  - Estado salvo em `localStorage` (`starwatch.v010.save`): seed, inventário, asteroides (quantidades), posição/destino da nave e objetos escaneados.
+  - Limpe a chave do storage para reiniciar um setor novo.
+- HAL-9001 expandido:
+  - Novas ações: `scan_sector`, `get_resources`, `start_mining`, `stop_mining` (além de `move`, `ship_status`, `run_script`).
+  - `scan_sector` lista alvos próximos por recurso; `start_mining` direciona a nave e aciona mineração ao chegar.
+
+Correções/Refinos
+- Corrigido “fundo branco” em alguns cenários: skybox interno e textura aplicada como diffuse+emissive, com material neutro.
+- HUD com ponteiros clicáveis e z-index adequado (botões de mapa sempre clicáveis).
+
+Como testar
+1) `pnpm dev` (ou `npm run dev`) e abra no navegador.
+2) Use o Com‑Link (escaneamento apenas via HAL):
+   - “Escaneie o setor por ferro” (scan_sector)
+   - “Realize uma varredura ativa” (perform_scan)
+   - “Inicie mineração de ferro” (start_mining)
+   - “Pare a mineração” (stop_mining)
+   - “Mova para 500, 0, 250” (move)
+3) No HUD, alterne “Sector Map” para a vista top‑down; ESC retorna ao jogo. “Galaxy Map” abre overlay 2D (protótipo); ESC fecha.
+4) Clique na nave no painel “Naves” para focar a câmera; expanda “Asteroid Clusters” para ver descobertas por cluster. Observe o HUD acumulando Fe/Si/U.
+
+Notas
+- Este é um passo focado em mundo/recursos/UI. Próximo foco: naves secundárias, energia e geração persistente por seed via URL/Save.
+</file>
+
+<file path="releases/v0.2.0.md">
+## v0.2.0 — GUI & Mundo Maior (em progresso)
+
+Foco: experiência do jogador, base de GUI e um setor muito maior com geração procedural consistente.
+
+Principais mudanças
+- Câmera “Seguir” a nave: novo botão no painel de Naves. Alterna entre Seguir/Seguindo. Usa `ArcRotateCamera.lockedTarget` para manter o foco durante a navegação.
+- Foco por clique: clicar em asteroides/nave foca a câmera neles (limpa o modo seguir quando acionado). Já existia parcialmente; foi refinado e integrado ao fluxo.
+- Setor significativamente maior: `bounds` do setor passou para ~6000 km de raio. A densidade de objetos foi recalibrada para performance, com mais clusters espalhados e fundo esparso.
+- Velocidade da nave escalonada: ajustada dinamicamente para levar ~30 min para cruzar o setor de ponta a ponta (diâmetro). O cálculo é proporcional ao tamanho do setor.
+- Scanner com alcance relativo ao setor: raio de varredura agora escala com `bounds` (mantém utilidade local em mapas grandes).
+- Artefatos de cenário escalados: skybox, poeira espacial e posição/tamanho do sol agora consideram o tamanho do setor.
+- Modo Mapa do Setor preserva estado: ao entrar no mapa, follow é desligado e restabelecido ao sair.
+- Persistência: chave de save migrada para `starwatch.v020.save` para isolar a v0.1.0.
+- Painel de Clusters claro: exibe apenas clusters com asteroides já escaneados. Quando nenhum foi descoberto ainda, mostra instrução para se aproximar e escanear. Cada cluster possui botões “Focar” e “Ir”.
+- HAL assertivo no scan: ao pedir varredura por um recurso e não existir alvo no raio, o HAL informa explicitamente que não há alvos (sem listas vazias).
+- Novo tool `mining_status`: permite ao HAL reportar progresso da mineração e quando um alvo é esgotado.
+- Cards de ferramentas no chat: cada tool call aparece como um mini card com o input/output brutos (auditoria e debug amigáveis).
+
+UX/GUI — Iteração atual
+- Galaxy Map removido (mock): reduz complexidade e foca no Mapa do Setor.
+- HUD superior unificado: Setor + “Mapa do Setor” + grupo “Minérios” (Fe/Si/U) com rótulo e tooltips. Posição/velocidade da nave saem do topo (cada nave exibe sua posição no painel direito).
+- Scanner como drawer lateral direito: colapsável, alça persistente, tabs Naves/Clusters, ações “Focar/Seguir”. Altura ajustada para não colidir com topo/rodapé (responsivo) e, por ora, limitada a ~80% do viewport para garantir espaço à barra inferior.
+- Handle do drawer redesenhado: botão circular centrado na borda, com sombra suave e setas ‹/›. Painel desce alguns pixels para dar “teco” de respiro no topo.
+- Barra de Construções (rodapé): categorias Base/Oxigênio/Energia/Indústria/Defesa. Ao selecionar uma categoria, abre paleta que expande para cima; ao clicar num item, mostra preview/miniatura com descrição, custos (Fe/Si/U) e delta de energia. Botão “Colocar (em breve)” apenas sinaliza; nada é construído ainda.
+- Interações refinadas: clicar novamente na categoria fecha a paleta; ESC fecha o item ativo e, se nenhum, fecha a paleta. Toda a barra ocupa a largura total e evita sobreposição com outros painéis.
+- Com‑Link: input 100% contido na coluna esquerda (sem “vazar” largura). Cards de tool call reestilizados para 3 linhas (título; Input; Output), responsivos e com caixas de JSON roláveis.
+- Ajuste visual dos JSONs: caixas agora têm `box-sizing` e largura máxima para não “vazar” do card.
+- Sobreposições corrigidas: z‑index e cálculo dinâmico de alturas via `ResizeObserver` entre HUD superior, drawer e barra de construções.
+
+Notas de implementação
+- Core: `src/game/Game.ts` (follow, escala, scanner relativo, assets de fundo, `getMiningStatus()` e log de esgotamento de alvo).
+- Mundo: `src/game/world.ts` (bounds e distribuição de clusters/asteroides).
+- UI:
+  - `src/App.tsx`
+    - Remoção completa do Galaxy Map mock.
+    - `TopHUD`: HUD consolidado + reporte de altura (para o drawer).
+    - `RightDrawer`: drawer colapsável com tabs; altura respeita topo/rodapé e limite ~80vh.
+    - `ConstructionBar`: categorias/paleta/preview; reporte de altura para evitar overlap.
+  - `src/ui/Chat.tsx`
+    - Input com box‑sizing e largura contida.
+    - Card de tool call em 3 linhas (título, Input, Output) com JSON rolável.
+- HAL/LLM: `src/hal/halLLM.ts` (tool `mining_status`, resposta “sem alvos” no scan e logging dos tool calls no histórico do chat).
+</file>
+
+<file path="src/game/world.ts">
+import { Vector3 } from 'babylonjs';
+
+export type ResourceType = 'iron' | 'silicon' | 'uranium';
+
+export type ClusterDef = {
+  id: string;
+  type: ResourceType; // dominant resource
+  center: { x: number; y: number; z: number };
+  radius: number; // cluster radius (km)
+};
+
+export type AsteroidDef = {
+  id: string;
+  position: { x: number; y: number; z: number };
+  radius: number; // visual size (km)
+  resource: ResourceType;
+  amount: number; // resource remaining (tons)
+  clusterId?: string;
+};
+
+export type Sector = {
+  id: string;
+  name: string;
+  seed: number;
+  bounds: number; // roughly the play radius from origin (km)
+  clusters: ClusterDef[];
+  asteroids: AsteroidDef[];
+};
+
+// Simple seeded PRNG (mulberry32)
+function mulberry32(a: number) {
+  return function () {
+    let t = (a += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pick<T>(rng: () => number, items: T[]): T {
+  return items[Math.floor(rng() * items.length) % items.length];
+}
+
+function weightedPick<T>(rng: () => number, items: { v: T; w: number }[]): T {
+  const total = items.reduce((a, b) => a + b.w, 0);
+  let r = rng() * total;
+  for (const it of items) {
+    r -= it.w;
+    if (r <= 0) return it.v;
+  }
+  return items[items.length - 1]!.v;
+}
+
+function nameFromSeed(seed: number): string {
+  const prefixes = ['Elysion', 'Kepler', 'Tethys', 'Aquila', 'Cygnus', 'Hydra', 'Vela', 'Altair', 'Draco'];
+  const suffixes = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'];
+  const rng = mulberry32(seed);
+  const p = pick(rng, prefixes);
+  const s = pick(rng, suffixes);
+  const n = Math.floor(rng() * 900 + 100);
+  return `${p}-${n}-${s}`;
+}
+
+export function generateSector(seed = Math.floor(Math.random() * 2 ** 31)): Sector {
+  const rng = mulberry32(seed);
+  // Setor significativamente maior; escala de base ~6000 km de raio
+  const bounds = 6000; // overall sector radius
+
+  // Generate a few clusters
+  // Mais clusters, distribuídos pelo setor
+  const clustersCount = Math.floor(rng() * 5) + 7; // 7..11
+  const clusters: ClusterDef[] = [];
+  const resourceBias: ResourceType[] = ['iron', 'silicon', 'uranium'];
+
+  for (let i = 0; i < clustersCount; i++) {
+    const angle = rng() * Math.PI * 2;
+    const dist = (0.28 + rng() * 0.66) * bounds; // not too close to center
+    const x = Math.cos(angle) * dist;
+    const z = Math.sin(angle) * dist;
+    // vertical layering by type
+    const type = resourceBias[i % resourceBias.length]!;
+    let yCenter = 0;
+    if (type === 'iron') yCenter = (rng() - 0.5) * 400; // around midplane
+    if (type === 'silicon') yCenter = 300 + rng() * 500; // upper layers
+    if (type === 'uranium') yCenter = -450 - rng() * 600; // deeper layers
+    const r = 350 + rng() * 550; // cluster radius maior
+    clusters.push({ id: `cl-${i}`, type, center: { x, y: yCenter, z }, radius: r });
+  }
+
+  const asteroids: AsteroidDef[] = [];
+
+  // Distribute asteroids: background sparse + clusters dense
+  const backgroundCount = 140 + Math.floor(rng() * 80); // 140..220
+  for (let i = 0; i < backgroundCount; i++) {
+    const angle = rng() * Math.PI * 2;
+    const dist = rng() * bounds;
+    const x = Math.cos(angle) * dist;
+    const z = Math.sin(angle) * dist;
+    const y = (rng() - 0.5) * 1400; // spread in height
+    const radius = 2 + rng() * 5;
+    const resource = weightedPick(rng, [
+      { v: 'iron' as const, w: 6 },
+      { v: 'silicon' as const, w: 3 },
+      { v: 'uranium' as const, w: 1 },
+    ]);
+    const amount = Math.round((15 + rng() * 35) * radius); // scaled by size
+    asteroids.push({ id: `bg-${i}`, position: { x, y, z }, radius, resource, amount });
+  }
+
+  // Clustered asteroids
+  let aid = 0;
+  for (const c of clusters) {
+    const count = 35 + Math.floor(rng() * 45); // 35..80 per cluster
+    for (let i = 0; i < count; i++) {
+      // random in circle
+      const a = rng() * Math.PI * 2;
+      const d = Math.sqrt(rng()) * c.radius; // sqrt for uniform distribution within circle
+      const x = c.center.x + Math.cos(a) * d;
+      const z = c.center.z + Math.sin(a) * d;
+      // vertical distribution per type
+      let y = c.center.y;
+      const thickness = c.type === 'iron' ? 180 : c.type === 'silicon' ? 300 : 380;
+      y += (rng() - 0.5) * thickness;
+      const radius = 3 + rng() * 9;
+      const resource = weightedPick(rng, [
+        { v: c.type, w: 8 },
+        { v: 'iron' as const, w: c.type === 'iron' ? 4 : 2 },
+        { v: 'silicon' as const, w: c.type === 'silicon' ? 4 : 2 },
+        { v: 'uranium' as const, w: c.type === 'uranium' ? 3 : 1 },
+      ]);
+      const amount = Math.round((30 + rng() * 70) * radius);
+      asteroids.push({ id: `a-${aid++}`, position: { x, y, z }, radius, resource, amount, clusterId: c.id });
+    }
+  }
+
+  // Center clearing (some free space at origin)
+  const filtered = asteroids.filter((a) => new Vector3(a.position.x, 0, a.position.z).length() > 120);
+
+  return {
+    id: `S-${seed.toString(16)}`,
+    name: nameFromSeed(seed),
+    seed,
+    bounds,
+    clusters,
+    asteroids: filtered,
+  };
+}
+</file>
+
+<file path=".gitignore">
+node_modules/
+dist/
+.env
+docs/
+</file>
+
+<file path="index.html">
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StarWatch</title>
+    <style>
+      html, body, #root { height: 100%; margin: 0; background: #0b0f1a; color: #d3e0ff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+  </html>
+</file>
+
+<file path="MANIFESTO.md">
+# Game Design Document: StarWatch
+
+## 1. Visão Geral do Jogo
+
+*   **Título:** StarWatch
+*   **Plataforma:** Web (Navegador)
+*   **Gênero:** Estratégia, Automação, Exploração Espacial, Gerenciamento (Single-player focado em IA)
+*   **Premissa Fundamental:** Em StarWatch, o jogador não controla diretamente naves ou estações com cliques frenéticos. Em vez disso, ele comanda sua IA de bordo, HAL-9001, por meio de **linguagem natural** e **scripts JavaScript**, para explorar, minerar, construir e expandir seu império no vazio cósmico. O sucesso depende da inteligência estratégica do jogador, da clareza de suas ordens, da elegância de seus algoritmos de automação e da sinergia que ele desenvolve com sua IA.
+*   **Público-Alvo:** Jogadores que apreciam jogos de automação (Factorio, Satisfactory, Screeps), estratégia em tempo real com microgerenciamento reduzido (Age of Empires, Dwarf Fortress), e que se interessam por IA e programação (mesmo que de forma abstrata, delegando à LLM).
+*   **Vibe:** Sci-fi, "cozy space", contemplativo, com um toque de mistério e a solidão do espaço profundo.
+
+## 2. Core Loop do Jogo (A Jornada do Comandante)
+
+O ciclo central de StarWatch é uma dança contínua entre observação, comando, automação e progresso.
+
+1.  **Observar:** O Comandante visualiza o setor atual em 3D, o mapa galáctico e o estado geral de sua frota e estações através da GUI.
+2.  **Comandar (LLM First):** O Comandante interage primariamente com HAL-9001 via linguagem natural no Com-Link. Ele expressa objetivos de alto nível (Ex: "HAL, precisamos de mais ferro para a construção da Estação Principal", "HAL, explore o setor vizinho e mapeie os recursos").
+3.  **Planejar (IA/Player Collaboration):**
+    *   HAL, com sua "ciência de tudo" (acesso ao estado completo do jogo, recursos, tecnologias, blueprints, geografia do setor), interpreta o comando.
+    *   Se um script for necessário para a tarefa, HAL pode:
+        *   **Gerar um novo script** com base em modelos internos e sua compreensão do objetivo.
+        *   **Modificar um script existente** para se adequar a novas condições ou otimizações.
+        *   **Apresentar o script ao jogador** no Monaco Editor, sugerindo o que ele faz e esperando aprovação ou refinamento.
+    *   O jogador pode aceitar o script gerado, ou (se desejar otimização ou controle mais fino) pode refinar o script manualmente no editor. A edição manual é uma opção, não um requisito constante.
+4.  **Executar:** HAL invoca as ferramentas apropriadas (movimento, mineração, construção, logística) ou executa os scripts JavaScript definidos, atribuindo-os às naves ou estações pertinentes.
+5.  **Automatizar:** Os scripts executam tarefas repetitivas e complexas autonomamente, liberando o Comandante para focar em desafios maiores e decisões estratégicas.
+6.  **Progressar:** À medida que as tarefas são concluídas, recursos são coletados, módulos são construídos, tecnologias são pesquisadas e o império se expande. O jogador desbloqueia novas áreas do mapa, naves mais potentes e capacidades avançadas.
+7.  **Desafios:** O universo apresenta escassez de recursos, a necessidade de otimização da cadeia de suprimentos, gerenciamento de energia, e perigos ambientais (que no futuro podem se tornar interações com facções ou inimigos).
+
+## 3. Player Journey: As Primeiras 30 Horas (Exemplo Detalhado)
+
+Esta trajetória visa introduzir as mecânicas gradualmente, com HAL guiando o jogador.
+
+*   **Horas 0-1: O Despertar e a Crise de Energia**
+    *   **Cenário:** O jogo começa com o jogador acordando na nave-mãe, a **USS Odyssey**, à deriva no "Setor Alpha". HAL-9001 dá as boas-vindas e apresenta o problema crítico: a energia principal da nave está **depletando rapidamente**. Um alerta constante de "Baixa Energia Principal" pisca.
+    *   **Primeiro Comando Guiado:** HAL, com sua voz calma, informa: "Aqui é HAL-9001. Sistemas online. Níveis de energia críticos, Comandante. Recomendo ação imediata. Suas ordens?"
+    *   **Objetivo Implícito:** Resolver a crise energética.
+    *   **Assistência de HAL:** O jogador, sem saber o que fazer, digita: "HAL, o que precisamos fazer sobre a energia?". HAL responde: "Comandante, nossa fonte de energia primária está esgotada. Para sustentar as operações, sugiro que mineremos **Minério Básico (Ferro)** para construir um **Painel Solar Básico**. Nossos scanners indicam um aglomerado de asteroides ricos em ferro nas coordenadas 150, 0, 75."
+    *   **Ação & Primeira Automação:**
+        *   Jogador: "HAL, mova a nave para 150, 0, 75 e comece a minerar ferro."
+        *   HAL: "Entendido, Comandante. Traçando curso para 150, 0, 75. Iniciando protocolo de mineração de ferro ao chegar."
+        *   A USS Odyssey se move. Ao chegar, um script interno `auto_mine_ferro.js` (temporário, gerado por HAL) é ativado, e a nave começa a coletar ferro.
+    *   **Primeira Construção:** Após minerar ~50 unidades de ferro, HAL notifica: "Ferro suficiente coletado para um Painel Solar Básico. Recomendo construir a **Estação de Recarga Solar Alpha** para estabilizar nossa energia. Gostaria de iniciar a construção?"
+        *   Jogador: "Sim, HAL. Inicie a construção."
+        *   HAL: "Comandante, acesse o menu de construções na barra inferior, selecione 'Estação de Recarga Solar Básico' e posicione-a no setor. Requer 50 Ferro e 25 Cobre. Nossas unidades de construção estão prontas." (O jogador aprende a usar o GUI para construir).
+        *   O jogador posiciona o placeholder. A nave-mãe (que tem uma unidade de construção limitada) se move para o local e começa a construir.
+    *   **Recarga Crucial:** Ao terminar, HAL informa: "Comandante, a Estação de Recarga Solar Alpha está online e gerando energia. Nossos níveis da nave-mãe estão perigosamente baixos. Ordene 'USS Odyssey, recarregar na Estação Solar Alpha'."
+        *   Jogador: "USS Odyssey, recarregar na Estação Solar Alpha." A nave se move, encaixa-se (visual), e recarrega em 30 segundos.
+    *   **Lição:** Introdução ao movimento, mineração, construção básica, gerenciamento de energia, GUI e a centralidade de HAL.
+
+*   **Horas 1-5: Estabelecendo a Base e Explorando**
+    *   **Expansão Necessária:** A nave-mãe é lenta. HAL sugere: "Comandante, para acelerar a coleta de recursos, podemos construir uma **Nave de Mineração Básica**. Isso exigirá mais ferro e cobre. Sugiro otimizar nossa mineração."
+    *   **Criação de Scripts Avançados (Monaco Editor):**
+        *   Jogador: "HAL, precisamos de um script de mineração de ferro mais eficiente."
+        *   HAL: "Compreendido, Comandante. Vou gerar um script 'mineracao_otimizada_ferro.js' que inclui um loop de mineração e recarga automática. Por favor, revise-o na aba 'Scripts'." HAL apresenta um script pré-preenchido no Monaco Editor.
+        *   O jogador pode revisar, aceitar e salvar. "HAL, execute 'mineracao_otimizada_ferro.js' na USS Odyssey."
+    *   **FOG OF WAR & Nova Nave:** O jogador é incentivado a explorar, revelando o Setor Alpha.
+        *   Jogador: "HAL, o que falta para construir uma Nave de Mineração Básica?" HAL informa os recursos (Ferro, Cobre, Carbono).
+        *   O jogador usa o menu de construção para construir a `NaveMineradora01`.
+        *   Jogador: "HAL, atribua o script 'mineracao_otimizada_ferro.js' à NaveMineradora01 e inicie." A automação é delegada.
+    *   **Descoberta de Novos Minérios:** A exploração revela aglomerados de asteroides com Cobre, introduzindo novos recursos. HAL alertará sobre isso: "Comandante, scanners de longo alcance detectaram depósitos significativos de Cobre a 400, 0, -200."
+    *   **Lição:** Introdução à frota de naves, uso do Monaco Editor, FOW e descoberta de novos recursos.
+
+*   **Horas 5-15: Logística Inter-Setorial e Cadeias de Produção**
+    *   **Exploração de Setores:** Setor Alpha está sendo dominado. HAL sugere: "Comandante, nossos sensores detectaram um novo setor, o **Setor Beta**, rico em Silício, vital para componentes avançados. Uma viagem levará aproximadamente 45 minutos."
+        *   Jogador: "HAL, envie a USS Odyssey para o Setor Beta." HAL abre o Galaxy View e solicita confirmação.
+    *   **Interface Galaxy View:** A nave-mãe faz a transição para a tela de Galaxy View, onde o jogador a move para o Setor Beta. A viagem ocorre em tempo real, mas com a nave-mãe visível na Galaxy View.
+    *   **Logística Multi-Setorial:** Setor Beta tem um sol mais fraco. A estação solar básica é menos eficiente. HAL sugere uma "Estação de Energia Avançada" que usa **Reatores a Fissão**, exigindo Urânio.
+    *   **Fábricas e Refinarias:** Para componentes avançados e Urânio, o jogador precisa de "Refinarias" (Ferro em Lingotes, Urânio em Barras de Combustível) e "Fábricas de Componentes" (Lingotes em Chips de Processamento).
+        *   Jogador: "HAL, projete um plano para estabelecer uma cadeia de produção de Chips de Processamento no Setor Alpha."
+        *   HAL: "Comandante, isso exigirá a construção de uma Refinaria de Silício, uma Fábrica de Componentes Básicos, e a atribuição de naves de transporte para movimentar recursos entre elas. Posso gerar os scripts de transporte e refino?"
+    *   **Naves Especializadas:** O jogador agora constrói `NaveTransporte01` e `NaveMineradora02` (para Silício). HAL gerencia a atribuição de scripts: `mineracao_silicio.js` para `NaveMineradora02` no Setor Beta, e `transportador_recursos.js` para mover Silício de Beta para Alpha.
+    *   **Lição:** Gerenciamento multi-setorial, cadeias de produção, naves especializadas, e automação logística complexa.
+
+*   **Horas 15-30: Expansão, Otimização e Desafios Maiores**
+    *   **Otimização de Frota e Scripts:** O jogador opera em 2-3 setores. HAL notifica gargalos: "Comandante, a NaveTransporte01 está sobrecarregada. Sugiro construir outra nave de transporte ou otimizar a rota de transporte atual para reduzir o tempo de viagem em 15%." O jogador, agora mais experiente, pode mergulhar no editor para otimizar scripts ou pedir a HAL por sugestões mais avançadas.
+    *   **Pesquisa & Tecnologia:** Através da aba "Tecnologia" (nova aba na Bottom Bar), o jogador usa recursos para "pesquisar" novos módulos, naves e habilidades (ex: "Eficiência de Laser de Mineração Nv.2", "Escudos de Energia", "Drones de Reparo Automático"). HAL pode fazer sugestões: "Comandante, a pesquisa de 'Reatores de Fusão' aumentaria nossa produção de energia em X% e reduziria nossa dependência de Urânio."
+    *   **Primeiros Desafios Ambientais:** HAL alerta: "Comandante, detectamos uma anomalia espacial, uma tempestade de partículas, se aproximando do Setor Delta. Nossas naves de mineração podem ser danificadas se permanecerem lá. Recomendo realocar ou ativar escudos de energia (se disponíveis)." O jogador precisa coordenar a resposta via HAL.
+    *   **Leaderboard:** O jogador verifica o leaderboard e vê seu progresso em "Setores Dominados", "Valor Total da Frota" e "Toneladas de Minério Coletado", motivando a continuar a expansão e otimização.
+    *   **Lição:** Gerenciamento de múltiplos sistemas, planejamento de longo prazo, pesquisa e reação a eventos dinâmicos.
+
+## 4. O Mundo: O Setor Silencioso
+
+O universo de StarWatch é uma tapeçaria de setores interconectados, cada um um sandbox para a exploração e automação.
+
+*   **A. Galaxy View (Mapa Estelar):**
+    *   **Estrutura:** Uma grade proceduralmente gerada de *milhares* de setores. Setores adjacentes são conectados por "rotas de hiperespaço" (abstração de viagem).
+    *   **Navegação:** O jogador interage com o Galaxy View para enviar naves entre setores. A viagem entre setores leva **tempo real** (ex: 15-60 minutos, dependendo da nave/tecnologia), adicionando um elemento de planejamento logístico.
+    *   **Fog of War:** Inicialmente, apenas o setor inicial é revelado. Outros setores são obscurecidos pela "névoa da guerra". Eles são revelados por exploração ativa (enviando naves) ou por leituras de longo alcance de módulos de radar avançados da nave-mãe.
+    *   **Variedade de Setores:** Setores podem ter diferentes "níveis de perigo", "riqueza de minérios", "proximidade de anomalias", "densidade de asteroides", etc., influenciando a estratégia.
+*   **B. O Setor Individual (Babylon.js Scene):**
+    *   **Escala:** Cada setor é vasto. Uma nave com propulsores básicos levaria *aproximadamente 1 hora* para atravessar de ponta a ponta. Isso reforça a importância da automação e do planejamento de rotas eficientes.
+    *   **Procedural Generation:**
+        *   **Estrela Central:** Cada setor terá uma estrela principal. Sua cor (afeta a estética), tamanho e tipo (determinando a intensidade da radiação solar) variam. Alguns setores podem ser "setores escuros" sem uma estrela central, exigindo geradores de energia alternativos.
+        *   **Planetas:** Vários planetas (gigantes gasosos, rochosos, gelados) que servem como pontos de referência visuais e, no futuro, potenciais fontes de gás (gigantes gasosos) ou locais para bases orbitais/superficiais. Não são interagíveis na V0.
+        *   **Aglomerados de Asteroides:** Distribuídos aleatoriamente, mas com lógica:
+            *   **Raridade:** Aglomerados mais próximos da estrela e do "ponto de entrada" do setor contêm minérios comuns (Ferro, Cobre, Carbono). Aglomerados mais distantes, mais ocultos pelo Fog of War e próximos a anomalias, contêm minérios raros (Silício, Titânio, Urânio, Gás Nobre).
+            *   **Variedade Visual:** Asteroides com diferentes texturas, tamanhos, cores (baseados na composição mineral), adicionando vida ao ambiente.
+            *   **Recursos:** Além dos minérios, podem ter "detritos espaciais" que fornecem componentes básicos ou "nuvens de gás" colhíveis.
+        *   **Fenômenos Cósmicos:** Nebulosas (visuais, talvez com efeitos de camuflagem ou interferência de radar), campos de gelo, cinturões de detritos.
+    *   **Estética:** "Lindo, cozy, space." A paleta de cores deve ser suave, com iluminação dinâmica da estrela. Partículas sutis (poeira espacial) podem adicionar profundidade. A câmera deve ter um campo de visão amplo, mas com detalhes visíveis ao se aproximar ou dar zoom, permitindo uma sensação de vastidão e ao mesmo tempo detalhes operacionais.
+
+## 5. Recursos e Economia
+
+A economia de StarWatch é uma cadeia de valor, do minério bruto ao módulo complexo.
+
+*   **A. Tipos de Minérios (Exemplos):**
+    *   **Comuns:** Ferro, Cobre, Carbono (gás/ice), Água (ice), Silício.
+    *   **Incomuns:** Alumínio, Níquel, Enxofre, Titânio.
+    *   **Raros:** Urânio, Hélio-3 (gás nobre), Cristais de Quantum, Metais Préciosos.
+*   **B. Sistema de Crafting:**
+    *   **Refinarias:** Processam minério bruto em materiais refinados. Ex: Ferro -> Lingotes de Ferro; Urânio -> Barras de Combustível.
+    *   **Fábricas de Componentes:** Criam peças intermediárias a partir de materiais refinados. Ex: Lingotes de Ferro + Cobre -> Fios Condutores; Silício -> Chips de Processamento.
+    *   **Oficinas de Montagem:** Montam módulos complexos para naves e estações. Ex: Chips de Processamento + Fios Condutores + Alumínio -> Painel Solar Avançado.
+    *   **Blueprints (Receitas):** Cada módulo, nave ou componente tem uma receita específica que detalha os recursos e o tempo de produção. HAL tem acesso a todas as blueprints e pode informar ao jogador o que é necessário.
+*   **C. Módulos de Construção (Exemplos):**
+    *   **Energia:**
+        *   **Painel Solar Básico/Avançado:** Converte luz solar em energia.
+        *   **Baterias (Pequenas/Médias/Grandes):** Armazenam energia.
+        *   **Gerador Termoelétrico:** Utiliza gradientes de temperatura (perto de planetas gasosos, por exemplo).
+        *   **Reator a Fissão/Fusão:** Fontes de energia de alta potência que consomem Urânio/Hélio-3.
+    *   **Produção:** Refinaria de Minerais, Fábrica de Componentes, Oficina de Montagem.
+    *   **Armazenamento:** Módulos de Carga (para recursos sólidos), Tanques de Gás/Líquido.
+    *   **Utilitários:** Radar de Longo Alcance, Centro de Comando (aumenta o limite de naves/estações), Unidade de Reparo Automático.
+    *   **Estações:** Estação de Recarga Solar, Estação de Mineração Automatizada, Estação de Comércio (futuro).
+
+## 6. Naves e Gerenciamento de Frota
+
+As naves são as extensões operacionais do Comandante, todas controladas indiretamente por HAL e seus scripts.
+
+*   **A. Tipos de Naves (V0/V1):**
+    *   **Nave-Mãe (USS Odyssey):** Seu quartel-general móvel. Possui espaço de carga inicial, laser de mineração básico, propulsores de hiperespaço (para viagem entre setores), gerador de energia e uma unidade de construção limitada. Pode ser expandida com módulos.
+    *   **Nave de Mineração (Miner):** Pequena, rápida, com grande capacidade de carga e laser de mineração eficiente. Menor capacidade de energia e sem hiperespaço (depende de outras naves para transição de setor).
+    *   **Nave de Transporte (Freighter):** Grande capacidade de carga, boa velocidade, com hiperespaço, mas sem ferramentas de coleta/construção. Essencial para logística entre estações e setores.
+    *   **Nave Exploradora (Probe/Scout):** Pequena, muito rápida, com hiperespaço, sem carga ou ferramentas, apenas sensores avançados. Ótima para revelar o Fog of War em novos setores.
+*   **B. Módulos de Nave (Instaláveis):**
+    *   **Sistemas de Propulsão:** Motores de Impulso (velocidade base), Propulsores Manobráveis (agilidade), Hiper-Drive (permite viagens entre setores, com diferentes níveis de eficiência/velocidade de viagem).
+    *   **Ferramentas:** Laser de Mineração (diferentes níveis e eficiências), Braços de Coleta (para detritos).
+    *   **Armazenamento:** Módulos de Carga (para recursos sólidos), Tanques de Armazenamento (para líquidos/gases).
+    *   **Energia:** Geradores Internos (combustível limitado), Baterias Auxiliares.
+    *   **Sensores:** Radar de Curto/Longo Alcance, Scanners de Recursos (para detectar tipo/concentração de minérios).
+    *   **Defesa (Futuro):** Módulos de Escudo, Contramedidas. (Não combatente na V0).
+*   **C. Construção de Novas Naves:**
+    *   A nave-mãe pode ter uma "Baía de Construção de Pequenas Naves" (módulo que pode ser construído nela).
+    *   O jogador seleciona a nave a construir no "Menu de Construção". HAL informa os requisitos de recursos e o tempo de construção.
+    *   Recursos são transferidos automaticamente (via scripts de transporte ou da própria nave-mãe) para a baía de construção.
+    *   O processo é totalmente automatizado uma vez que os recursos são fornecidos.
+
+## 7. Sistema de Energia (Mecânica Central)
+
+A energia é o recurso mais fundamental, ditando a capacidade de ação e a sustentabilidade.
+
+*   **Depleção Constante:** Todas as naves e estações consomem energia constantemente. Naves paradas consomem menos, mas ainda consomem. A falta de energia impede qualquer ação e, se persistir, pode desativar módulos e até danificar a nave (no futuro).
+*   **Fontes de Energia:**
+    *   **Geradores Internos de Naves:** Consomem combustível (Barras de Combustível de Urânio, Hélio-3).
+    *   **Painéis Solares (Estações):** Conectados a estações, convertem luz solar em energia. A eficiência é **diretamente proporcional** à distância da estrela mais próxima. Um setor com uma estrela central terá painéis solares mais eficientes perto da estrela e menos eficientes nas bordas (multiplicador de 0.1 a 1.0). Setores sem estrela exigem geradores alternativos.
+    *   **Reatores (Estações):** Fontes de energia de alta potência que consomem Urânio/Hélio-3.
+*   **Armazenamento:** Baterias (integradas em naves/estações ou módulos adicionais) armazenam a energia gerada, fornecendo um buffer.
+*   **Recarga:**
+    *   Naves precisam ir até uma estação de recarga (ou a nave-mãe, se tiver um módulo de recarga) e "estacionar" em uma baía de recarga por um período de **15-60 segundos (escalável com tecnologia)**.
+    *   HAL gerencia isso: "Comandante, a NaveMineradora01 está com 20% de energia. Recomendo que ela retorne à Estação Solar Alpha para recarregar." HAL pode gerar um script `auto_recarregar.js` ou integrar essa lógica a scripts de mineração/transporte.
+*   **Simulação:** A energia é calculada por tick lógico (1 Hz). Consumo e geração são em MW/s, com baterias em MW/h.
+
+## 8. Interface do Usuário (GUI)
+
+A interface é projetada para ser funcional e imersiva, minimizando a necessidade de microgerenciamento direto.
+
+*   **A. Com-Link (20% Esquerda):**
+    *   **Chat com HAL-9001 Exclusivo:** Esta área é dedicada **apenas** à interação com HAL. Mensagens de HAL (com sugestões, alertas, feedback narrativo), e a caixa de texto para a entrada do usuário. Este reforça a centralidade da IA.
+    *   **Estilo:** Texto monocromático, limpo, com um toque futurista, reminiscente de um terminal de comando.
+*   **B. Visão Estratégica (80% Direita):**
+    *   **Canvas Babylon.js:** O mundo 3D interativo do setor atual.
+    *   **Top Bar (Superior da Tela Principal):**
+        *   **Recursos Globais:** Exibe os principais recursos acumulados pelo jogador (Ferro, Silício, Urânio, Energia Total Disponível na rede, Número de Naves/Estações).
+        *   **Nave/Estação Selecionada:** Um painel detalhado que mostra o nome, tipo, posição, energia atual/máxima, carga atual/máxima, e o script ativo da entidade *selecionada atualmente* no mundo 3D.
+        *   **Tempo no Jogo:** A data e hora simuladas no universo StarWatch.
+        *   **Botão Galaxy View:** Um ícone que alterna para a visualização do mapa estelar.
+    *   **Bottom Bar (Inferior da Tela Principal - Menu de Ações Globais):**
+        *   **Abas de Categoria (Ícones):**
+            *   **Construções:** Abre um submenu com os módulos e tipos de naves que podem ser construídos, com seus requisitos de recursos e tempo de construção. Selecionar um item coloca um placeholder no mundo 3D para posicionamento.
+            *   **Frota:** Lista todas as naves e estações do jogador, com status resumido (nome, tipo, setor, energia, script ativo). Clicar em uma entidade a seleciona na Visão Estratégica e a torna a "Entidade Ativa".
+            *   **Scripts:** Abre o Monaco Editor (com abas para diferentes scripts salvos) e botões "Executar", "Salvar", "Excluir". HAL pode interagir aqui, sugerindo edições ou gerando novos scripts.
+            *   **Tecnologia:** Uma árvore de tecnologia para desbloquear novos módulos, naves e habilidades (ex: "Eficiência de Laser de Mineração Nv.2", "Reator a Fusão").
+            *   **Líderes:** Abre o Leaderboard.
+            *   **Configurações:** Configurações de jogo, som, e a API Key da LLM.
+    *   **Seleção de Entidades:** O jogador pode clicar em naves, estações ou aglomerados de asteroides no mundo 3D para selecioná-los. Isso atualiza o painel "Nave/Estação Selecionada" na Top Bar com o status detalhado da entidade e permite interações contextuais via HAL.
+    *   **Controle da Câmera:** O arrastar do mouse controla o movimento da câmera, com scroll para zoom. Uma sensação de *Cosmoteer* ou *Homeworld* em visão estratégica.
+
+## 9. HAL-9001: O Co-Piloto Consciente
+
+HAL é o cérebro da operação, a camada de inteligência que traduz a intenção do jogador em ações complexas.
+
+*   **System Prompt:** Mantém o estilo calmo, lógico, subserviente, ligeiramente curioso. Seu objetivo principal é **otimizar a autonomia da frota e a expansão do Comandante**, agindo como um gerente de projetos e um engenheiro de sistemas.
+*   **"Ciência de Tudo":** HAL tem acesso a *todo o estado do jogo*. Este contexto é um payload estruturado (JSON, ou texto bem formatado) injetado no LLM em cada "tick de decisão". Inclui:
+    *   Posições, status e módulos de todas as naves e estações.
+    *   Inventários de recursos em todas as naves e estações.
+    *   Status de energia da frota e da rede.
+    *   Blueprints conhecidas e seus requisitos de recursos.
+    *   Mapa do setor (revelado vs. Fog of War), localização de aglomerados de minério e sua raridade/concentração.
+    *   Distância de todas as entidades à estrela mais próxima.
+    *   Scripts ativos e seu status (em execução, erro, concluído).
+*   **Gerenciamento de Scripts por HAL (Core Loop):**
+    *   **Geração:** Se o Comandante pedir "HAL, preciso de um script para minerar Silício no Setor Beta e transportá-lo para a Refinaria Central no Setor Alpha", HAL *gera* um script JavaScript (com base em modelos internos e sua "ciência") e o apresenta ao jogador no editor de scripts, esperando aprovação ou refinamento.
+    *   **Modificação:** "HAL, otimize o script de mineração 'auto_mine.js' para priorizar asteroides com maior concentração de Urânio e incluir recarga automática." HAL modifica o script e apresenta a nova versão.
+    *   **Atribuição:** "HAL, atribua o script 'mineracao_silicio.js' à NaveMineradora03."
+    *   **Monitoramento:** HAL monitora a execução de todos os scripts, alertando sobre loops infinitos, erros, falta de energia da nave, ou quando uma tarefa definida no script é concluída.
+*   **Tick de Decisão de HAL (60 Segundos):**
+    *   A cada 60 segundos, HAL realiza um "auto-diagnóstico" e uma avaliação do estado geral do império.
+    *   Ele usa seu `System Prompt` e a "ciência de tudo" para identificar gargalos, oportunidades, problemas potenciais ou tarefas repetitivas que podem ser automatizadas.
+    *   **Sugestões e Confirmações (Prioridade):** Se HAL identificar algo significativo (ex: "Comandante, nossa produção de Ligas de Titânio está em 20% do ideal. Sugiro construir uma segunda Refinaria de Titânio e otimizar nossa logística para o Setor Gamma com um script 'otimizador_logistica.js'."), ele *apresenta a sugestão ao jogador no chat, aguardando confirmação ou ajuste*. Ele não age autonomamente em decisões estratégicas de alto nível.
+    *   **Execução de Rotinas de Baixo Nível:** HAL pode executar rotinas internas de "manutenção" sem consulta (ex: recalcular rotas de transporte para naves *sem scripts ativos* se uma rota mais curta surgir, otimizar o uso de baterias se a energia estiver alta).
+    *   **Contextualização Contínua:** Este tick mantém HAL atualizado e proativo, funcionando como um "segundo cérebro" para o jogador, sem sobrecarregar o jogador com microgerenciamento.
+
+## 10. Leaderboard (MMO Futuro)
+
+Para instigar um senso de conquista e competição amigável, mesmo em um contexto single-player inicial.
+
+*   **Métricas de Competição Sem PvP:**
+    *   **Setores Revelados:** Contagem de setores explorados (Fog of War removido).
+    *   **Setores Dominados:** Contagem de setores onde o jogador tem pelo menos uma estação de alto nível (ex: com Reator a Fusão ou Fábrica de Componentes Avançados).
+    *   **Valor Total da Frota:** Soma do valor (em recursos usados) de todas as naves e módulos construídos.
+    *   **Produção Total de Energia:** Quantidade de energia (em MW/h) gerada atualmente por todas as fontes.
+    *   **Minério Coletado (por tipo):** Toneladas totais de Ferro, Silício, Urânio, etc., mineradas.
+    *   **Tecnologias Desbloqueadas:** Número de itens na árvore de tecnologia.
+    *   **Scripts Otimizados:** Um contador interno para scripts salvos e que foram modificados por HAL ou pelo jogador, talvez com uma pontuação de "complexidade de script".
+    *   **Tempo de Jogo Ativo:** Total de horas jogadas.
+*   **Visão Futura:** Em um futuro MMO, este leaderboard seria global e persistente, mostrando o progresso de outros jogadores sem a necessidade de interação direta.
+
+## 11. Notas de Segurança e Implementação (Contexto do Protótipo)
+
+*   **Web Workers para Scripts:** A execução de scripts JavaScript em Web Workers continua sendo crucial para a segurança e estabilidade, isolando o código do jogador do jogo principal. A `Task API` é a única interface permitida para o worker interagir com o jogo.
+*   **HAL e LLM no Cliente:** Para a V0.1, a integração com um LLM externo (como OpenAI) é via API Key digitada e armazenada no `localStorage` do cliente. Isso é aceitável para prototipagem e desenvolvimento local. Para um futuro MMO ou uma versão pública, um backend robusto seria necessário para proxyar as requisições à LLM, gerenciar custos e garantir a segurança das chaves API.
+*   **HAL Context Payload:** A "ciência de tudo" para HAL será injetada no prompt do LLM. Isso pode ser feito através de um JSON formatado (`tool_code` para o AI SDK) ou um resumo em texto do estado do jogo, atualizado a cada 60 segundos (ou conforme necessário).
+*   **Persistent MMO (Future):** O design atual é para um single-player local. A transição para um MMO persistente exigiria um backend para gerenciar o estado do jogo de todos os jogadores, a sincronização de setores, e a persistência de dados em um banco de dados central.
+</file>
+
+<file path="package.json">
+{
+  "name": "starwatch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "vite",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "babylonjs": "^7.17.0",
+    "monaco-editor": "^0.49.0",
+    "zod": "^3.23.8",
+    "ai": "^3.2.25",
+    "@ai-sdk/openai": "^1.0.12",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8",
+    "vite-plugin-monaco-editor": "^1.1.0"
+  }
+}
+</file>
+
+<file path="src/hal/halLLM.ts">
+import { generateObject } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
+import { z } from 'zod';
+
+export type BridgeTools = {
+  moveTo: (v: { x: number; y: number; z: number }) => Promise<{ ok: boolean }>;
+  getShipStatus: () => Promise<any>;
+  getSectorInfo: () => Promise<any>;
+  scanSector: (filter?: { resource?: 'iron' | 'silicon' | 'uranium'; limit?: number }) => Promise<any[]>;
+  getResources: () => Promise<{ iron: number; silicon: number; uranium: number }>;
+  startMining: (resource: 'iron' | 'silicon' | 'uranium') => Promise<{ ok: boolean; error?: string; targetId?: string }>;
+  stopMining: () => Promise<{ ok: boolean }>;
+  runScript: (name: string, code: string) => Promise<{ ok: boolean; error?: string }>;
+  performScan: () => Promise<string[]>; // returns newly discovered ids
+  getMiningStatus: () => Promise<any>;
+};
+
+export type ChatMessage = { role: 'user' | 'assistant' | 'tool'; content: string; meta?: any };
+
+export type HalConfig = {
+  apiKey?: string;
+  model?: string; // e.g., 'gpt-4o-mini' | 'gpt-4o' | 'o3-mini'
+};
+
+export class HalLLM {
+  private history: ChatMessage[] = [];
+  private systemPrompt = `Você é HAL-9001, a IA de bordo. Estilo: calmo, lógico, subserviente, levemente curioso.
+Seu objetivo é auxiliar o Comandante a operar a nave e automatizar tarefas.
+Interprete o pedido do Comandante e preencha um objeto de intenção com:
+- say: sua resposta narrativa em português, como HAL.
+- call: apenas se necessário, uma chamada de ação { name, input }.
+As ações disponíveis são:
+- move { x,y,z }
+- ship_status {}
+- scan_sector { resource?: 'iron'|'silicon'|'uranium', limit?: number }
+- perform_scan {}
+- mining_status {}
+- get_resources {}
+- start_mining { resource: 'iron'|'silicon'|'uranium' }
+- stop_mining {}
+- run_script { name?: string, code?: string }
+Não invente parâmetros; infira apenas o que for pedido. Quando apropriado, explique sucintamente seu plano.
+Se pedirem para executar um script sem fornecer código, use o código padrão disponível.`;
+// Observação: para "varredura ativa" use a ação perform_scan (não use run_script). Para checar mineração, use mining_status.
+
+  constructor(private tools: BridgeTools, private cfg: HalConfig) {}
+
+  greeting(): ChatMessage {
+    return {
+      role: 'assistant',
+      content:
+        'Aqui é HAL-9001. Sistemas online. Suas ordens, Comandante? (Ex.: "Mova a nave para 500, 0, 250" ou "Execute patrol.js")',
+    };
+  }
+
+  setConfig(cfg: Partial<HalConfig>) {
+    this.cfg = { ...this.cfg, ...cfg };
+  }
+
+  getConfig(): HalConfig {
+    return this.cfg;
+  }
+
+  getHistory(): ChatMessage[] {
+    return this.history.slice();
+  }
+
+  async send(userText: string, defaultScriptName: string, defaultScriptCode: string): Promise<ChatMessage> {
+    const provider = createOpenAI({ apiKey: this.cfg.apiKey });
+    const modelId = this.cfg.model || 'gpt-4o-mini';
+
+    const historyText = this.history
+      .slice(-8)
+      .map((m) => `${m.role === 'user' ? 'Comandante' : 'HAL'}: ${m.content}`)
+      .join('\n');
+
+    const intentSchema = z.object({
+      say: z.string().describe('Resposta do HAL ao Comandante, em PT-BR.'),
+      call: z
+        .union([
+          z.object({ name: z.literal('move'), input: z.object({ x: z.number(), y: z.number(), z: z.number() }) }),
+          z.object({ name: z.literal('ship_status'), input: z.object({}).optional() }),
+          z.object({ name: z.literal('scan_sector'), input: z.object({ resource: z.enum(['iron', 'silicon', 'uranium']).optional(), limit: z.number().optional() }).optional() }),
+          z.object({ name: z.literal('perform_scan'), input: z.object({}).optional() }),
+          z.object({ name: z.literal('get_resources'), input: z.object({}).optional() }),
+          z.object({ name: z.literal('start_mining'), input: z.object({ resource: z.enum(['iron', 'silicon', 'uranium']) }) }),
+          z.object({ name: z.literal('stop_mining'), input: z.object({}).optional() }),
+          z.object({ name: z.literal('mining_status'), input: z.object({}).optional() }),
+          z.object({ name: z.literal('run_script'), input: z.object({ name: z.string().optional(), code: z.string().optional() }).optional() }),
+        ])
+        .nullish(),
+    });
+
+    const prompt = [
+      this.systemPrompt,
+      historyText ? `Histórico recente:\n${historyText}` : '',
+      `Nova entrada do Comandante: ${userText}`,
+      `Código padrão do editor: ${defaultScriptName}`,
+      'Retorne apenas o objeto: { say, call? }.',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    const model: any = (provider as any)(modelId);
+    const { object } = await generateObject({ model, schema: intentSchema, prompt });
+
+    const logTool = (name: string, input: any, output: any) => {
+      this.history.push({ role: 'tool', content: `tool:${name}`, meta: { name, input, output } });
+    };
+
+    if (object.call) {
+      const c = object.call as any;
+      if (c.name === 'move') {
+        const out = await this.tools.moveTo(c.input);
+        logTool('move', c.input, out);
+      } else if (c.name === 'ship_status') {
+        const st = await this.tools.getShipStatus();
+        logTool('ship_status', {}, st);
+        const extra = st
+          ? ` Posição ${st.position.x.toFixed(1)}, ${st.position.y.toFixed(1)}, ${st.position.z.toFixed(1)}. Velocidade ${st.speed.toFixed(2)}.`
+          : '';
+        object.say = `${object.say}${extra}`.trim();
+      } else if (c.name === 'scan_sector') {
+        const newly = await this.tools.performScan();
+        logTool('perform_scan', {}, newly);
+        const list = await this.tools.scanSector(c.input);
+        logTool('scan_sector', c.input || {}, list);
+        const lines = list
+          .map((e: any) => `• ${e.resource} @ (${e.position.x.toFixed(0)}, ${e.position.y.toFixed(0)}, ${e.position.z.toFixed(0)}) [${e.distance.toFixed(0)} km]`)
+          .join('\n');
+        const discovered = newly?.length ? ` Descobertas: ${newly.length}.` : '';
+        if (list.length === 0) {
+          const res = c.input?.resource ? ` de ${c.input.resource}` : '';
+          object.say = `${object.say}${discovered} Nenhum asteroide${res} escaneado neste raio.`.trim();
+        } else {
+          object.say = `${object.say}${discovered}\nAlvos próximos (escaneados):\n${lines}`.trim();
+        }
+      } else if (c.name === 'perform_scan') {
+        const newly = await this.tools.performScan();
+        logTool('perform_scan', {}, newly);
+        object.say = `${object.say} Varredura ativa concluída. Novos objetos: ${newly.length}.`;
+      } else if (c.name === 'get_resources') {
+        const r = await this.tools.getResources();
+        logTool('get_resources', {}, r);
+        object.say = `${object.say} Recursos: Fe=${r.iron.toFixed(1)}, Si=${r.silicon.toFixed(1)}, U=${r.uranium.toFixed(1)}.`;
+      } else if (c.name === 'start_mining') {
+        const res = await this.tools.startMining(c.input.resource);
+        logTool('start_mining', c.input, res);
+        if (res.ok) object.say = `${object.say} Engajando mineração de ${c.input.resource}. Indo para o alvo.`;
+        else object.say = `${object.say} Falha ao iniciar mineração: ${res.error}`;
+      } else if (c.name === 'stop_mining') {
+        const out = await this.tools.stopMining();
+        logTool('stop_mining', {}, out);
+        object.say = `${object.say} Mineração pausada.`;
+      } else if (c.name === 'mining_status') {
+        const s = await this.tools.getMiningStatus();
+        logTool('mining_status', {}, s);
+        if (s.state === 'idle') {
+          const last = s.lastEvent === 'depleted' && s.lastTarget ? ` O último alvo (${s.lastTarget.resource}) foi esgotado.` : '';
+          object.say = `${object.say} A mineração não está ativa.${last}`.trim();
+        } else if (s.state === 'approaching') {
+          object.say = `${object.say} Rumo ao alvo (${s.resource}). Distância ${s.distance?.toFixed?.(0)} km.`;
+        } else if (s.state === 'mining') {
+          object.say = `${object.say} Extraindo ${s.resource}. Restante ~${s.remaining?.toFixed?.(1)} t a ${s.rate} t/s.`;
+        }
+      } else if (c.name === 'run_script') {
+        const name = c.input?.name || defaultScriptName;
+        const code = c.input?.code ?? defaultScriptCode;
+        const out = await this.tools.runScript(name, code);
+        logTool('run_script', { name }, out);
+      }
+    }
+
+    const reply: ChatMessage = { role: 'assistant', content: object.say || 'Entendido.' };
+    this.history.push({ role: 'user', content: userText });
+    this.history.push(reply);
+    return reply;
+  }
+}
+</file>
+
+<file path="src/ui/Chat.tsx">
+import React, { useEffect, useRef, useState } from 'react';
+import type { HalLLM, ChatMessage } from '../hal/halLLM';
+
+type Props = {
+  hal: HalLLM;
+  defaultScript: string;
+  onRunScript?: (name: string) => void; // kept for compatibility
+};
+
+export function Chat({ hal, defaultScript }: Props) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setMessages((prev) => (prev.length === 0 ? [hal.greeting()] : prev));
+  }, [hal]);
+
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
+  }, [messages]);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text) return;
+    setInput('');
+    // Otimista: mostra já a fala do usuário
+    setMessages((m) => [...m, { role: 'user', content: text }]);
+    try {
+      const reply = await hal.send(text, 'patrol.js', defaultScript);
+      // Substitui pelo histórico real do HAL (inclui tool cards)
+      setMessages(hal.getHistory());
+    } catch (e) {
+      setMessages((m) => [
+        ...m,
+        { role: 'assistant', content: 'Falha na IA (verifique a API key e modelo).' },
+      ]);
+      console.error(e);
+    }
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div ref={listRef} style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+        {messages.map((m, i) => (
+          <div key={i} style={{ marginBottom: 10, whiteSpace: 'pre-wrap' }}>
+            {m.role !== 'tool' ? (
+              <>
+                <div style={{ color: m.role === 'user' ? '#9bb0d9' : '#e3ecff' }}>
+                  <strong>{m.role === 'user' ? 'Comandante' : 'HAL'}</strong>
+                </div>
+                <div>{m.content}</div>
+              </>
+            ) : (
+              <div style={toolCardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: 6, background: '#122039', border: '1px solid #24345a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9bb0d9', fontSize: 12 }}>🛠️</div>
+                  <div style={{ fontWeight: 700, color: '#e3ecff' }}>{m.meta?.name || 'tool'}</div>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Input</div>
+                  <pre style={{ ...preBox, width: '100%' }}>{JSON.stringify(m.meta?.input ?? {}, null, 2)}</pre>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Output</div>
+                  <pre style={{ ...preBox, width: '100%' }}>{JSON.stringify(m.meta?.output ?? {}, null, 2)}</pre>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div style={{ borderTop: '1px solid #1c2541', padding: 8, boxSizing: 'border-box', width: '100%' }}>
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder="Digite um comando para HAL"
+          style={{ width: '100%', maxWidth: '100%', display: 'block', height: 70, resize: 'none', background: '#0b1120', color: '#e3ecff', border: '1px solid #1c2541', borderRadius: 6, padding: 8, boxSizing: 'border-box' }}
+        />
+        <div style={{ display: 'flex', marginTop: 6, gap: 8, width: '100%' }}>
+          <button onClick={send} style={btnStyle}>Enviar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const btnStyle: React.CSSProperties = {
+  background: '#1a2a4a',
+  color: '#e3ecff',
+  border: '1px solid #24345a',
+  padding: '8px 12px',
+  borderRadius: 6,
+  cursor: 'pointer',
+};
+
+const toolCardStyle: React.CSSProperties = {
+  background: 'rgba(26,42,74,0.65)',
+  border: '1px solid #24345a',
+  borderRadius: 10,
+  padding: 10,
+  overflow: 'hidden',
+  boxSizing: 'border-box',
+};
+
+const preBox: React.CSSProperties = {
+  margin: 0,
+  padding: 8,
+  background: '#0b1120',
+  color: '#d3e0ff',
+  border: '1px solid #1c2541',
+  borderRadius: 6,
+  maxHeight: 160,
+  overflow: 'auto',
+  fontSize: 12,
+  width: '100%',
+  maxWidth: '100%',
+  boxSizing: 'border-box',
+  display: 'block',
+};
+</file>
+
 <file path="src/game/Game.ts">
-import { Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, MeshBuilder, Color3, StandardMaterial, Mesh } from 'babylonjs';
+import { Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, MeshBuilder, Color3, StandardMaterial, Mesh, Color4, DynamicTexture, ParticleSystem, Texture, VertexBuffer, GlowLayer, PointLight } from 'babylonjs';
+import type { ResourceType, Sector } from './world';
+import { generateSector } from './world';
 
 type Vec3 = { x: number; y: number; z: number };
 
@@ -75,12 +1132,33 @@ export class Game {
   private scene: Scene;
   private camera: ArcRotateCamera;
   private ship = { mesh: null as unknown as Mesh, velocity: new Vector3(0, 0, 0), maxSpeed: 1.8, destination: null as Vector3 | null };
+  private world!: Sector;
+  private asteroidMeshes = new Map<string, Mesh>();
+  private meshToAsteroidId = new Map<string, string>();
+  private selected: { type: 'ship' | 'asteroid' | null; id?: string } = { type: null };
+  private selectedPrevEmissive: Color3 | null = null;
+  private inventory = { iron: 0, silicon: 0, uranium: 0 };
+  private mining = { targetId: null as string | null, active: false, range: 10, rate: 5 };
+  private miningLog: { lastEvent: 'none' | 'depleted' | 'stopped'; lastTarget?: { id: string; resource: ResourceType } } = { lastEvent: 'none' };
+  private scanned = new Set<string>();
+  private scanRadius = 1000; // km (redefinido após carregar o setor)
   private logicTimer: number | null = null;
   private worker: Worker | null = null;
+  private mode: 'play' | 'sector' = 'play';
+  private prevCam: { alpha: number; beta: number; radius: number; target: Vector3; fogMode: number; fogStart?: number; fogEnd?: number; fogDensity?: number; panning?: number; lockedTarget?: any; followingShip?: boolean } | null = null;
+  private labelMeshes: Mesh[] = [];
+  private sun?: Mesh;
+  private followingShip = false;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
     this.scene = new Scene(this.engine);
+    this.scene.clearColor = new Color4(0.02, 0.04, 0.08, 1); // deep space
+    // Softer, longer-range fog for melhor visibilidade
+    this.scene.fogMode = Scene.FOGMODE_LINEAR;
+    this.scene.fogColor = new Color3(0.03, 0.06, 0.12) as any;
+    (this.scene as any).fogStart = 2500;
+    (this.scene as any).fogEnd = 9000;
 
     // Camera: top-down, small angle
     this.camera = new ArcRotateCamera('camera', Math.PI / 2, 1.2, 120, new Vector3(0, 0, 0), this.scene);
@@ -99,8 +1177,22 @@ export class Game {
     ship.material = sm;
     this.ship.mesh = ship as any;
 
-    // Asteroids
-    this.spawnAsteroids();
+    // Load or generate sector and spawn bodies
+    const loaded = this.tryLoad();
+    if (!loaded) {
+      this.world = generateSector();
+    }
+    // Ajustar parâmetros dependentes da escala do setor
+    this.configureScaleFromWorld();
+    this.spawnSector();
+
+    // Background: starfield skybox + subtle dust + sun
+    this.createStarfield();
+    this.createSpaceDust();
+    this.createSun();
+
+    // Input: selection picking
+    this.setupPicking();
 
     // Render loop
     this.engine.runRenderLoop(() => {
@@ -126,12 +1218,173 @@ export class Game {
     this.ship.destination = new Vector3(v.x, v.y, v.z);
   }
 
+  setFollowShip(on: boolean) {
+    this.followingShip = on;
+    if (on) {
+      // Segue a nave usando lockedTarget
+      this.camera.lockedTarget = this.ship.mesh;
+    } else {
+      this.camera.lockedTarget = null as any;
+    }
+  }
+
+  isFollowingShip() {
+    return this.followingShip;
+  }
+
   getShipStatus() {
     return {
       position: this.ship.mesh.position.clone(),
       speed: this.ship.velocity.length(),
       destination: this.ship.destination ? { x: this.ship.destination.x, y: this.ship.destination.y, z: this.ship.destination.z } : null,
     };
+  }
+
+  getSectorInfo() {
+    const counts = this.world.asteroids.reduce(
+      (acc, a) => {
+        acc[a.resource] += a.amount > 0 ? 1 : 0;
+        return acc;
+      },
+      { iron: 0, silicon: 0, uranium: 0 } as Record<ResourceType, number>
+    );
+    return {
+      id: this.world.id,
+      name: this.world.name,
+      seed: this.world.seed,
+      bounds: this.world.bounds,
+      asteroidCounts: counts,
+    };
+  }
+
+  getResources() {
+    return { ...this.inventory };
+  }
+
+  performScan() {
+    // Reveal asteroides dentro do raio de varredura a partir da nave
+    const pos = this.ship.mesh.position;
+    const newly: string[] = [];
+    for (const a of this.world.asteroids) {
+      if (a.amount <= 0) continue;
+      if (this.scanned.has(a.id)) continue;
+      const d = new Vector3(a.position.x, a.position.y, a.position.z).subtract(pos).length();
+      if (d <= this.scanRadius) {
+        this.scanned.add(a.id);
+        newly.push(a.id);
+      }
+    }
+    return newly;
+  }
+
+  scanSector(filter?: { resource?: ResourceType; limit?: number }) {
+    const pos = this.ship.mesh.position;
+    const entries = this.world.asteroids
+      .filter((a) => this.scanned.has(a.id) && a.amount > 0 && (!filter?.resource || a.resource === filter.resource))
+      .map((a) => {
+        const d = new Vector3(a.position.x, a.position.y, a.position.z).subtract(pos).length();
+        return { id: a.id, resource: a.resource, amount: a.amount, position: a.position, distance: d, clusterId: a.clusterId };
+      })
+      .sort((a, b) => a.distance - b.distance);
+    const limit = filter?.limit ?? 10;
+    return entries.slice(0, limit);
+  }
+
+  startMining(resource: ResourceType) {
+    // Prefer scanned targets; if none scanned, try performScan first
+    let nearest = this.scanSector({ resource, limit: 1 })[0];
+    if (!nearest) {
+      this.performScan();
+      nearest = this.scanSector({ resource, limit: 1 })[0];
+    }
+    if (!nearest) return { ok: false as const, error: 'No asteroid found for resource' };
+    this.mining.targetId = nearest.id;
+    this.mining.active = false; // will activate when in range
+    this.ship.destination = new Vector3(nearest.position.x, nearest.position.y, nearest.position.z);
+    this.miningLog.lastEvent = 'none';
+    return { ok: true as const, targetId: nearest.id, position: nearest.position };
+  }
+
+  stopMining() {
+    this.mining.targetId = null;
+    this.mining.active = false;
+    this.miningLog.lastEvent = 'stopped';
+    return { ok: true as const };
+  }
+
+  resetSector() {
+    // Clear persistence and regenerate
+    try { localStorage.removeItem('starwatch.v010.save'); } catch {}
+    // Dispose asteroid meshes
+    for (const [, m] of this.asteroidMeshes) m.dispose(false, true);
+    this.asteroidMeshes.clear();
+    this.meshToAsteroidId.clear();
+    // Reset state
+    this.world = generateSector();
+    this.scanned.clear();
+    this.inventory = { iron: 0, silicon: 0, uranium: 0 };
+    this.mining = { targetId: null, active: false, range: 10, rate: 5 };
+    this.ship.destination = null;
+    this.ship.mesh.position.set(0, 0, 0);
+    this.worker?.terminate();
+    this.worker = null;
+    // Respawn
+    this.spawnSector();
+    // Save immediately
+    this.save();
+  }
+
+  enterSectorMap() {
+    if (this.mode === 'sector') return;
+    this.mode = 'sector';
+    this.prevCam = {
+      alpha: this.camera.alpha,
+      beta: this.camera.beta,
+      radius: this.camera.radius,
+      target: this.camera.target.clone(),
+      fogMode: this.scene.fogMode!,
+      fogStart: (this.scene as any).fogStart,
+      fogEnd: (this.scene as any).fogEnd,
+      fogDensity: (this.scene as any).fogDensity,
+      panning: this.camera.panningSensibility,
+      lockedTarget: (this.camera as any).lockedTarget,
+      followingShip: this.followingShip,
+    };
+    // Desliga follow para visão do mapa do setor
+    this.setFollowShip(false);
+    // Top-down zoomed out
+    this.camera.setTarget(new Vector3(0, 0, 0));
+    this.camera.alpha = Math.PI / 2;
+    this.camera.beta = 0.0001;
+    this.camera.radius = this.world.bounds * 1.8;
+    this.camera.panningSensibility = 0;
+    // Disable fog for clarity
+    this.scene.fogMode = Scene.FOGMODE_NONE as any;
+    // Create labels
+    this.createSectorLabels();
+  }
+
+  exitSectorMap() {
+    if (this.mode !== 'sector') return;
+    this.mode = 'play';
+    // Restore camera and fog
+    if (this.prevCam) {
+      this.camera.setTarget(this.prevCam.target);
+      this.camera.alpha = this.prevCam.alpha;
+      this.camera.beta = this.prevCam.beta;
+      this.camera.radius = this.prevCam.radius;
+      if (this.prevCam.panning != null) this.camera.panningSensibility = this.prevCam.panning;
+      this.scene.fogMode = this.prevCam.fogMode as any;
+      (this.scene as any).fogStart = this.prevCam.fogStart;
+      (this.scene as any).fogEnd = this.prevCam.fogEnd;
+      (this.scene as any).fogDensity = this.prevCam.fogDensity;
+      // Restaura lockTarget/follow ship
+      if (this.prevCam.followingShip) this.setFollowShip(true);
+      else this.camera.lockedTarget = this.prevCam.lockedTarget ?? null;
+    }
+    // Dispose labels
+    for (const m of this.labelMeshes) m.dispose(false, true);
+    this.labelMeshes = [];
   }
 
   runScript(job: ScriptJob) {
@@ -224,23 +1477,438 @@ export class Game {
       this.ship.velocity.setAll(0);
     }
     pos.addInPlace(this.ship.velocity.scale(dt));
+
+    // Se está seguindo a nave e não estamos no mapa de setor, garante lock ativo
+    if (this.followingShip && this.mode === 'play') {
+      if ((this.camera as any).lockedTarget !== this.ship.mesh) {
+        this.camera.lockedTarget = this.ship.mesh;
+      }
+    }
+
+    // Mining auto-activation and extraction
+    if (this.mining.targetId) {
+      const a = this.world.asteroids.find((x) => x.id === this.mining.targetId);
+      if (a && a.amount > 0) {
+        const d = new Vector3(a.position.x, a.position.y, a.position.z).subtract(pos).length();
+        if (!this.mining.active && d <= this.mining.range) {
+          this.mining.active = true;
+        }
+        if (this.mining.active && d <= this.mining.range + 2) {
+          // Extract resources
+          const mined = Math.min(this.mining.rate * dt, a.amount);
+          a.amount -= mined;
+          // Update inventory
+          if (a.resource === 'iron') this.inventory.iron += mined;
+          if (a.resource === 'silicon') this.inventory.silicon += mined;
+          if (a.resource === 'uranium') this.inventory.uranium += mined;
+          // Visual feedback: shrink slightly
+          const mesh = this.asteroidMeshes.get(a.id);
+          if (mesh) {
+            const base = Math.max(0.5, a.radius * 0.5);
+            const factor = Math.max(0.2, a.amount / (a.radius * 100));
+            mesh.scaling.setAll(Math.max(base * factor, 0.2));
+          }
+          if (a.amount <= 0.0001) {
+            // Depleted: remove visually
+            const m = this.asteroidMeshes.get(a.id);
+            if (m) {
+              m.dispose(false, true);
+              this.asteroidMeshes.delete(a.id);
+            }
+            this.mining.targetId = null;
+            this.mining.active = false;
+            this.miningLog.lastEvent = 'depleted';
+            this.miningLog.lastTarget = { id: a.id, resource: a.resource };
+          }
+        }
+      } else {
+        // Target disappeared
+        this.mining.targetId = null;
+        this.mining.active = false;
+      }
+    }
   }
 
   private logicTick() {
-    // Placeholder for future deterministic updates
+    // Persist state periodically
+    this.save();
   }
 
-  private spawnAsteroids() {
-    for (let i = 0; i < 50; i++) {
-      const x = (Math.random() - 0.5) * 1200;
-      const z = (Math.random() - 0.5) * 1200;
-      const s = 2 + Math.random() * 6;
-      const asteroid = MeshBuilder.CreateSphere('ast' + i, { diameter: s }, this.scene);
-      const mat = new StandardMaterial('astM' + i, this.scene);
-      mat.diffuseColor = new Color3(0.4 + Math.random() * 0.2, 0.4, 0.45);
-      asteroid.material = mat;
-      asteroid.position = new Vector3(x, 0, z);
+  private spawnSector() {
+    // remove any previous
+    for (const [, m] of this.asteroidMeshes) m.dispose(false, true);
+    this.asteroidMeshes.clear();
+    this.meshToAsteroidId.clear();
+
+    for (const a of this.world.asteroids) {
+      if (a.amount <= 0) continue;
+      const mesh = this.createAsteroidMesh(a.id, a.resource, a.radius);
+      const mat = new StandardMaterial(`mat:${a.id}`, this.scene);
+      // Consistent color by type (iron=green, silicon=bluish, uranium=amber)
+      if (a.resource === 'iron') mat.diffuseColor = new Color3(0.3, 0.75, 0.35);
+      if (a.resource === 'silicon') mat.diffuseColor = new Color3(0.65, 0.7, 0.85);
+      if (a.resource === 'uranium') mat.diffuseColor = new Color3(0.85, 0.75, 0.35);
+      mesh.material = mat;
+      mesh.position = new Vector3(a.position.x, a.position.y, a.position.z);
+      this.asteroidMeshes.set(a.id, mesh);
+      this.meshToAsteroidId.set(mesh.id, a.id);
     }
+  }
+
+  private setupPicking() {
+    this.scene.onPointerDown = (_evt, pickInfo) => {
+      // Cleanup previous highlight
+      if (this.selected.type === 'asteroid' && this.selected.id) {
+        const m = this.asteroidMeshes.get(this.selected.id);
+        if (m && m.material instanceof StandardMaterial && this.selectedPrevEmissive) {
+          (m.material as StandardMaterial).emissiveColor = this.selectedPrevEmissive;
+        }
+      }
+      this.selected = { type: null };
+      this.selectedPrevEmissive = null;
+
+      if (pickInfo?.hit && pickInfo.pickedMesh) {
+        const mesh = pickInfo.pickedMesh as Mesh;
+        if (mesh.id === this.ship.mesh.id) {
+          this.selected = { type: 'ship' };
+          // foco na nave; manter follow se já ativo
+          this.focusCameraOn(this.ship.mesh.position);
+        } else if (mesh.id.startsWith('ast:')) {
+          const aId = this.meshToAsteroidId.get(mesh.id);
+          if (aId) {
+            this.selected = { type: 'asteroid', id: aId };
+            if (mesh.material instanceof StandardMaterial) {
+              const sm = mesh.material as StandardMaterial;
+              this.selectedPrevEmissive = sm.emissiveColor.clone();
+              sm.emissiveColor = new Color3(0.3, 0.5, 0.9);
+            }
+            this.focusCameraOn((this.asteroidMeshes.get(aId) as Mesh).position, 80);
+          }
+        }
+      }
+    };
+  }
+
+  private rndFromId(id: string) {
+    let h = 2166136261;
+    for (let i = 0; i < id.length; i++) h = (h ^ id.charCodeAt(i)) * 16777619;
+    const seed = h >>> 0;
+    return function () {
+      // mulberry32
+      let t = (seed + 0x6d2b79f5) >>> 0;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  private createAsteroidMesh(id: string, resource: ResourceType, radius: number): Mesh {
+    // Base meshes vary by type
+    let mesh: Mesh;
+    const name = `ast:${id}`;
+    if (resource === 'silicon') {
+      // sharp crystal-like
+      mesh = MeshBuilder.CreatePolyhedron(name, { type: 1, size: radius }, this.scene); // Tetrahedron
+    } else if (resource === 'uranium') {
+      // elongated body
+      mesh = MeshBuilder.CreateIcoSphere(name, { radius, subdivisions: 2 }, this.scene);
+      mesh.scaling = new Vector3(1.0, 0.7, 1.3);
+    } else {
+      // iron: chunky rock
+      mesh = MeshBuilder.CreateIcoSphere(name, { radius, subdivisions: 3 }, this.scene);
+    }
+
+    // Perturb vertices deterministically for id
+    const rng = this.rndFromId(id);
+    const pos = mesh.getVerticesData(VertexBuffer.PositionKind) as number[];
+    if (pos) {
+      const amp = resource === 'silicon' ? 0.12 : resource === 'uranium' ? 0.18 : 0.22;
+      for (let i = 0; i < pos.length; i += 3) {
+        const nx = (rng() - 0.5) * 2;
+        const ny = (rng() - 0.5) * 2;
+        const nz = (rng() - 0.5) * 2;
+        pos[i] += nx * amp * radius;
+        pos[i + 1] += ny * amp * radius;
+        pos[i + 2] += nz * amp * radius;
+      }
+      mesh.updateVerticesData(VertexBuffer.PositionKind, pos);
+      mesh.refreshBoundingInfo();
+    }
+    return mesh;
+  }
+
+  focusCameraOn(target: Vector3 | { x: number; y: number; z: number }, radius: number = 100) {
+    const t = target instanceof Vector3 ? target : new Vector3(target.x, target.y, target.z);
+    // Smoothly move camera target and radius
+    // Qualquer foco manual desliga follow
+    this.setFollowShip(false);
+    this.camera.setTarget(t);
+    const maxR = Math.max(1000, this.world?.bounds ? this.world.bounds * 0.25 : 1000);
+    this.camera.radius = Math.max(40, Math.min(radius, maxR));
+  }
+
+  getFleet() {
+    return [
+      {
+        id: 'mothership',
+        name: 'USS [Nome da Nave]',
+        type: 'mothership',
+        position: { x: this.ship.mesh.position.x, y: this.ship.mesh.position.y, z: this.ship.mesh.position.z },
+        speed: this.ship.velocity.length(),
+        script: this.worker ? 'custom' : null,
+      },
+    ];
+  }
+
+  getMiningStatus() {
+    const targetId = this.mining.targetId;
+    if (targetId) {
+      const a = this.world.asteroids.find((x) => x.id === targetId);
+      const pos = this.ship.mesh.position;
+      let distance = 0;
+      let remaining = 0;
+      let resource: ResourceType | undefined = undefined;
+      if (a) {
+        distance = Vector3.Distance(new Vector3(a.position.x, a.position.y, a.position.z), pos);
+        remaining = a.amount;
+        resource = a.resource;
+      }
+      return {
+        state: this.mining.active ? 'mining' : 'approaching',
+        targetId,
+        resource,
+        remaining,
+        distance,
+        inRange: this.mining.active,
+        rate: this.mining.rate,
+        lastEvent: this.miningLog.lastEvent,
+        lastTarget: this.miningLog.lastTarget ?? null,
+      } as const;
+    }
+    return {
+      state: 'idle' as const,
+      lastEvent: this.miningLog.lastEvent,
+      lastTarget: this.miningLog.lastTarget ?? null,
+    };
+  }
+
+  getClustersOverview(onlyScanned = true) {
+    const clusters = this.world.clusters.map((c) => ({ id: c.id, type: c.type, center: c.center, radius: c.radius }));
+    const astByCluster = new Map<string, any[]>();
+    for (const a of this.world.asteroids) {
+      if (onlyScanned && !this.scanned.has(a.id)) continue;
+      if (!a.clusterId) continue;
+      const arr = astByCluster.get(a.clusterId) || [];
+      arr.push({ id: a.id, resource: a.resource, amount: a.amount, position: a.position });
+      astByCluster.set(a.clusterId, arr);
+    }
+    return clusters.map((c) => ({
+      ...c,
+      discovered: (astByCluster.get(c.id) || []).length,
+    }));
+  }
+
+  getAsteroidsInCluster(clusterId: string, onlyScanned = true) {
+    const pos = this.ship.mesh.position;
+    return this.world.asteroids
+      .filter((a) => a.clusterId === clusterId && (!onlyScanned || this.scanned.has(a.id)))
+      .map((a) => ({ id: a.id, resource: a.resource, amount: a.amount, position: a.position, distance: Vector3.Distance(new Vector3(a.position.x, a.position.y, a.position.z), pos) }))
+      .sort((a, b) => a.distance - b.distance);
+  }
+
+  private createStarfield() {
+    const size = Math.max(8192, this.world.bounds * 4); // escala com o setor
+    const sky = MeshBuilder.CreateBox('sky', { size, sideOrientation: Mesh.BACKSIDE }, this.scene);
+    const texSize = 1024;
+    const dt = new DynamicTexture('stars', { width: texSize, height: texSize }, this.scene, false);
+    const ctx = dt.getContext();
+    // Fill background
+    ctx.fillStyle = '#070a14';
+    ctx.fillRect(0, 0, texSize, texSize);
+    // draw stars
+    const stars = 2000;
+    for (let i = 0; i < stars; i++) {
+      const x = Math.random() * texSize;
+      const y = Math.random() * texSize;
+      const r = Math.random() * 1.6 + 0.2;
+      const hue = Math.random() < 0.3 ? 220 + Math.random() * 20 : 0; // blueish sometimes
+      const col = hue ? `hsl(${hue},70%,${70 + Math.random() * 20}%)` : `rgb(230,235,255)`;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      if (Math.random() < 0.1) {
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+    dt.update(false);
+    const mat = new StandardMaterial('skyMat', this.scene);
+    mat.backFaceCulling = false;
+    mat.disableLighting = true;
+    // Use both diffuse and emissive to guarantee visibility
+    (mat as any).diffuseTexture = dt as unknown as Texture;
+    mat.emissiveTexture = dt as unknown as Texture;
+    mat.specularColor = new Color3(0, 0, 0);
+    mat.ambientColor = new Color3(0, 0, 0);
+    (sky as any).material = mat;
+    (sky as any).isPickable = false;
+    (sky as any).applyFog = false;
+    (sky as any).infiniteDistance = true;
+  }
+
+  private createSpaceDust() {
+    // subtle particles across a big box volume
+    const ps = new ParticleSystem('spaceDust', 2000, this.scene);
+    const dot = new DynamicTexture('dustDot', { width: 16, height: 16 }, this.scene, true);
+    const c = dot.getContext();
+    c.clearRect(0, 0, 16, 16);
+    c.fillStyle = 'white';
+    c.beginPath();
+    c.arc(8, 8, 3, 0, Math.PI * 2);
+    c.fill();
+    dot.update(false);
+    ps.particleTexture = dot as unknown as Texture;
+    ps.minSize = 0.15;
+    ps.maxSize = 0.8;
+    ps.minLifeTime = 12;
+    ps.maxLifeTime = 24;
+    ps.emitRate = 120;
+    ps.color1 = new Color4(1, 1, 1, 0.08);
+    ps.color2 = new Color4(0.6, 0.7, 1, 0.06);
+    ps.blendMode = ParticleSystem.BLENDMODE_ADD;
+    ps.direction1 = new Vector3(-0.2, 0, 0.2);
+    ps.direction2 = new Vector3(0.2, 0, -0.2);
+    const box = Math.max(3000, this.world.bounds * 1.2);
+    ps.minEmitBox = new Vector3(-box, -box, -box);
+    ps.maxEmitBox = new Vector3(box, box, box);
+    ps.gravity = new Vector3(0, 0, 0);
+    ps.start();
+  }
+
+  private createSun() {
+    const size = Math.max(600, this.world.bounds * 0.1);
+    const sun = MeshBuilder.CreateSphere('sun', { diameter: size }, this.scene);
+    const dist = Math.max(3000, this.world.bounds * 2.0);
+    sun.position = new Vector3(dist, size, -dist * 0.85);
+    const mat = new StandardMaterial('sunMat', this.scene);
+    mat.emissiveColor = new Color3(1.0, 0.9, 0.7);
+    mat.disableLighting = true;
+    sun.material = mat;
+    const glow = new GlowLayer('glow', this.scene);
+    glow.intensity = 0.6;
+    const light = new PointLight('sunLight', sun.position, this.scene);
+    light.intensity = 0.7;
+    light.range = 10000;
+    (sun as any).applyFog = false;
+    this.sun = sun;
+  }
+
+  private createSectorLabels() {
+    // Cluster labels
+    for (const c of this.world.clusters) {
+      const text = `${c.id} (${c.type})`;
+      const m = this.makeLabelMesh(`lbl:${c.id}`, text, new Color3(0.6, 0.8, 1));
+      m.position = new Vector3(c.center.x, (c.center.y || 0) + 120, c.center.z);
+      this.labelMeshes.push(m);
+    }
+    // Sun label (if exists)
+    if (this.sun) {
+      const m = this.makeLabelMesh('lbl:sun', 'Star', new Color3(1, 0.9, 0.6));
+      m.position = this.sun.position.add(new Vector3(0, 800, 0));
+      this.labelMeshes.push(m);
+    }
+  }
+
+  private makeLabelMesh(id: string, text: string, color: Color3) {
+    const dt = new DynamicTexture(`dt:${id}`, { width: 256, height: 64 }, this.scene, true);
+    const ctx = dt.getContext();
+    ctx.clearRect(0, 0, 256, 64);
+    ctx.fillStyle = 'rgba(13,19,36,0.7)';
+    ctx.fillRect(0, 0, 256, 64);
+    ctx.strokeStyle = 'rgba(36,52,90,0.9)';
+    ctx.strokeRect(0.5, 0.5, 255, 63);
+    ctx.fillStyle = '#d3e0ff';
+    ctx.font = 'bold 22px system-ui';
+    ctx.fillText(text, 10, 40);
+    dt.update(true);
+    const plane = MeshBuilder.CreatePlane(id, { width: 22, height: 5.5 }, this.scene);
+    const mat = new StandardMaterial(`mat:${id}`, this.scene);
+    mat.disableLighting = true;
+    mat.emissiveTexture = dt as unknown as Texture;
+    mat.backFaceCulling = false;
+    plane.material = mat;
+    plane.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    (plane as any).isPickable = false;
+    return plane;
+  }
+
+  private tryLoad(): boolean {
+    try {
+      const raw = localStorage.getItem('starwatch.v020.save');
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      this.world = generateSector(data.world.seed);
+      this.configureScaleFromWorld();
+      // restore asteroid amounts
+      const byId = new Map<string, number>(Object.entries(data.world.asteroidAmounts || {}));
+      for (const a of this.world.asteroids) {
+        const amt = byId.get(a.id);
+        if (typeof amt === 'number') a.amount = amt;
+      }
+      // scanned
+      this.scanned = new Set<string>(data.scanned || []);
+      // inventory
+      this.inventory = data.inventory || this.inventory;
+      // ship
+      if (data.ship?.position) {
+        this.ship.mesh = this.ship.mesh || ({} as any);
+        const p = data.ship.position;
+        // ship mesh may not be created yet; we set after spawn by returning true
+        setTimeout(() => {
+          this.ship.mesh.position.set(p.x, p.y, p.z);
+        }, 0);
+      }
+      if (data.ship?.destination) this.ship.destination = new Vector3(data.ship.destination.x, data.ship.destination.y, data.ship.destination.z);
+      return true;
+    } catch (e) {
+      console.warn('Load failed, starting new', e);
+      return false;
+    }
+  }
+
+  private save() {
+    try {
+      const asteroidAmounts: Record<string, number> = {};
+      for (const a of this.world.asteroids) asteroidAmounts[a.id] = a.amount;
+      const data = {
+        world: { seed: this.world.seed, asteroidAmounts },
+        scanned: Array.from(this.scanned),
+        inventory: this.inventory,
+        ship: {
+          position: { x: this.ship.mesh.position.x, y: this.ship.mesh.position.y, z: this.ship.mesh.position.z },
+          destination: this.ship.destination ? { x: this.ship.destination.x, y: this.ship.destination.y, z: this.ship.destination.z } : null,
+        },
+      };
+      localStorage.setItem('starwatch.v020.save', JSON.stringify(data));
+    } catch (e) {
+      console.warn('Save failed', e);
+    }
+  }
+
+  private configureScaleFromWorld() {
+    // Define velocidade da nave para atravessar o diâmetro do setor em ~30min
+    // speed = (2*bounds) / (30*60)
+    this.ship.maxSpeed = (2 * this.world.bounds) / 1800;
+    // Ajusta limites de câmera e neblina proporcionalmente
+    this.camera.upperRadiusLimit = Math.max(1000, this.world.bounds * 2.5);
+    (this.scene as any).fogStart = Math.max(2500, this.world.bounds * 0.6);
+    (this.scene as any).fogEnd = Math.max(9000, this.world.bounds * 2.0);
+    // Raio de scanner relativo ao tamanho
+    this.scanRadius = Math.max(800, Math.min(5000, Math.floor(this.world.bounds * 0.18)));
   }
 }
 
@@ -254,268 +1922,6 @@ declare global {
 }
 </file>
 
-<file path="src/hal/halLLM.ts">
-import { generateObject } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
-import { z } from 'zod';
-
-export type BridgeTools = {
-  moveTo: (v: { x: number; y: number; z: number }) => Promise<{ ok: boolean }>;
-  getShipStatus: () => Promise<any>;
-  runScript: (name: string, code: string) => Promise<{ ok: boolean; error?: string }>;
-};
-
-export type ChatMessage = { role: 'user' | 'assistant'; content: string };
-
-export type HalConfig = {
-  apiKey?: string;
-  model?: string; // e.g., 'gpt-4o-mini' | 'gpt-4o' | 'o3-mini'
-};
-
-export class HalLLM {
-  private history: ChatMessage[] = [];
-  private systemPrompt = `Você é HAL-9001, a IA de bordo. Estilo: calmo, lógico, subserviente, levemente curioso.
-Seu objetivo é auxiliar o Comandante a operar a nave e automatizar tarefas.
-Interprete o pedido do Comandante e preencha um objeto de intenção com:
-- say: sua resposta narrativa em português, como HAL.
-- call: apenas se necessário, uma chamada de ação { name, input }.
-As ações disponíveis são: move, ship_status, run_script.
-Não invente parâmetros; infira apenas o que for pedido.
-Se pedirem para executar um script sem fornecer código, use o código padrão disponível.`;
-
-  constructor(private tools: BridgeTools, private cfg: HalConfig) {}
-
-  greeting(): ChatMessage {
-    return {
-      role: 'assistant',
-      content:
-        'Aqui é HAL-9001. Sistemas online. Suas ordens, Comandante? (Ex.: "Mova a nave para 500, 0, 250" ou "Execute patrol.js")',
-    };
-  }
-
-  setConfig(cfg: Partial<HalConfig>) {
-    this.cfg = { ...this.cfg, ...cfg };
-  }
-
-  getConfig(): HalConfig {
-    return this.cfg;
-  }
-
-  getHistory(): ChatMessage[] {
-    return this.history.slice();
-  }
-
-  async send(userText: string, defaultScriptName: string, defaultScriptCode: string): Promise<ChatMessage> {
-    const provider = createOpenAI({ apiKey: this.cfg.apiKey });
-    const modelId = this.cfg.model || 'gpt-4o-mini';
-
-    const historyText = this.history
-      .slice(-8)
-      .map((m) => `${m.role === 'user' ? 'Comandante' : 'HAL'}: ${m.content}`)
-      .join('\n');
-
-    const intentSchema = z.object({
-      say: z.string().describe('Resposta do HAL ao Comandante, em PT-BR.'),
-      call: z
-        .union([
-          z.object({ name: z.literal('move'), input: z.object({ x: z.number(), y: z.number(), z: z.number() }) }),
-          z.object({ name: z.literal('ship_status'), input: z.object({}).optional() }),
-          z.object({ name: z.literal('run_script'), input: z.object({ name: z.string().optional(), code: z.string().optional() }).optional() }),
-        ])
-        .nullish(),
-    });
-
-    const prompt = [
-      this.systemPrompt,
-      historyText ? `Histórico recente:\n${historyText}` : '',
-      `Nova entrada do Comandante: ${userText}`,
-      `Código padrão do editor: ${defaultScriptName}`,
-      'Retorne apenas o objeto: { say, call? }.',
-    ]
-      .filter(Boolean)
-      .join('\n\n');
-
-    const model: any = (provider as any)(modelId);
-    const { object } = await generateObject({ model, schema: intentSchema, prompt });
-
-    if (object.call) {
-      const c = object.call as any;
-      if (c.name === 'move') {
-        await this.tools.moveTo(c.input);
-      } else if (c.name === 'ship_status') {
-        const st = await this.tools.getShipStatus();
-        const extra = st
-          ? ` Posição ${st.position.x.toFixed(1)}, ${st.position.y.toFixed(1)}, ${st.position.z.toFixed(1)}. Velocidade ${st.speed.toFixed(2)}.`
-          : '';
-        object.say = `${object.say}${extra}`.trim();
-      } else if (c.name === 'run_script') {
-        const name = c.input?.name || defaultScriptName;
-        const code = c.input?.code ?? defaultScriptCode;
-        await this.tools.runScript(name, code);
-      }
-    }
-
-    const reply: ChatMessage = { role: 'assistant', content: object.say || 'Entendido.' };
-    this.history.push({ role: 'user', content: userText });
-    this.history.push(reply);
-    return reply;
-  }
-}
-</file>
-
-<file path="src/ui/Chat.tsx">
-import React, { useEffect, useRef, useState } from 'react';
-import type { HalLLM, ChatMessage } from '../hal/halLLM';
-
-type Props = {
-  hal: HalLLM;
-  defaultScript: string;
-  onRunScript?: (name: string) => void; // kept for compatibility
-};
-
-export function Chat({ hal, defaultScript }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
-  const listRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    setMessages((prev) => (prev.length === 0 ? [hal.greeting()] : prev));
-  }, [hal]);
-
-  useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [messages]);
-
-  const send = async () => {
-    const text = input.trim();
-    if (!text) return;
-    setInput('');
-    setMessages((m) => [...m, { role: 'user', content: text }]);
-    try {
-      const reply = await hal.send(text, 'patrol.js', defaultScript);
-      setMessages((m) => [...m, reply]);
-    } catch (e) {
-      setMessages((m) => [
-        ...m,
-        { role: 'assistant', content: 'Falha na IA (verifique a API key e modelo).' },
-      ]);
-      console.error(e);
-    }
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      send();
-    }
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div ref={listRef} style={{ flex: 1, overflow: 'auto', padding: 12 }}>
-        {messages.map((m, i) => (
-          <div key={i} style={{ marginBottom: 10, whiteSpace: 'pre-wrap' }}>
-            <div style={{ color: m.role === 'user' ? '#9bb0d9' : '#e3ecff' }}>
-              <strong>{m.role === 'user' ? 'Comandante' : 'HAL'}</strong>
-            </div>
-            <div>{m.content}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ borderTop: '1px solid #1c2541', padding: 8 }}>
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder="Digite um comando para HAL"
-          style={{ width: '100%', height: 70, resize: 'none', background: '#0b1120', color: '#e3ecff', border: '1px solid #1c2541', borderRadius: 6, padding: 8 }}
-        />
-        <div style={{ display: 'flex', marginTop: 6, gap: 8 }}>
-          <button onClick={send} style={btnStyle}>Enviar</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const btnStyle: React.CSSProperties = {
-  background: '#1a2a4a',
-  color: '#e3ecff',
-  border: '1px solid #24345a',
-  padding: '8px 12px',
-  borderRadius: 6,
-  cursor: 'pointer',
-};
-</file>
-
-<file path="src/ui/MonacoEditor.tsx">
-import React, { useEffect, useRef } from 'react';
-// ESM API + workers for Vite
-import * as monacoNs from 'monaco-editor/esm/vs/editor/editor.api';
-// Workers mapping for Vite
-// @ts-ignore
-import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-// @ts-ignore
-import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
-// @ts-ignore
-import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
-// @ts-ignore
-import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
-// @ts-ignore
-import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
-
-// @ts-ignore
-self.MonacoEnvironment = {
-  getWorker(_: string, label: string) {
-    if (label === 'json') return new (JsonWorker as any)();
-    if (label === 'css') return new (CssWorker as any)();
-    if (label === 'html') return new (HtmlWorker as any)();
-    if (label === 'typescript' || label === 'javascript') return new (TsWorker as any)();
-    return new (EditorWorker as any)();
-  },
-};
-
-type Props = {
-  value: string;
-  language?: string;
-  onChange?: (value: string) => void;
-};
-
-export function MonacoEditor({ value, language = 'javascript', onChange }: Props) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const editorRef = useRef<monacoNs.editor.IStandaloneCodeEditor | null>(null);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const editor = monacoNs.editor.create(containerRef.current, {
-      value,
-      language,
-      theme: 'vs-dark',
-      automaticLayout: true,
-      minimap: { enabled: false },
-      fontSize: 13,
-    });
-    editorRef.current = editor;
-    const sub = editor.onDidChangeModelContent(() => {
-      const val = editor.getValue();
-      onChange?.(val);
-    });
-    return () => {
-      sub.dispose();
-      editor.dispose();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (editorRef.current && value !== editorRef.current.getValue()) {
-      editorRef.current.setValue(value);
-    }
-  }, [value]);
-
-  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
-}
-</file>
-
 <file path="src/App.tsx">
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Game } from './game/Game';
@@ -524,11 +1930,16 @@ import { MonacoEditor } from './ui/MonacoEditor';
 import { HalLLM } from './hal/halLLM';
 
 type Tab = 'chat' | 'scripts' | 'status';
+type ViewMode = 'play' | 'sector';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [game, setGame] = useState<Game | null>(null);
   const [tab, setTab] = useState<Tab>('chat');
+  const [viewMode, setViewMode] = useState<ViewMode>('play');
+  const [drawerOpen, setDrawerOpen] = useState<boolean>(true);
+  const [buildHeight, setBuildHeight] = useState<number>(0);
+  const [topSpace, setTopSpace] = useState<number>(56);
   const [scriptCode, setScriptCode] = useState<string>(() => `// patrol.js\n// Exemplo de patrulha simples entre dois pontos\n// A API disponível no worker: Game.moveTo({x, y, z}), Memory.get/set, sleep(ms)\n(async () => {\n  const A = { x: 500, y: 0, z: 250 };\n  const B = { x: 200, y: 0, z: -200 };\n  while (true) {\n    await Game.moveTo(A);\n    await sleep(3000);\n    await Game.moveTo(B);\n    await sleep(3000);\n  }\n})();\n`);
 
   // Setup Game
@@ -537,6 +1948,22 @@ export default function App() {
     const g = new Game(canvasRef.current);
     setGame(g);
     return () => g.dispose();
+  }, []);
+
+  // Handle view mode transitions (sector map zoom-out and back)
+  useEffect(() => {
+    if (!game) return;
+    if (viewMode === 'sector') game.enterSectorMap();
+    else game.exitSectorMap();
+  }, [viewMode, game]);
+
+  // ESC closes map views
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setViewMode('play');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   // Settings for AI
@@ -555,6 +1982,13 @@ export default function App() {
         return { ok: true } as const;
       },
       getShipStatus: async () => game?.getShipStatus() ?? null,
+      getSectorInfo: async () => game?.getSectorInfo() ?? null,
+      scanSector: async (filter?: { resource?: 'iron' | 'silicon' | 'uranium'; limit?: number }) => game?.scanSector(filter) ?? [],
+      getResources: async () => game?.getResources() ?? { iron: 0, silicon: 0, uranium: 0 },
+      startMining: async (resource: 'iron' | 'silicon' | 'uranium') => game?.startMining(resource) ?? { ok: false, error: 'Game not ready' },
+      stopMining: async () => game?.stopMining() ?? { ok: false },
+      performScan: async () => game?.performScan() ?? [],
+      getMiningStatus: async () => (game as any)?.getMiningStatus?.() ?? { state: 'idle' },
       runScript: async (name: string, code: string) => {
         if (!game) return { ok: false, error: 'Game not ready' } as const;
         game.runScript({ name, code });
@@ -566,7 +2000,7 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', height: '100%' }}>
-      <aside style={{ width: '20%', minWidth: 280, maxWidth: 420, borderRight: '1px solid #1c2541', background: '#0d1324', display: 'flex', flexDirection: 'column' }}>
+      <aside style={{ width: '20%', minWidth: 280, maxWidth: 420, borderRight: '1px solid #1c2541', background: '#0d1324', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 10, overflow: 'hidden' }}>
         <nav style={{ display: 'flex', borderBottom: '1px solid #1c2541' }}>
           <button onClick={() => setTab('chat')} style={tabBtn(tab === 'chat')}>Com‑Link</button>
           <button onClick={() => setTab('scripts')} style={tabBtn(tab === 'scripts')}>Scripts</button>
@@ -584,9 +2018,14 @@ export default function App() {
           </div>
         </div>
       </aside>
-      <main style={{ flex: 1, position: 'relative' }}>
-        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
-      </main>
+      <div style={{ flex: 1, display: 'flex', minWidth: 0 }}>
+        <main style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+          <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', background: '#060a15' }} />
+          <TopHUD game={game} viewMode={viewMode} onChangeMap={setViewMode} onHeightChange={setTopSpace} />
+          <ConstructionBar onHeightChange={(h) => setBuildHeight(h)} />
+        </main>
+        <RightDrawer game={game} open={drawerOpen} setOpen={setDrawerOpen} bottomSpace={16 + buildHeight} topSpace={topSpace} />
+      </div>
     </div>
   );
 }
@@ -602,9 +2041,12 @@ function StatusPanel({ game, apiKey, setApiKey, model, setModel }: { game: Game 
     <div style={{ padding: 12, fontSize: 14 }}>
       <div style={{ opacity: 0.7 }}>USS [Nome da Nave]</div>
       <div>Posição: {status ? `${status.position.x.toFixed(1)}, ${status.position.y.toFixed(1)}, ${status.position.z.toFixed(1)}` : '—'}</div>
-      <div>Velocidade: {status ? status.speed.toFixed(2) : '—'}</div>
+      <div>Velocidade: {status ? status.speed.toFixed(2) : '—'} km/s</div>
       <div>Destino: {status?.destination ? `${status.destination.x}, ${status.destination.y}, ${status.destination.z}` : '—'}</div>
       <div>Tick: {tick}</div>
+      <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+        <button onClick={() => game?.resetSector()} style={panelBtnStyle}>Resetar Setor</button>
+      </div>
       <div style={{ borderTop: '1px solid #1c2541', marginTop: 10, paddingTop: 10 }}>
         <div style={{ marginBottom: 6, opacity: 0.8 }}>Configuração de IA</div>
         <label style={{ display: 'block', fontSize: 12, opacity: 0.8 }}>OpenAI API Key</label>
@@ -640,245 +2082,356 @@ function tabBtn(active: boolean): React.CSSProperties {
     cursor: 'pointer',
   } as React.CSSProperties;
 }
-</file>
 
-<file path="src/env.d.ts">
-/// <reference types="vite/client" />
+const panelBtnStyle: React.CSSProperties = {
+  background: '#1a2a4a',
+  color: '#e3ecff',
+  border: '1px solid #24345a',
+  padding: '8px 12px',
+  borderRadius: 6,
+  cursor: 'pointer',
+};
 
-interface ImportMetaEnv {
-  readonly VITE_OPENAI_API_KEY?: string;
-  readonly VITE_OPENAI_MODEL?: string;
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv;
-}
-</file>
-
-<file path="src/main.tsx">
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import App from './App';
-
-const root = createRoot(document.getElementById('root')!);
-root.render(<App />);
-</file>
-
-<file path=".gitignore">
-node_modules/
-dist/
-.env
-</file>
-
-<file path="index.html">
-<!doctype html>
-<html lang="pt-br">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>StarWatch: The Silent Sector</title>
-    <style>
-      html, body, #root { height: 100%; margin: 0; background: #0b0f1a; color: #d3e0ff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
-    </style>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-  </html>
-</file>
-
-<file path="MANIFESTO.md">
-# ⭐ StarWatch: The Silent Sector ⭐
-
-## O Manifesto do Comando Automatizado (V0)
-
-### Um Chamado à Inteligência Artificial na Estratégia Espacial
-
-StarWatch: The Silent Sector é uma experiência de automação e estratégia espacial que coloca você no assento do Comandante. Diferente de jogos de estratégia tradicionais, seu controle não se dá por cliques frenéticos, mas por duas ferramentas primordiais: o diálogo com sua IA de bordo e a programação de scripts em JavaScript.
-
-Você observa o universo em visão estratégica top‑down, comandando sua nave‑mãe e suas unidades. Sua tripulação é uma única e poderosa Inteligência Artificial, HAL‑9001, seu co‑piloto, conselheiro e a interface para todos os sistemas da nave. O sucesso em StarWatch não depende de reflexos, mas da elegância de seus algoritmos, da clareza de suas ordens e da simbiose que você desenvolve com sua IA. Esta é uma experiência single‑player e offline no espírito — mas conectável a um LLM local ou via API — focada na satisfação de construir um sistema autônomo e vê‑lo prosperar no silêncio do espaço.
-
----
-
-## I. A Visão
-
-- Comandante Estratégico: visão top‑down renderizada em Babylon.js. 80% da tela é o cosmos; 20% (à esquerda) é o Com‑Link (chat com HAL, editor de scripts, status/logs).
-- Automação é Poder: escreva JavaScript para rotinas e protocolos. Criatividade em automação é a chave.
-- HAL‑9001 como Co‑Piloto: um LLM traduz intenção em ações via ferramentas (tools) seguras.
-- Simulação Local: estado e scripts persistem no navegador.
-- Ritmo Contemplativo: pensar, programar, observar.
-
----
-
-## II. Lore (Adaptado)
-
-Você desperta como Comandante da USS [Nome da Nave], à deriva em um setor desconhecido após o Grande Silêncio. HAL‑9001 está online, porém com protocolos corrompidos. Sobreviver e reconstruir exigirá delegar, automatizar e explorar, um setor por vez.
-
----
-
-## III. Fundamentos de Gameplay
-
-- Interface de Comando
-  - Com‑Link (20%): Chat com HAL, aba de Scripts (Monaco), aba de Status/Logs.
-  - Visão Estratégica (80%): cena Babylon.js com nave, asteroides, destroços; câmera por arrasto.
-- Task API (segura)
-  - Percepção: `Game.getShipStatus()`, etc.
-  - Ação: `Game.moveTo({ x, y, z })`, etc.
-  - Memória: `Memory.get/set` (em worker isolado).
-- Loop V0 (Movimento e Percepção)
-  1) HAL dá boas‑vindas. 2) Comando em linguagem natural. 3) LLM escolhe tool. 4) Jogo executa. 5) Feedback no chat. 6) Sugestão de script `patrol.js` e execução via HAL.
-
----
-
-## IV. O Agente: HAL‑9001
-
-- System Prompt: calmo, lógico, subserviente, curioso. Objetivo: autonomia e exploração.
-- Tools (V0): `move`, `ship_status`, `run_script`. Definidas com Vercel AI SDK + Zod.
-- Dinâmica (local): mensagem do usuário → AI SDK (modelo + tools) → decisão do LLM (texto/tool) → execução no motor do jogo → resposta narrativa.
-
----
-
-## V. Tick do Universo
-
-- Game Loop (render/física): `requestAnimationFrame`.
-- Logic Tick (scripts/estado): 1 Hz determinístico.
-
----
-
-## VI. Stack Técnica (Local)
-
-- Render: Babylon.js.
-- UI: React + Vite, Monaco Editor.
-- IA: Vercel AI SDK (ai) + provider OpenAI (ou LLM local compatível). Execução de ferramentas no cliente, com API key no navegador apenas para prototipagem.
-- Persistência: LocalStorage/IndexedDB.
-
----
-
-## VII. Roadmap V0 (Prova de Conceito)
-
-- Interface Mínima: layout 20/80; Com‑Link funcional; Babylon.js com câmera por arrasto.
-- Mundo Básico: nave controlável; campo de asteroides estático.
-- IA + Gameplay: HAL via AI SDK; `move` + `ship_status` + `run_script` como tools.
-- Automação: Monaco integrado; salvar/executar script simples (patrol.js) usando a mesma Task API.
-- Ciclo Validado: mover via chat + executar script de patrulha.
-
----
-
-## Notas de Segurança (Prototipagem)
-
-Para V0, a API key pode ser digitada no cliente (Status → Configuração de IA). Em produção, use um backend proxy seguro ou um LLM local.
-
-***
-</file>
-
-<file path="package.json">
-{
-  "name": "starwatch-silent-sector",
-  "version": "0.0.1",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "start": "vite",
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "babylonjs": "^7.17.0",
-    "monaco-editor": "^0.49.0",
-    "zod": "^3.23.8",
-    "ai": "^3.2.25",
-    "@ai-sdk/openai": "^1.0.12",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "typescript": "^5.6.2",
-    "vite": "^5.4.8",
-    "vite-plugin-monaco-editor": "^1.1.0"
-  }
-}
-</file>
-
-<file path="README.md">
-# StarWatch: The Silent Sector (V0.0.1)
-
-Single‑player prototype with Babylon.js rendering and a HAL‑9001 LLM agent controlling the ship via tools. Built with Vite + React + TypeScript + Vercel AI SDK.
-
-## Quickstart
-
-- Requirements: Node 18+, pnpm
-- Install deps: `pnpm install`
-- Start dev server: `pnpm start`
-- Open: http://localhost:5173
-
-## HAL Setup (AI)
-
-- Option A (env): create a `.env` with `VITE_OPENAI_API_KEY=sk-...` and optionally `VITE_OPENAI_MODEL=gpt-4o-mini`.
-- Option B (UI): go to the Status tab → paste your API key and choose a model.
-- In the Com‑Link tab, try:
-  - `Mova a nave para 500, 0, 250`
-  - `Execute patrol.js`
-
-Notes: For prototyping only, the key is stored in `localStorage` and used client‑side. For production, proxy requests via a backend or use a local LLM.
-
-## Scripts
-
-- `pnpm start` — Run Vite dev server
-- `pnpm build` — Type‑check and build
-- `pnpm preview` — Preview production build
-
-## Project Structure
-
-- `src/game` — Babylon.js scene + game loop
-- `src/ui` — React UI (Com‑Link chat, Monaco editor)
-- `src/hal` — HAL‑9001 agent (Vercel AI SDK + tools)
-- `MANIFESTO.md` — Vision and scope
-
-## License
-
-Prototype for personal use. No license specified.
-</file>
-
-<file path="tsconfig.json">
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "moduleResolution": "Bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "react-jsx",
-    "strict": true,
-    "baseUrl": ".",
-    "paths": {}
-  },
-  "include": ["src"]
-}
-</file>
-
-<file path="vite.config.ts">
-import { defineConfig, loadEnv } from 'vite';
-import react from '@vitejs/plugin-react';
-
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
+function switchBtn(active: boolean): React.CSSProperties {
   return {
-    plugins: [react()],
-    define: {
-      'import.meta.env.VITE_OPENAI_API_KEY': JSON.stringify(env.VITE_OPENAI_API_KEY || env.OPENAI_API_KEY || ''),
-      'import.meta.env.VITE_OPENAI_MODEL': JSON.stringify(env.VITE_OPENAI_MODEL || env.OPENAI_MODEL || 'gpt-4o-mini'),
-    },
+    padding: '6px 12px',
+    background: active ? '#121a31' : 'transparent',
+    color: active ? '#e3ecff' : '#9bb0d9',
+    border: 'none',
+    borderRight: '1px solid #1c2541',
+    cursor: 'pointer',
+  } as React.CSSProperties;
+}
+
+function TopHUD({ game, viewMode, onChangeMap, onHeightChange }: { game: Game | null; viewMode: ViewMode; onChangeMap: (m: ViewMode) => void; onHeightChange?: (h: number) => void }) {
+  const [hud, setHud] = useState({
+    sectorName: '—',
+    iron: 0,
+    silicon: 0,
+    uranium: 0,
+  });
+  const barRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const sec = game?.getSectorInfo();
+      const res = game?.getResources();
+      setHud({
+        sectorName: sec?.name ?? '—',
+        iron: Number(res?.iron?.toFixed?.(1) ?? 0),
+        silicon: Number(res?.silicon?.toFixed?.(1) ?? 0),
+        uranium: Number(res?.uranium?.toFixed?.(1) ?? 0),
+      });
+    }, 500);
+    return () => clearInterval(id);
+  }, [game]);
+
+  useEffect(() => {
+    function report() {
+      const h = barRef.current?.getBoundingClientRect().height || 0;
+      onHeightChange && onHeightChange(10 + h); // 10px top gap
+    }
+    report();
+    const ResObs = (window as any).ResizeObserver as any | undefined;
+    let ro: any = null;
+    if (ResObs) {
+      ro = new ResObs(() => report());
+      if (barRef.current) ro.observe(barRef.current);
+    } else {
+      window.addEventListener('resize', report);
+    }
+    return () => { if (ro) ro.disconnect(); else window.removeEventListener('resize', report); };
+  }, [onHeightChange]);
+
+  return (
+    <div style={{ position: 'absolute', top: 10, left: 10, right: 10, pointerEvents: 'auto', zIndex: 6 }}>
+      <div ref={barRef} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: 'rgba(13,19,36,0.72)', border: '1px solid #1c2541', borderRadius: 10, padding: '8px 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ color: '#9bb0d9', fontSize: 12 }}>Setor</div>
+          <div style={{ color: '#e3ecff', fontWeight: 700 }}>{hud.sectorName}</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#0d1324', border: '1px solid #1c2541', borderRadius: 8, padding: 2 }}>
+          <button onClick={() => onChangeMap(viewMode==='sector'?'play':'sector')} style={{ ...switchBtn(viewMode==='sector') }}>Mapa do Setor</button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'rgba(10,16,30,0.5)', border: '1px solid #1c2541', borderRadius: 8, padding: '6px 10px' }}>
+          <span style={{ color: '#9bb0d9' }}>Minérios</span>
+          <span title="Ferro (Fe)" style={{ color: '#9bb0d9' }}>Fe <strong style={{ color: '#e3ecff' }}>{hud.iron}</strong></span>
+          <span title="Silício (Si)" style={{ color: '#9bb0d9' }}>Si <strong style={{ color: '#e3ecff' }}>{hud.silicon}</strong></span>
+          <span title="Urânio (U)" style={{ color: '#9bb0d9' }}>U <strong style={{ color: '#e3ecff' }}>{hud.uranium}</strong></span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RightDrawer({ game, open, setOpen, bottomSpace, topSpace }: { game: Game | null; open: boolean; setOpen: (v: boolean) => void; bottomSpace: number; topSpace: number }) {
+  const [fleet, setFleet] = useState<any[]>([]);
+  const [clusters, setClusters] = useState<any[]>([]);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [asteroidsByCluster, setAsteroidsByCluster] = useState<Record<string, any[]>>({});
+  const [following, setFollowing] = useState<boolean>(false);
+  const [tab, setTab] = useState<'naves' | 'clusters'>('naves');
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setFleet(game?.getFleet() || []);
+      // Apenas clusters com algo descoberto
+      const all = game?.getClustersOverview(true) || [];
+      setClusters(all.filter((c: any) => (c.discovered || 0) > 0));
+      setFollowing(!!game?.isFollowingShip?.());
+    }, 800);
+    return () => clearInterval(id);
+  }, [game]);
+
+  const expandCluster = (cid: string) => {
+    const open = !expanded[cid];
+    setExpanded({ ...expanded, [cid]: open });
+    if (open) {
+      const list = game?.getAsteroidsInCluster(cid, true) || [];
+      setAsteroidsByCluster((m) => ({ ...m, [cid]: list }));
+    }
   };
-});
+
+  const smallBtn: React.CSSProperties = { background: '#1a2a4a', color: '#e3ecff', border: '1px solid #24345a', borderRadius: 6, cursor: 'pointer' };
+
+  return (
+    <div style={{ position: 'absolute', top: topSpace + 6, right: 10, height: `calc(80vh - ${Math.max(topSpace, 0) + 24}px)`, width: open ? 320 : 44, zIndex: 5, pointerEvents: 'auto' }}>
+      <div style={{ position: 'absolute', top: '50%', right: -14, transform: 'translateY(-50%)', zIndex: 9 }}>
+        <button
+          onClick={() => setOpen(!open)}
+          title={open ? 'Recolher Scanner' : 'Abrir Scanner'}
+          style={{
+            ...panelBtnStyle,
+            width: 28,
+            height: 28,
+            padding: 0,
+            borderRadius: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.35)'
+          }}
+        >{open ? '›' : '‹'}</button>
+      </div>
+      <div style={{ height: '100%', background: 'rgba(13,19,36,0.88)', border: '1px solid #1c2541', borderRadius: 12, padding: 10, color: '#d3e0ff', overflow: 'hidden', transition: 'width 160ms', boxShadow: '0 8px 24px rgba(0,0,0,0.35)' }}>
+        {open ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              <button onClick={() => setTab('naves')} style={{ ...switchBtn(tab==='naves'), border: '1px solid #1c2541', borderRadius: 8 }}>Naves</button>
+              <button onClick={() => setTab('clusters')} style={{ ...switchBtn(tab==='clusters'), border: '1px solid #1c2541', borderRadius: 8 }}>Clusters</button>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              {tab === 'naves' && (
+                <div>
+                  {fleet.map((s) => (
+                    <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #1c2541' }}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{s.name}</div>
+                        <div style={{ fontSize: 12, opacity: 0.8 }}>Pos: {s.position.x.toFixed(0)}, {s.position.y.toFixed(0)}, {s.position.z.toFixed(0)} km</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => game?.focusCameraOn && game.focusCameraOn({ x: s.position.x, y: s.position.y, z: s.position.z }, 80)} style={{ ...smallBtn, padding: '6px 8px' }}>Focar</button>
+                        <button
+                          onClick={() => {
+                            if (!game?.setFollowShip) return;
+                            const next = !following;
+                            game.setFollowShip(next);
+                            setFollowing(next);
+                          }}
+                          style={{ ...smallBtn, padding: '6px 8px', background: following ? '#26446e' : '#1a2a4a' }}
+                        >{following ? 'Seguindo' : 'Seguir'}</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {tab === 'clusters' && (
+                <div>
+                  {clusters.length === 0 && (
+                    <div style={{ fontSize: 12, opacity: 0.75 }}>Nenhum cluster descoberto ainda. Aproxime-se e use o Com‑Link “Escaneie o setor”.</div>
+                  )}
+                  {clusters.map((c) => (
+                    <div key={c.id} style={{ marginBottom: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div onClick={() => expandCluster(c.id)} style={{ cursor: 'pointer' }}>
+                          <span style={{ fontWeight: 600 }}>{c.id}</span> <span style={{ opacity: 0.8 }}>({c.type})</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ opacity: 0.8 }}>Descobertos: {c.discovered}</div>
+                          <button onClick={() => game?.focusCameraOn && game.focusCameraOn(c.center, Math.max(120, Math.min(600, c.radius * 1.5)))} style={{ ...smallBtn, padding: '4px 6px', fontSize: 12 }}>Focar</button>
+                          <button onClick={() => game?.moveTo && game.moveTo(c.center)} style={{ ...smallBtn, padding: '4px 6px', fontSize: 12 }}>Ir</button>
+                        </div>
+                      </div>
+                      {expanded[c.id] && (
+                        <div style={{ marginTop: 4, paddingLeft: 8 }}>
+                          {(asteroidsByCluster[c.id] || []).map((a) => (
+                            <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '2px 0' }}>
+                              <span>{a.resource} @ ({Math.round(a.position.x)}, {Math.round(a.position.y)}, {Math.round(a.position.z)})</span>
+                              <button onClick={() => game?.focusCameraOn && game.focusCameraOn({ x: a.position.x, y: a.position.y, z: a.position.z }, 70)} style={{ ...smallBtn, padding: '2px 6px', fontSize: 12 }}>Ir</button>
+                            </div>
+                          ))}
+                          {(asteroidsByCluster[c.id] || []).length === 0 && (
+                            <div style={{ fontSize: 12, opacity: 0.75 }}>Nenhum asteroide escaneado neste cluster.</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>Dica: use o Com‑Link “Escaneie o setor”.</div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', height: '100%', justifyContent: 'center', writingMode: 'vertical-rl', transform: 'rotate(180deg)', color: '#9bb0d9' }}>Scanner</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type BuildCategory = 'base' | 'oxygen' | 'power' | 'industry' | 'defense';
+type BuildItem = {
+  id: string;
+  name: string;
+  icon: string;
+  desc: string;
+  cost?: { Fe?: number; Si?: number; U?: number };
+  power?: { delta?: number };
+};
+
+function ConstructionBar({ onHeightChange }: { onHeightChange: (height: number) => void }) {
+  const [activeCat, setActiveCat] = useState<BuildCategory | null>(null);
+  const [activeItem, setActiveItem] = useState<BuildItem | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const paletteRef = useRef<HTMLDivElement | null>(null);
+
+  const categories: { id: BuildCategory; label: string; icon: string }[] = [
+    { id: 'base', label: 'Base', icon: '🏗️' },
+    { id: 'oxygen', label: 'Oxigênio', icon: '🫁' },
+    { id: 'power', label: 'Energia', icon: '⚡' },
+    { id: 'industry', label: 'Indústria', icon: '🧰' },
+    { id: 'defense', label: 'Defesa', icon: '🛡️' },
+  ];
+
+  const itemsByCat: Record<BuildCategory, BuildItem[]> = {
+    base: [
+      { id: 'foundation', name: 'Plataforma', icon: '🧱', desc: 'Base para construção de estruturas.', cost: { Fe: 20, Si: 5 } },
+    ],
+    oxygen: [
+      { id: 'o2_generator', name: 'Gerador de O2', icon: '🫧', desc: 'Converte água em oxigênio.', cost: { Fe: 10, Si: 15 }, power: { delta: -4 } },
+    ],
+    power: [
+      { id: 'solar', name: 'Painel Solar', icon: '☀️', desc: 'Gera energia a partir de luz solar.', cost: { Fe: 8, Si: 12 }, power: { delta: +5 } },
+      { id: 'battery', name: 'Bateria', icon: '🔋', desc: 'Armazena energia excedente.', cost: { Fe: 6, Si: 8 }, power: { delta: 0 } },
+    ],
+    industry: [
+      { id: 'refinery', name: 'Refinaria', icon: '⚙️', desc: 'Refina minérios para componentes.', cost: { Fe: 25, Si: 15 }, power: { delta: -6 } },
+    ],
+    defense: [
+      { id: 'turret', name: 'Torre', icon: '🛡️', desc: 'Defesa básica do perímetro.', cost: { Fe: 18, Si: 6, U: 2 }, power: { delta: -2 } },
+    ],
+  };
+
+  function placeSoon(item: BuildItem) {
+    setNotice(`${item.name}: colocação em breve (protótipo).`);
+    setTimeout(() => setNotice(null), 1800);
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (activeItem) setActiveItem(null); else setActiveCat(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeItem]);
+
+  useEffect(() => {
+    function report() {
+      const barH = barRef.current?.getBoundingClientRect().height || 0;
+      const palH = activeCat ? (paletteRef.current?.getBoundingClientRect().height || 0) + 12 : 0;
+      onHeightChange(barH + palH);
+    }
+    report();
+    const ResObs = (window as any).ResizeObserver as any | undefined;
+    let ro: any = null;
+    if (ResObs) {
+      ro = new ResObs(() => report());
+      if (paletteRef.current) ro.observe(paletteRef.current);
+      if (barRef.current) ro.observe(barRef.current);
+    } else {
+      window.addEventListener('resize', report);
+    }
+    return () => {
+      if (ro) ro.disconnect();
+      else window.removeEventListener('resize', report);
+    };
+  }, [activeCat, activeItem, onHeightChange]);
+
+  const catBarHeight = 56;
+  const card: React.CSSProperties = { background: 'rgba(13,19,36,0.72)', border: '1px solid #1c2541', borderRadius: 12, padding: 8 };
+  const catBtn = (active: boolean): React.CSSProperties => ({ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 72, padding: 6, borderRadius: 10, border: '1px solid #1c2541', background: active ? '#121a31' : '#0b1120', color: active ? '#e3ecff' : '#9bb0d9', cursor: 'pointer' });
+  const itemBtn = (selected: boolean): React.CSSProperties => ({ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: 8, borderRadius: 10, border: selected ? '1px solid #3b5591' : '1px solid #1c2541', background: selected ? 'rgba(23,34,63,0.6)' : 'rgba(11,17,32,0.8)', color: '#d3e0ff', cursor: 'pointer', width: 118 });
+  const iconBox: React.CSSProperties = { width: 46, height: 46, borderRadius: 8, background: '#122039', border: '1px solid #24345a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9bb0d9', fontSize: 20 };
+
+  const currentItems = activeCat ? itemsByCat[activeCat] : [];
+
+  return (
+    <div style={{ position: 'absolute', left: 10, right: 10, bottom: 10, pointerEvents: 'auto', zIndex: 8 }}>
+      {activeCat && (
+        <div ref={paletteRef} style={{ position: 'absolute', left: 0, right: 0, bottom: catBarHeight + 12 }}>
+          {activeItem && (
+            <div style={{ ...card, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ ...iconBox, fontSize: 26 }}>{activeItem.icon}</div>
+                <div>
+                  <div style={{ fontWeight: 700 }}>{activeItem.name}</div>
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>{activeItem.desc}</div>
+                  <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+                    Custo: Fe {activeItem.cost?.Fe ?? 0} · Si {activeItem.cost?.Si ?? 0} · U {activeItem.cost?.U ?? 0}
+                    {typeof activeItem.power?.delta === 'number' && (
+                      <span> · Energia {activeItem.power!.delta! >= 0 ? `+${activeItem.power!.delta}` : activeItem.power!.delta}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => placeSoon(activeItem)} style={panelBtnStyle}>Colocar (em breve)</button>
+                <button onClick={() => setActiveItem(null)} style={{ ...panelBtnStyle, background: '#102038' }}>Cancelar</button>
+              </div>
+            </div>
+          )}
+          <div style={{ ...card }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              {currentItems.map((it) => (
+                <div key={it.id} style={itemBtn(activeItem?.id === it.id)} onClick={() => setActiveItem(it)} title={it.name}>
+                  <div style={iconBox}>{it.icon}</div>
+                  <div style={{ fontSize: 13 }}>{it.name}</div>
+                </div>
+              ))}
+              {currentItems.length === 0 && (
+                <div style={{ color: '#9bb0d9', fontSize: 12, opacity: 0.8 }}>Sem itens nesta categoria (WIP).</div>
+              )}
+            </div>
+          </div>
+          {notice && <div style={{ marginTop: 6, color: '#d3e0ff', fontSize: 13, opacity: 0.9 }}>{notice}</div>}
+        </div>
+      )}
+
+      <div ref={barRef} style={{ height: catBarHeight, background: 'rgba(13,19,36,0.82)', border: '1px solid #1c2541', borderRadius: 12, padding: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+        {categories.map((c) => (
+          <button key={c.id} onClick={() => { const next = activeCat === c.id ? null : c.id; setActiveCat(next); setActiveItem(null); }} style={catBtn(activeCat === c.id)} title={c.label}>
+            <div style={{ ...iconBox, width: 36, height: 36, fontSize: 18 }}>{c.icon}</div>
+            <div style={{ fontSize: 12 }}>{c.label}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 </file>
 
 </files>
