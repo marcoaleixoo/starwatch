@@ -1,51 +1,31 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/` – application code
-  - `src/ui/` React views (`Chat.tsx`, `MonacoEditor.tsx`)
-  - `src/game/` Babylon.js gameplay (`Game.ts`, `world.ts`)
-  - `src/hal/` LLM bridge (`halLLM.ts`)
-  - `src/main.tsx`, `src/App.tsx` app entry
-- `index.html` Vite HTML entry
-- `vite.config.ts`, `tsconfig.json` build/config
-- `dist/` build output (ignored)
-- `docs/` reference docs
-- `releases/` release notes
+The app code lives in `src/`, split into focused modules:
+- `src/ui/` hosts React panels such as `Chat.tsx` and `MonacoEditor.tsx`.
+- `src/game/` contains Babylon.js gameplay logic (`Game.ts`, `world.ts`).
+- `src/hal/` bridges HAL tool calls (`halLLM.ts`).
+- `src/App.tsx` and `src/main.tsx` bootstrap the UI; `index.html` configures Vite entry.
+Keep build artifacts in `dist/` (ignored), docs in `docs/`, and release notes in `releases/`.
 
-## Build, Run & Environment
-- Install: `pnpm install` (pnpm is preferred; lockfile present)
-- Dev server: `pnpm dev` (Vite at http://localhost:5173)
-- Build: `pnpm build` (TypeScript compile + Vite bundle)
-- Preview build: `pnpm preview`
-- Node 18+ recommended. Environment: set `OPENAI_API_KEY` (or `VITE_OPENAI_API_KEY`) and optional `OPENAI_MODEL` (default `gpt-4o-mini`). Example `.env`:
-  
-  OPENAI_API_KEY=sk-...
-  OPENAI_MODEL=gpt-4o-mini
+## Build, Test, and Development Commands
+- `pnpm install` — install dependencies (pnpm is the supported package manager).
+- `pnpm dev` — start the Vite dev server at http://localhost:5173/.
+- `pnpm build` — run TypeScript checks and create a production bundle in `dist/`.
+- `pnpm preview` — serve the built bundle locally for smoke testing.
+Add `pnpm test` once Vitest suites land so the command stays discoverable.
 
 ## Coding Style & Naming Conventions
-- TypeScript strict; avoid `any`. Two-space indentation.
-- React function components; components PascalCase (`App.tsx`), files in `ui/` follow this pattern.
-- Variables/functions camelCase; folders lowercase.
-- Keep inline styles consistent with existing code; prefer local, focused modules and explicit types.
+Use TypeScript with strict types; avoid `any`. Keep indentation at two spaces. Components in `src/ui/` are PascalCase files exporting function components. Favor camelCase for variables and helpers. Keep inline styles minimal and aligned with existing patterns.
 
 ## Testing Guidelines
-- No automated tests yet. If adding:
-  - Use Vitest; React Testing Library for UI.
-  - Name tests `*.test.ts`/`*.test.tsx` near sources or in `src/__tests__/`.
-  - Prioritize fast unit tests for `world.ts` (determinism) and `halLLM.ts` (intent handling).
+Adopt Vitest with React Testing Library for UI and deterministic unit tests for `src/game/world.ts` and `src/hal/halLLM.ts`. Name specs `*.test.ts` or `*.test.tsx` near their subjects. Run the suite via `pnpm test`; ensure tests complete quickly to support the feedback loop.
 
 ## Commit & Pull Request Guidelines
-- Follow Conventional Commits (seen in history): `feat: ...`, `fix: ...`, `chore: ...`.
-- Branch naming: `feat/<scope>`, `fix/<scope>`.
-- PRs include: clear description, linked issues, screenshots/GIFs for UI, and manual test steps (dev server or preview).
-- Keep PRs focused; update docs or release notes when relevant.
+Follow Conventional Commits (`feat:`, `fix:`, `chore:`). Scope branches as `feat/<scope>` or `fix/<scope>`. PRs should include a concise summary, linked issues, screenshots or GIFs for UI updates, and manual verification steps (`pnpm dev` or `pnpm preview`).
 
 ## Security & Configuration Tips
-- Do not commit real secrets. `.env` is git-ignored.
-- Vite maps `OPENAI_*` → `import.meta.env.VITE_OPENAI_*`; verify in `vite.config.ts`.
-- For contributors, consider adding a sanitized `.env.example` with required keys.
+Never commit real API keys; `.env` is ignored. Provide contributors a sanitized `.env.example` with `OPENAI_API_KEY` and optional `OPENAI_MODEL`. Vite exposes `OPENAI_*` variables via `import.meta.env`, so reference them through that accessor.
 
 ## Architecture Overview
-- Game: Babylon.js scene, sector generation, mining and scanning (`src/game/*`).
-- HAL: LLM intent → game tool calls (`src/hal/halLLM.ts`).
-- UI: Chat/Editor panels + canvas HUD (`src/ui/*`, `App.tsx`).
+The Babylon.js game orchestrates sectors and scanning/mining interactions, the HAL layer translates LLM intents into tool calls, and the React UI hosts the chat, editor, and canvas HUD. Understanding these boundaries keeps changes localized and reviewable.

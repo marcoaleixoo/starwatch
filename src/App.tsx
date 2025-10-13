@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Game } from './game/Game';
 import { Chat } from './ui/Chat';
-import { MonacoEditor } from './ui/MonacoEditor';
+import { ScriptsPanel } from './ui/ScriptsPanel';
 import { HalLLM } from './hal/halLLM';
 
-type Tab = 'chat' | 'scripts' | 'status';
+type Tab = 'chat' | 'status';
 type ViewMode = 'play' | 'sector';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [game, setGame] = useState<Game | null>(null);
   const [tab, setTab] = useState<Tab>('chat');
+  const [scriptsOpen, setScriptsOpen] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<ViewMode>('play');
   const [drawerOpen, setDrawerOpen] = useState<boolean>(true);
   const [buildHeight, setBuildHeight] = useState<number>(0);
@@ -64,11 +65,13 @@ export default function App() {
       stopMining: async () => game?.stopMining() ?? { ok: false },
       performScan: async () => game?.performScan() ?? [],
       getMiningStatus: async () => (game as any)?.getMiningStatus?.() ?? { state: 'idle' },
-      runScript: async (name: string, code: string) => {
-        if (!game) return { ok: false, error: 'Game not ready' } as const;
-        game.runScript({ name, code });
-        return { ok: true } as const;
-      },
+      // Script library tools
+      listScripts: async () => game?.listScripts?.() ?? [],
+      getScriptCode: async (name: string) => game?.getScriptCode?.(name) ?? null,
+      createScriptRaw: async (name: string, code: string, description?: string) => game ? game.createScript(name, code, description) : { ok: false, error: 'Game not ready' },
+      updateScriptRaw: async (name: string, newCode: string) => game ? game.updateScript(name, newCode) : { ok: false, error: 'Game not ready' },
+      deleteScript: async (name: string) => game ? game.deleteScript(name) : { ok: false, error: 'Game not ready' },
+      runScript: async (name: string) => game ? game.runScriptByName(name) : { ok: false, error: 'Game not ready' },
     };
     return new HalLLM(tools, { apiKey, model });
   }, [game, apiKey, model]);
@@ -78,15 +81,11 @@ export default function App() {
       <aside style={{ width: '20%', minWidth: 280, maxWidth: 420, borderRight: '1px solid #1c2541', background: '#0d1324', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 10, overflow: 'hidden' }}>
         <nav style={{ display: 'flex', borderBottom: '1px solid #1c2541' }}>
           <button onClick={() => setTab('chat')} style={tabBtn(tab === 'chat')}>Com‑Link</button>
-          <button onClick={() => setTab('scripts')} style={tabBtn(tab === 'scripts')}>Scripts</button>
           <button onClick={() => setTab('status')} style={tabBtn(tab === 'status')}>Status</button>
         </nav>
         <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
           <div style={{ display: tab === 'chat' ? 'block' : 'none', height: '100%' }}>
             <Chat hal={hal} defaultScript={scriptCode} />
-          </div>
-          <div style={{ display: tab === 'scripts' ? 'block' : 'none', height: '100%' }}>
-            <MonacoEditor value={scriptCode} language="javascript" onChange={setScriptCode} />
           </div>
           <div style={{ display: tab === 'status' ? 'block' : 'none', height: '100%' }}>
             <StatusPanel game={game} apiKey={apiKey} setApiKey={setApiKey} model={model} setModel={setModel} />
@@ -97,10 +96,24 @@ export default function App() {
         <main style={{ flex: 1, position: 'relative', minWidth: 0 }}>
           <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', background: '#060a15' }} />
           <TopHUD game={game} viewMode={viewMode} onChangeMap={setViewMode} onHeightChange={setTopSpace} />
-          <ConstructionBar onHeightChange={(h) => setBuildHeight(h)} />
+          <ConstructionBar onHeightChange={(h) => setBuildHeight(h)} onOpenScripts={() => setScriptsOpen(true)} />
         </main>
         <RightDrawer game={game} open={drawerOpen} setOpen={setDrawerOpen} bottomSpace={16 + buildHeight} topSpace={topSpace} />
       </div>
+      {scriptsOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setScriptsOpen(false); }}>
+          <div style={{ width: '82%', height: '72%', background: 'rgba(13,19,36,0.96)', border: '1px solid #1c2541', borderRadius: 12, boxShadow: '0 10px 40px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: 10, borderBottom: '1px solid #1c2541', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ color: '#e3ecff', fontWeight: 700 }}>Scripts</div>
+              <button onClick={() => setScriptsOpen(false)} style={{ ...panelBtnStyle, background: '#102038' }}>Fechar</button>
+            </div>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <ScriptsPanel game={game} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -375,7 +388,7 @@ type BuildItem = {
   power?: { delta?: number };
 };
 
-function ConstructionBar({ onHeightChange }: { onHeightChange: (height: number) => void }) {
+function ConstructionBar({ onHeightChange, onOpenScripts }: { onHeightChange: (height: number) => void; onOpenScripts: () => void }) {
   const [activeCat, setActiveCat] = useState<BuildCategory | null>(null);
   const [activeItem, setActiveItem] = useState<BuildItem | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -503,6 +516,8 @@ function ConstructionBar({ onHeightChange }: { onHeightChange: (height: number) 
             <div style={{ fontSize: 12 }}>{c.label}</div>
           </button>
         ))}
+        <div style={{ flex: 1 }} />
+        <button onClick={onOpenScripts} style={{ ...panelBtnStyle }}>Scripts</button>
       </div>
     </div>
   );

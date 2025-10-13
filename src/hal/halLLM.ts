@@ -1,4 +1,4 @@
-import { generateObject } from 'ai';
+import { generateObject, generateText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 
@@ -10,7 +10,13 @@ export type BridgeTools = {
   getResources: () => Promise<{ iron: number; silicon: number; uranium: number }>;
   startMining: (resource: 'iron' | 'silicon' | 'uranium') => Promise<{ ok: boolean; error?: string; targetId?: string }>;
   stopMining: () => Promise<{ ok: boolean }>;
-  runScript: (name: string, code: string) => Promise<{ ok: boolean; error?: string }>;
+  // Script Library base tools (CRUD + run by name)
+  listScripts: () => Promise<Array<{ name: string; description: string; lastModified: string }>>;
+  getScriptCode: (name: string) => Promise<string | null>;
+  createScriptRaw: (name: string, code: string, description?: string) => Promise<{ ok: boolean; error?: string }>;
+  updateScriptRaw: (name: string, newCode: string) => Promise<{ ok: boolean; error?: string }>;
+  deleteScript: (name: string) => Promise<{ ok: boolean; error?: string }>;
+  runScript: (name: string) => Promise<{ ok: boolean; error?: string }>;
   performScan: () => Promise<string[]>; // returns newly discovered ids
   getMiningStatus: () => Promise<any>;
 };
@@ -38,9 +44,19 @@ As ações disponíveis são:
 - get_resources {}
 - start_mining { resource: 'iron'|'silicon'|'uranium' }
 - stop_mining {}
-- run_script { name?: string, code?: string }
-Não invente parâmetros; infira apenas o que for pedido. Quando apropriado, explique sucintamente seu plano.
-Se pedirem para executar um script sem fornecer código, use o código padrão disponível.`;
+- Scripts (biblioteca):
+  - list_scripts {}
+  - get_script_code { name }
+  - delete_script { name }
+  - run_script { name }
+  - create_script { name, goal, description? }  // gere o código internamente
+  - update_script { name, goal }                // edite o código internamente
+Fluxos recomendados:
+  • Criar: create_script -> (opcional) run_script { name } se pedirem para já executar.
+  • Editar: get_script_code -> update_script.
+  • Executar: se ambíguo, list_scripts; senão run_script { name }.
+Regras de scripts: usar somente a API do worker (Game.*, Memory, sleep), sem valores fictícios ou "substitua"; o código deve ser autossuficiente.
+Não invente parâmetros; infira apenas o que for pedido. Quando apropriado, explique sucintamente seu plano.`;
 // Observação: para "varredura ativa" use a ação perform_scan (não use run_script). Para checar mineração, use mining_status.
 
   constructor(private tools: BridgeTools, private cfg: HalConfig) {}
@@ -86,7 +102,13 @@ Se pedirem para executar um script sem fornecer código, use o código padrão d
           z.object({ name: z.literal('start_mining'), input: z.object({ resource: z.enum(['iron', 'silicon', 'uranium']) }) }),
           z.object({ name: z.literal('stop_mining'), input: z.object({}).optional() }),
           z.object({ name: z.literal('mining_status'), input: z.object({}).optional() }),
-          z.object({ name: z.literal('run_script'), input: z.object({ name: z.string().optional(), code: z.string().optional() }).optional() }),
+          // Library tools
+          z.object({ name: z.literal('list_scripts'), input: z.object({}).optional() }),
+          z.object({ name: z.literal('get_script_code'), input: z.object({ name: z.string() }) }),
+          z.object({ name: z.literal('delete_script'), input: z.object({ name: z.string() }) }),
+          z.object({ name: z.literal('run_script'), input: z.object({ name: z.string() }) }),
+          z.object({ name: z.literal('create_script'), input: z.object({ name: z.string(), goal: z.string(), description: z.string().optional() }) }),
+          z.object({ name: z.literal('update_script'), input: z.object({ name: z.string(), goal: z.string() }) }),
         ])
         .nullish(),
     });
@@ -95,7 +117,6 @@ Se pedirem para executar um script sem fornecer código, use o código padrão d
       this.systemPrompt,
       historyText ? `Histórico recente:\n${historyText}` : '',
       `Nova entrada do Comandante: ${userText}`,
-      `Código padrão do editor: ${defaultScriptName}`,
       'Retorne apenas o objeto: { say, call? }.',
     ]
       .filter(Boolean)
@@ -106,6 +127,41 @@ Se pedirem para executar um script sem fornecer código, use o código padrão d
 
     const logTool = (name: string, input: any, output: any) => {
       this.history.push({ role: 'tool', content: `tool:${name}`, meta: { name, input, output } });
+    };
+
+    const getRecentHistory = () =>
+      this.history
+        .slice(-5)
+        .map((m) => `${m.role === 'user' ? 'Comandante' : m.role === 'assistant' ? 'HAL' : 'Tool'}: ${m.content}`)
+        .join('\n');
+
+    const generateScript = async (goal: string, currentCode?: string) => {
+      const sys = `Você é HAL, gerando código JavaScript para rodar em um Web Worker do jogo.
+Use exclusivamente a API exposta no worker:
+- Game.moveTo({x,y,z})
+- Game.performScan()
+- Game.scanSector({ resource?: 'iron'|'silicon'|'uranium', limit?: number })
+- Game.startMining(resource)
+- Game.getMiningStatus()
+- Game.stopMining()
+- Game.getShipStatus(), Game.getResources()
+- Memory.get/set, sleep(ms)
+Sem placeholders ou comentários do tipo "substitua"; escreva lógica real que consulta o ambiente em tempo de execução.
+Padrões úteis: escanear, escolher alvos próximos, laços assíncronos com await e intervalos; nunca use recursão para loops; trate erros de forma simples.
+Retorne apenas o código executável (sem markdown).`;
+      const recent = getRecentHistory();
+      const parts = [
+        sys,
+        recent ? `Contexto recente:\n${recent}` : '',
+        `Objetivo do script: ${goal}`,
+        currentCode ? `Código atual (para atualizar):\n${currentCode}` : '',
+      ].filter(Boolean);
+      const t = await generateText({
+        model,
+        prompt: parts.join('\n\n'),
+        maxSteps: 15 as any,
+      });
+      return t.text.trim();
     };
 
     if (object.call) {
@@ -163,11 +219,43 @@ Se pedirem para executar um script sem fornecer código, use o código padrão d
         } else if (s.state === 'mining') {
           object.say = `${object.say} Extraindo ${s.resource}. Restante ~${s.remaining?.toFixed?.(1)} t a ${s.rate} t/s.`;
         }
+      } else if (c.name === 'list_scripts') {
+        const out = await this.tools.listScripts();
+        logTool('list_scripts', {}, out);
+        const names = out.map((s: any) => s.name).join(', ');
+        object.say = `${object.say} Scripts disponíveis: ${names || 'nenhum'}.`;
+      } else if (c.name === 'get_script_code') {
+        const code = await this.tools.getScriptCode(c.input.name);
+        logTool('get_script_code', c.input, { hasCode: !!code, length: code?.length ?? 0 });
+        if (code) object.say = `${object.say}\nTrecho de ${c.input.name}:\n${code.slice(0, 400)}${code.length > 400 ? '…' : ''}`;
+        else object.say = `${object.say} O script ${c.input.name} não existe.`;
+      } else if (c.name === 'delete_script') {
+        const out = await this.tools.deleteScript(c.input.name);
+        logTool('delete_script', c.input, out);
+        object.say = out.ok ? `${object.say} Script ${c.input.name} removido.` : `${object.say} Falha: ${out.error}`;
       } else if (c.name === 'run_script') {
         const name = c.input?.name || defaultScriptName;
-        const code = c.input?.code ?? defaultScriptCode;
-        const out = await this.tools.runScript(name, code);
+        const out = await this.tools.runScript(name);
         logTool('run_script', { name }, out);
+        if (out.ok) object.say = `${object.say} Executando ${name} agora.`;
+        else object.say = `${object.say} Falha ao executar ${name}: ${out.error}`;
+      } else if (c.name === 'create_script') {
+        const { name, goal, description } = c.input;
+        const code = await generateScript(goal);
+        const out = await this.tools.createScriptRaw(name, code, description);
+        logTool('create_script', { name, goal, description }, out);
+        object.say = out.ok ? `${object.say} Criei ${name} na biblioteca.` : `${object.say} Falha ao criar: ${out.error}`;
+      } else if (c.name === 'update_script') {
+        const { name, goal } = c.input;
+        const current = await this.tools.getScriptCode(name);
+        if (!current) {
+          object.say = `${object.say} O script ${name} não existe.`;
+        } else {
+          const newCode = await generateScript(goal, current);
+          const out = await this.tools.updateScriptRaw(name, newCode);
+          logTool('update_script', { name, goal }, out);
+          object.say = out.ok ? `${object.say} Atualizei ${name} conforme solicitado.` : `${object.say} Falha ao atualizar: ${out.error}`;
+        }
       }
     }
 

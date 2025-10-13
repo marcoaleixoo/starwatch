@@ -5,6 +5,7 @@ import { generateSector } from './world';
 type Vec3 = { x: number; y: number; z: number };
 
 type ScriptJob = { name: string; code: string };
+type ScriptEntry = { code: string; description: string; lastModified: string };
 
 export class Game {
   private engine: Engine;
@@ -28,6 +29,8 @@ export class Game {
   private labelMeshes: Mesh[] = [];
   private sun?: Mesh;
   private followingShip = false;
+  // Script Library (persisted)
+  private scriptLibrary: Map<string, ScriptEntry> = new Map();
 
   constructor(private canvas: HTMLCanvasElement) {
     this.engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
@@ -64,6 +67,9 @@ export class Game {
     // Ajustar parâmetros dependentes da escala do setor
     this.configureScaleFromWorld();
     this.spawnSector();
+
+    // Load scripts library (seed with default patrol if empty)
+    this.loadScripts();
 
     // Background: starfield skybox + subtle dust + sun
     this.createStarfield();
@@ -279,11 +285,39 @@ export class Game {
     worker.onmessage = (ev) => {
       const msg = ev.data;
       if (msg?.type === 'tool') {
-        if (msg.name === 'moveTo') {
-          const { x, y, z } = msg.args ?? {};
-          this.moveTo({ x, y, z });
-          worker.postMessage({ type: 'tool-ack', id: msg.id, ok: true });
-        }
+        (async () => {
+          try {
+            if (msg.name === 'moveTo') {
+              const { x, y, z } = msg.args ?? {};
+              this.moveTo({ x, y, z });
+              worker.postMessage({ type: 'tool-ack', id: msg.id, ok: true, result: null });
+            } else if (msg.name === 'performScan') {
+              const out = this.performScan();
+              worker.postMessage({ type: 'tool-ack', id: msg.id, ok: true, result: out });
+            } else if (msg.name === 'scanSector') {
+              const out = this.scanSector(msg.args);
+              worker.postMessage({ type: 'tool-ack', id: msg.id, ok: true, result: out });
+            } else if (msg.name === 'startMining') {
+              const out = this.startMining(msg.args?.resource);
+              worker.postMessage({ type: 'tool-ack', id: msg.id, ok: true, result: out });
+            } else if (msg.name === 'stopMining') {
+              const out = this.stopMining();
+              worker.postMessage({ type: 'tool-ack', id: msg.id, ok: true, result: out });
+            } else if (msg.name === 'getMiningStatus') {
+              const out = this.getMiningStatus();
+              worker.postMessage({ type: 'tool-ack', id: msg.id, ok: true, result: out });
+            } else if (msg.name === 'getShipStatus') {
+              const out = this.getShipStatus();
+              worker.postMessage({ type: 'tool-ack', id: msg.id, ok: true, result: out });
+            } else if (msg.name === 'getResources') {
+              const out = this.getResources();
+              worker.postMessage({ type: 'tool-ack', id: msg.id, ok: true, result: out });
+            }
+          } catch (e) {
+            console.error('Script tool error', e);
+            worker.postMessage({ type: 'tool-ack', id: msg.id, ok: false, error: String(e) });
+          }
+        })();
       }
     };
     worker.onerror = (e) => {
@@ -292,8 +326,18 @@ export class Game {
     this.worker = worker;
   }
 
+  runScriptByName(name: string) {
+    const code = this.getScriptCode(name);
+    if (!code) {
+      console.warn('Script not found:', name);
+      return { ok: false as const, error: 'Script not found' };
+    }
+    this.runScript({ name, code });
+    return { ok: true as const };
+  }
+
   private makeWorkerSource(userCode: string) {
-    // Tiny API bridge: Game.moveTo, Memory.get/set, sleep
+    // Tiny API bridge: Game.moveTo, Memory.get/set, sleep + mining/scan helpers
     return `
       const Memory = new Map();
       function postTool(name, args) {
@@ -302,7 +346,7 @@ export class Game {
           function onAck(ev) {
             const msg = ev.data;
             if (msg && msg.type === 'tool-ack' && msg.id === id) {
-              resolve(msg);
+              resolve(msg.result);
               self.removeEventListener('message', onAck);
             }
           }
@@ -311,33 +355,100 @@ export class Game {
         });
       }
       const Game = {
-        moveTo: async (v) => {
-          await postTool('moveTo', v);
-        }
+        moveTo: async (v) => { await postTool('moveTo', v); },
+        performScan: async () => await postTool('performScan'),
+        scanSector: async (filter) => await postTool('scanSector', filter),
+        startMining: async (resource) => await postTool('startMining', { resource }),
+        stopMining: async () => await postTool('stopMining'),
+        getMiningStatus: async () => await postTool('getMiningStatus'),
+        getShipStatus: async () => await postTool('getShipStatus'),
+        getResources: async () => await postTool('getResources'),
       };
       const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-      // Provide Memory API (string keys only for simplicity)
-      const MemoryAPI = {
-        set: (k, v) => Memory.set(k, v),
-        get: (k) => Memory.get(k)
-      };
-      // Expose globals
-      self.Game = Game;
-      self.Memory = MemoryAPI;
-      self.sleep = sleep;
-      // Built-in helpers for convenience (so LLM can call patrol())
+      const MemoryAPI = { set: (k, v) => Memory.set(k, v), get: (k) => Memory.get(k) };
+      self.Game = Game; self.Memory = MemoryAPI; self.sleep = sleep;
+      // Helpers
       async function patrol() {
-        const A = { x: 500, y: 0, z: 250 };
-        const B = { x: 200, y: 0, z: -200 };
+        const A = { x: 500, y: 0, z: 250 }; const B = { x: 200, y: 0, z: -200 };
+        while (true) { await Game.moveTo(A); await sleep(3000); await Game.moveTo(B); await sleep(3000); }
+      }
+      async function mineResource(resource) {
+        await Game.performScan();
+        const res = await Game.startMining(resource);
+        if (!res?.ok) return res;
         while (true) {
-          await Game.moveTo(A);
-          await sleep(3000);
-          await Game.moveTo(B);
-          await sleep(3000);
+          const s = await Game.getMiningStatus();
+          if (!s || s.state === 'idle') break;
+          await sleep(1000);
         }
+        return { ok: true };
       }
       (async () => { try {\n${userCode}\n } catch (e) { console.error('User script error:', e); } })();
     `;
+  }
+
+  // ===== Script Library API =====
+  listScripts() {
+    return Array.from(this.scriptLibrary.entries()).map(([name, e]) => ({ name, description: e.description, lastModified: e.lastModified }));
+  }
+
+  getScriptCode(name: string): string | null {
+    const e = this.scriptLibrary.get(name);
+    return e ? e.code : null;
+  }
+
+  createScript(name: string, code: string, description: string = '') {
+    if (!name || !code) return { ok: false as const, error: 'Missing name or code' };
+    if (this.scriptLibrary.has(name)) return { ok: false as const, error: 'Script already exists' };
+    const entry: ScriptEntry = { code, description, lastModified: new Date().toISOString() };
+    this.scriptLibrary.set(name, entry);
+    this.saveScripts();
+    return { ok: true as const };
+  }
+
+  updateScript(name: string, newCode: string) {
+    const e = this.scriptLibrary.get(name);
+    if (!e) return { ok: false as const, error: 'Script not found' };
+    e.code = newCode;
+    e.lastModified = new Date().toISOString();
+    this.scriptLibrary.set(name, e);
+    this.saveScripts();
+    return { ok: true as const };
+  }
+
+  deleteScript(name: string) {
+    if (!this.scriptLibrary.has(name)) return { ok: false as const, error: 'Script not found' };
+    this.scriptLibrary.delete(name);
+    this.saveScripts();
+    return { ok: true as const };
+  }
+
+  private loadScripts() {
+    try {
+      const raw = localStorage.getItem('starwatch.v030.scripts');
+      if (raw) {
+        const obj = JSON.parse(raw) as Record<string, ScriptEntry>;
+        this.scriptLibrary = new Map<string, ScriptEntry>(Object.entries(obj));
+      }
+    } catch (e) {
+      console.warn('Failed to load scripts', e);
+    }
+    if (this.scriptLibrary.size === 0) {
+      // Seed with a default patrol script
+      const code = `// patrol.js\n// Patrulha simples entre dois pontos usando a API do worker\n(async () => {\n  const A = { x: 500, y: 0, z: 250 };\n  const B = { x: 200, y: 0, z: -200 };\n  while (true) {\n    await Game.moveTo(A);\n    await sleep(3000);\n    await Game.moveTo(B);\n    await sleep(3000);\n  }\n})();`;
+      this.scriptLibrary.set('patrol.js', { code, description: 'Patrulha entre dois pontos', lastModified: new Date().toISOString() });
+      this.saveScripts();
+    }
+  }
+
+  private saveScripts() {
+    try {
+      const obj: Record<string, ScriptEntry> = {};
+      for (const [k, v] of this.scriptLibrary.entries()) obj[k] = v;
+      localStorage.setItem('starwatch.v030.scripts', JSON.stringify(obj));
+    } catch (e) {
+      console.warn('Failed to save scripts', e);
+    }
   }
 
   private updatePhysics() {
@@ -794,7 +905,16 @@ export class Game {
 declare global {
   // Worker script globals (type-only exposure for TS consumers)
   interface WorkerGlobalScope {
-    Game: { moveTo(v: Vec3): Promise<void> };
+    Game: {
+      moveTo(v: Vec3): Promise<void>;
+      performScan(): Promise<string[]>;
+      scanSector(filter?: { resource?: ResourceType; limit?: number }): Promise<any[]>;
+      startMining(resource: ResourceType): Promise<{ ok: boolean; error?: string }>;
+      stopMining(): Promise<{ ok: boolean }>;
+      getMiningStatus(): Promise<any>;
+      getShipStatus(): Promise<any>;
+      getResources(): Promise<{ iron: number; silicon: number; uranium: number }>;
+    };
     Memory: { set(k: string, v: unknown): void; get(k: string): unknown };
     sleep(ms: number): Promise<void>;
   }
