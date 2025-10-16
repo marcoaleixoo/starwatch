@@ -13,7 +13,7 @@ export function ScriptsPanel({ game }: Props) {
   const [desc, setDesc] = useState<string>('');
   const [status, setStatus] = useState<string>('');
 
-  const refresh = async (keepSelection = true) => {
+  const refresh = async ({ keepSelection = true }: { keepSelection?: boolean } = {}) => {
     const list = game ? game.listScripts() : [];
     setScripts(list);
     if (keepSelection && selected) {
@@ -26,7 +26,7 @@ export function ScriptsPanel({ game }: Props) {
   };
 
   useEffect(() => {
-    refresh(false);
+    refresh({ keepSelection: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game]);
 
@@ -59,7 +59,7 @@ export function ScriptsPanel({ game }: Props) {
       : game?.createScript(selected, code, desc);
     if (out?.ok) {
       setStatus('Salvo');
-      await refresh(true);
+      await refresh();
       setTimeout(() => setStatus(''), 1000);
     } else {
       setStatus(`Erro: ${out?.error || 'desconhecido'}`);
@@ -81,7 +81,7 @@ export function ScriptsPanel({ game }: Props) {
     const out = game?.deleteScript(name);
     if (out?.ok) {
       if (selected === name) { setSelected(null); setCode(''); }
-      await refresh(false);
+      await refresh({ keepSelection: false });
     } else {
       setStatus(`Erro ao excluir: ${out?.error}`);
       setTimeout(() => setStatus(''), 1400);
@@ -97,7 +97,7 @@ export function ScriptsPanel({ game }: Props) {
       <div style={{ ...sidebar, padding: 8 }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
           <button style={btn} onClick={newScript}>Novo</button>
-          <button style={{ ...btn, background: '#102038' }} onClick={refresh}>Atualizar</button>
+          <button style={{ ...btn, background: '#102038' }} onClick={() => { void refresh(); }}>Atualizar</button>
         </div>
         <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Biblioteca</div>
         <div style={{ overflow: 'auto', maxHeight: 'calc(100% - 64px)' }}>

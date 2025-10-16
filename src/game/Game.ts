@@ -6,6 +6,17 @@ type Vec3 = { x: number; y: number; z: number };
 
 type ScriptJob = { name: string; code: string };
 type ScriptEntry = { code: string; description: string; lastModified: string };
+type WorkerLogEntry = { id: string; level: 'info' | 'warn' | 'error'; message: string; timestamp: number };
+type WorkerState = 'idle' | 'starting' | 'running' | 'completed' | 'error' | 'stopped';
+type WorkerStatus = {
+  scriptName: string | null;
+  state: WorkerState;
+  startedAt?: number;
+  finishedAt?: number;
+  logs: WorkerLogEntry[];
+  lastMessage?: string;
+  lastError?: string;
+};
 
 export class Game {
   private engine: Engine;
@@ -24,10 +35,14 @@ export class Game {
   private scanRadius = 1000; // km (redefinido após carregar o setor)
   private logicTimer: number | null = null;
   private worker: Worker | null = null;
+  private workerStatus: WorkerStatus = { scriptName: null, state: 'idle', logs: [] };
   private mode: 'play' | 'sector' = 'play';
   private prevCam: { alpha: number; beta: number; radius: number; target: Vector3; fogMode: number; fogStart?: number; fogEnd?: number; fogDensity?: number; panning?: number; lockedTarget?: any; followingShip?: boolean } | null = null;
   private labelMeshes: Mesh[] = [];
   private sun?: Mesh;
+  private starfield?: Mesh;
+  private dustEmitter?: Mesh;
+  private dustSystem?: ParticleSystem;
   private followingShip = false;
   // Script Library (persisted)
   private scriptLibrary: Map<string, ScriptEntry> = new Map();
@@ -94,7 +109,11 @@ export class Game {
 
   dispose() {
     if (this.logicTimer) window.clearInterval(this.logicTimer);
-    this.worker?.terminate();
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+    }
+    this.workerStatus = { scriptName: null, state: 'idle', logs: [] };
     this.scene.dispose();
     this.engine.dispose();
   }
@@ -213,6 +232,7 @@ export class Game {
     this.ship.mesh.position.set(0, 0, 0);
     this.worker?.terminate();
     this.worker = null;
+    this.workerStatus = { scriptName: null, state: 'idle', logs: [] };
     // Respawn
     this.spawnSector();
     // Save immediately
@@ -273,18 +293,36 @@ export class Game {
   }
 
   runScript(job: ScriptJob) {
-    // Terminate old worker
-    this.worker?.terminate();
+    if (this.worker) {
+      this.worker.terminate();
+      if (this.workerStatus.state === 'running' || this.workerStatus.state === 'starting') {
+        this.workerStatus = {
+          ...this.workerStatus,
+          state: 'stopped',
+          finishedAt: Date.now(),
+          lastMessage: 'Script anterior interrompido.',
+        };
+      }
+    }
+    this.workerStatus = {
+      scriptName: job.name,
+      state: 'starting',
+      startedAt: Date.now(),
+      logs: [],
+    };
     const blob = new Blob([
-      this.makeWorkerSource(job.code)
+      this.makeWorkerSource(job.code, job.name)
     ], { type: 'application/javascript' });
     const url = URL.createObjectURL(blob);
     const worker = new Worker(url, { type: 'module' });
     URL.revokeObjectURL(url);
+    this.worker = worker;
+    this.workerStatus.state = 'running';
 
     worker.onmessage = (ev) => {
       const msg = ev.data;
-      if (msg?.type === 'tool') {
+      if (!msg) return;
+      if (msg.type === 'tool') {
         (async () => {
           try {
             if (msg.name === 'moveTo') {
@@ -310,20 +348,58 @@ export class Game {
               const out = this.getShipStatus();
               worker.postMessage({ type: 'tool-ack', id: msg.id, ok: true, result: out });
             } else if (msg.name === 'getResources') {
-              const out = this.getResources();
-              worker.postMessage({ type: 'tool-ack', id: msg.id, ok: true, result: out });
+                const out = this.getResources();
+                worker.postMessage({ type: 'tool-ack', id: msg.id, ok: true, result: out });
+              }
+            } catch (e) {
+              console.error('Script tool error', e);
+              worker.postMessage({ type: 'tool-ack', id: msg.id, ok: false, error: String(e) });
             }
-          } catch (e) {
-            console.error('Script tool error', e);
-            worker.postMessage({ type: 'tool-ack', id: msg.id, ok: false, error: String(e) });
-          }
         })();
+      } else if (msg.type === 'log') {
+        const entry: WorkerLogEntry = {
+          id: msg.id || Math.random().toString(36).slice(2),
+          level: msg.level === 'error' ? 'error' : msg.level === 'warn' ? 'warn' : 'info',
+          message: String(msg.message ?? ''),
+          timestamp: msg.timestamp || Date.now(),
+        };
+        this.workerStatus.logs = [...this.workerStatus.logs.slice(-99), entry];
+        this.workerStatus.lastMessage = entry.message;
+        if (entry.level === 'error') {
+          this.workerStatus.lastError = entry.message;
+        }
+      } else if (msg.type === 'script-state') {
+        if (msg.state === 'completed') {
+          this.workerStatus = {
+            ...this.workerStatus,
+            state: 'completed',
+            finishedAt: Date.now(),
+            lastMessage: msg.message || 'Script concluído.',
+          };
+          worker.terminate();
+          if (this.worker === worker) this.worker = null;
+        } else if (msg.state === 'error') {
+          this.workerStatus = {
+            ...this.workerStatus,
+            state: 'error',
+            finishedAt: Date.now(),
+            lastError: msg.error || 'Erro desconhecido',
+          };
+          worker.terminate();
+          if (this.worker === worker) this.worker = null;
+        }
       }
     };
     worker.onerror = (e) => {
       console.error('Script worker error', e);
+      this.workerStatus = {
+        ...this.workerStatus,
+        state: 'error',
+        finishedAt: Date.now(),
+        lastError: e.message || String(e),
+      };
+      if (this.worker === worker) this.worker = null;
     };
-    this.worker = worker;
   }
 
   runScriptByName(name: string) {
@@ -336,9 +412,27 @@ export class Game {
     return { ok: true as const };
   }
 
-  private makeWorkerSource(userCode: string) {
+  private makeWorkerSource(userCode: string, scriptName: string) {
     // Tiny API bridge: Game.moveTo, Memory.get/set, sleep + mining/scan helpers
     return `
+      const __postLog = (level, message) => {
+        try {
+          postMessage({ type: 'log', level, message: message != null ? String(message) : '', timestamp: Date.now(), id: Math.random().toString(36).slice(2) });
+        } catch (_) {}
+      };
+      const __formatArgs = (args) => args.map((v) => {
+        if (typeof v === 'string') return v;
+        try { return JSON.stringify(v); } catch { return String(v); }
+      }).join(' ');
+      (() => {
+        const originalLog = console.log.bind(console);
+        const originalWarn = console.warn ? console.warn.bind(console) : console.log.bind(console);
+        const originalError = console.error ? console.error.bind(console) : console.log.bind(console);
+        console.log = (...args) => { originalLog(...args); __postLog('info', __formatArgs(args)); };
+        console.warn = (...args) => { originalWarn(...args); __postLog('warn', __formatArgs(args)); };
+        console.error = (...args) => { originalError(...args); __postLog('error', __formatArgs(args)); };
+      })();
+
       const Memory = new Map();
       function postTool(name, args) {
         return new Promise((resolve) => {
@@ -383,7 +477,17 @@ export class Game {
         }
         return { ok: true };
       }
-      (async () => { try {\n${userCode}\n } catch (e) { console.error('User script error:', e); } })();
+      postMessage({ type: 'script-state', state: 'ready', scriptName: ${JSON.stringify(scriptName)} });
+      (async () => {
+        try {
+${userCode.split('\n').map((line) => `          ${line}`).join('\n')}
+        } catch (e) {
+          console.error('Erro no script:', e);
+          postMessage({ type: 'script-state', state: 'error', error: e?.stack || e?.message || String(e) });
+          return;
+        }
+        postMessage({ type: 'script-state', state: 'completed', message: 'Execução encerrada.' });
+      })();
     `;
   }
 
@@ -650,6 +754,18 @@ export class Game {
     ];
   }
 
+  getWorkerStatus(): WorkerStatus {
+    return {
+      scriptName: this.workerStatus.scriptName,
+      state: this.workerStatus.state,
+      startedAt: this.workerStatus.startedAt,
+      finishedAt: this.workerStatus.finishedAt,
+      logs: this.workerStatus.logs.slice(),
+      lastMessage: this.workerStatus.lastMessage,
+      lastError: this.workerStatus.lastError,
+    };
+  }
+
   getMiningStatus() {
     const targetId = this.mining.targetId;
     if (targetId) {
@@ -709,30 +825,64 @@ export class Game {
   private createStarfield() {
     const size = Math.max(8192, this.world.bounds * 4); // escala com o setor
     const sky = MeshBuilder.CreateBox('sky', { size, sideOrientation: Mesh.BACKSIDE }, this.scene);
-    const texSize = 1024;
+    const texSize = 2048;
     const dt = new DynamicTexture('stars', { width: texSize, height: texSize }, this.scene, false);
     const ctx = dt.getContext();
-    // Fill background
-    ctx.fillStyle = '#070a14';
+    // Fundo com leve gradiente frio
+    const gradient = ctx.createRadialGradient(texSize / 2, texSize / 2, texSize * 0.1, texSize / 2, texSize / 2, texSize * 0.7);
+    gradient.addColorStop(0, '#060914');
+    gradient.addColorStop(1, '#02030a');
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, texSize, texSize);
-    // draw stars
-    const stars = 2000;
-    for (let i = 0; i < stars; i++) {
-      const x = Math.random() * texSize;
-      const y = Math.random() * texSize;
-      const r = Math.random() * 1.6 + 0.2;
-      const hue = Math.random() < 0.3 ? 220 + Math.random() * 20 : 0; // blueish sometimes
-      const col = hue ? `hsl(${hue},70%,${70 + Math.random() * 20}%)` : `rgb(230,235,255)`;
-      ctx.fillStyle = col;
+    // Nebulosas suaves para volume distante
+    const nebulaCount = 12;
+    for (let i = 0; i < nebulaCount; i++) {
+      const nx = Math.random() * texSize;
+      const ny = Math.random() * texSize;
+      const radius = (Math.random() * 0.18 + 0.05) * texSize;
+      const hue = 200 + Math.random() * 40;
+      const nebula = ctx.createRadialGradient(nx, ny, radius * 0.15, nx, ny, radius);
+      nebula.addColorStop(0, `hsla(${hue.toFixed(1)}, 70%, ${60 + Math.random() * 15}%, 0.18)`);
+      nebula.addColorStop(0.7, `hsla(${hue.toFixed(1)}, 60%, 20%, 0.06)`);
+      nebula.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = nebula;
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.arc(nx, ny, radius, 0, Math.PI * 2);
       ctx.fill();
-      if (Math.random() < 0.1) {
-        ctx.globalAlpha = 0.3;
+    }
+    // Estrelas em múltiplas camadas
+    const starLayers: Array<{ count: number; size: [number, number]; alpha: [number, number] }> = [
+      { count: 800, size: [2.2, 3.6], alpha: [0.7, 1] },
+      { count: 2200, size: [0.8, 1.8], alpha: [0.4, 0.8] },
+      { count: 1200, size: [0.3, 0.9], alpha: [0.2, 0.5] },
+    ];
+    for (const layer of starLayers) {
+      for (let i = 0; i < layer.count; i++) {
+        const x = Math.random() * texSize;
+        const y = Math.random() * texSize;
+        const r = layer.size[0] + Math.random() * (layer.size[1] - layer.size[0]);
+        const alpha = layer.alpha[0] + Math.random() * (layer.alpha[1] - layer.alpha[0]);
+        const hueChance = Math.random();
+        let color = `rgba(230,235,255,${alpha.toFixed(3)})`;
+        if (hueChance < 0.12) {
+          const hue = 200 + Math.random() * 30;
+          color = `hsla(${hue}, 70%, ${65 + Math.random() * 20}%, ${alpha.toFixed(3)})`;
+        } else if (hueChance > 0.94) {
+          const warmth = 30 + Math.random() * 10;
+          color = `hsla(${warmth}, 80%, ${70 + Math.random() * 15}%, ${alpha.toFixed(3)})`;
+        }
+        ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(x, y, r * 3, 0, Math.PI * 2);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
-        ctx.globalAlpha = 1;
+        if (Math.random() < 0.1) {
+          ctx.save();
+          ctx.globalAlpha = alpha * 0.25;
+          ctx.beginPath();
+          ctx.arc(x, y, r * 3.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
       }
     }
     dt.update(false);
@@ -748,35 +898,68 @@ export class Game {
     (sky as any).isPickable = false;
     (sky as any).applyFog = false;
     (sky as any).infiniteDistance = true;
+    this.starfield = sky as any;
+    this.scene.registerBeforeRender(() => {
+      if (this.starfield) {
+        this.starfield.rotation.y += 0.00001;
+      }
+    });
   }
 
   private createSpaceDust() {
-    // subtle particles across a big box volume
-    const ps = new ParticleSystem('spaceDust', 2000, this.scene);
-    const dot = new DynamicTexture('dustDot', { width: 16, height: 16 }, this.scene, true);
-    const c = dot.getContext();
-    c.clearRect(0, 0, 16, 16);
-    c.fillStyle = 'white';
-    c.beginPath();
-    c.arc(8, 8, 3, 0, Math.PI * 2);
-    c.fill();
+    // subtle particles travelling with the camera to sugerir volume ao redor
+    this.dustEmitter = MeshBuilder.CreateSphere('dustEmitter', { diameter: 0.1 }, this.scene);
+    this.dustEmitter.parent = this.camera;
+    this.dustEmitter.position.set(0, 0, 0);
+    this.dustEmitter.isPickable = false;
+    this.dustEmitter.isVisible = false;
+    this.dustEmitter.doNotSyncBoundingInfo = true;
+
+    const ps = new ParticleSystem('spaceDust', 2800, this.scene);
+    const size = 32;
+    const dot = new DynamicTexture('dustDot', { width: size, height: size }, this.scene, true);
+    const ctx = dot.getContext();
+    ctx.clearRect(0, 0, size, size);
+    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+    grad.addColorStop(0.45, 'rgba(200,220,255,0.6)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
     dot.update(false);
+
     ps.particleTexture = dot as unknown as Texture;
-    ps.minSize = 0.15;
-    ps.maxSize = 0.8;
-    ps.minLifeTime = 12;
-    ps.maxLifeTime = 24;
-    ps.emitRate = 120;
-    ps.color1 = new Color4(1, 1, 1, 0.08);
-    ps.color2 = new Color4(0.6, 0.7, 1, 0.06);
+    ps.emitter = this.dustEmitter;
+    ps.minEmitBox = new Vector3(-180, -100, -180);
+    ps.maxEmitBox = new Vector3(180, 100, 180);
+    ps.minSize = 0.3;
+    ps.maxSize = 1.6;
+    ps.minLifeTime = 18;
+    ps.maxLifeTime = 36;
+    ps.emitRate = 180;
+    ps.minEmitPower = 0.08;
+    ps.maxEmitPower = 0.26;
+    ps.minAngularSpeed = -0.4;
+    ps.maxAngularSpeed = 0.4;
+    ps.direction1 = new Vector3(-0.2, -0.02, 0.2);
+    ps.direction2 = new Vector3(0.2, 0.02, -0.2);
+    ps.color1 = new Color4(1, 1, 1, 0.18);
+    ps.color2 = new Color4(0.76, 0.86, 1, 0.12);
+    ps.colorDead = new Color4(0.45, 0.6, 1, 0.02);
     ps.blendMode = ParticleSystem.BLENDMODE_ADD;
-    ps.direction1 = new Vector3(-0.2, 0, 0.2);
-    ps.direction2 = new Vector3(0.2, 0, -0.2);
-    const box = Math.max(3000, this.world.bounds * 1.2);
-    ps.minEmitBox = new Vector3(-box, -box, -box);
-    ps.maxEmitBox = new Vector3(box, box, box);
-    ps.gravity = new Vector3(0, 0, 0);
+    ps.gravity = Vector3.Zero();
+
     ps.start();
+    this.dustSystem = ps;
+    let t = 0;
+    this.scene.registerBeforeRender(() => {
+      if (!this.dustEmitter) return;
+      t += this.scene.getEngine().getDeltaTime() * 0.00006;
+      const sway = 24;
+      this.dustEmitter.position.x = Math.sin(t) * sway;
+      this.dustEmitter.position.y = Math.sin(t * 1.8) * 8;
+      this.dustEmitter.position.z = Math.cos(t * 1.2) * sway;
+    });
   }
 
   private createSun() {

@@ -259,14 +259,38 @@ function RightDrawer({ game, open, setOpen, bottomSpace, topSpace }: { game: Gam
   const [asteroidsByCluster, setAsteroidsByCluster] = useState<Record<string, any[]>>({});
   const [following, setFollowing] = useState<boolean>(false);
   const [tab, setTab] = useState<'naves' | 'clusters'>('naves');
+  const [shipStatus, setShipStatus] = useState<any | null>(null);
+  const [miningStatus, setMiningStatus] = useState<any | null>(null);
+  const [workerStatus, setWorkerStatus] = useState<ReturnType<Game['getWorkerStatus']> | null>(null);
+  const [resources, setResources] = useState<{ iron: number; silicon: number; uranium: number }>({ iron: 0, silicon: 0, uranium: 0 });
 
   useEffect(() => {
+    if (!game) {
+      setFleet([]);
+      setClusters([]);
+      setExpanded({});
+      setAsteroidsByCluster({});
+      setFollowing(false);
+      setShipStatus(null);
+      setMiningStatus(null);
+      setWorkerStatus(null);
+      setResources({ iron: 0, silicon: 0, uranium: 0 });
+      return;
+    }
     const id = setInterval(() => {
-      setFleet(game?.getFleet() || []);
-      // Apenas clusters com algo descoberto
-      const all = game?.getClustersOverview(true) || [];
+      setFleet(game.getFleet() || []);
+      const all = game.getClustersOverview(true) || [];
       setClusters(all.filter((c: any) => (c.discovered || 0) > 0));
-      setFollowing(!!game?.isFollowingShip?.());
+      setFollowing(!!game.isFollowingShip?.());
+      setShipStatus(game.getShipStatus());
+      setMiningStatus(game.getMiningStatus());
+      setWorkerStatus(game.getWorkerStatus());
+      const res = game.getResources();
+      setResources({
+        iron: Number(res.iron?.toFixed?.(1) ?? res.iron ?? 0),
+        silicon: Number(res.silicon?.toFixed?.(1) ?? res.silicon ?? 0),
+        uranium: Number(res.uranium?.toFixed?.(1) ?? res.uranium ?? 0),
+      });
     }, 800);
     return () => clearInterval(id);
   }, [game]);
@@ -281,9 +305,50 @@ function RightDrawer({ game, open, setOpen, bottomSpace, topSpace }: { game: Gam
   };
 
   const smallBtn: React.CSSProperties = { background: '#1a2a4a', color: '#e3ecff', border: '1px solid #24345a', borderRadius: 6, cursor: 'pointer' };
+  const cardStyle: React.CSSProperties = { background: 'rgba(9,15,28,0.72)', border: '1px solid #1c2541', borderRadius: 12, padding: '10px 12px', marginBottom: 10 };
+  const sectionTitle: React.CSSProperties = { fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8fa2cd', marginBottom: 6 };
+  const workerStateColors: Record<string, string> = {
+    idle: '#4b5563',
+    starting: '#38bdf8',
+    running: '#34d399',
+    completed: '#a855f7',
+    error: '#f87171',
+    stopped: '#fbbf24',
+  };
+  const workerStateLabels: Record<string, string> = {
+    idle: 'Parado',
+    starting: 'Inicializando',
+    running: 'Executando',
+    completed: 'Concluído',
+    error: 'Erro',
+    stopped: 'Interrompido',
+  };
+  const scriptState = workerStatus?.state ?? 'idle';
+  const workerBadgeColor = workerStateColors[scriptState] ?? '#4b5563';
+  const workerBadgeLabel = workerStateLabels[scriptState] ?? 'Estado';
+  const scriptName = workerStatus?.scriptName ?? 'Nenhum script ativo';
+  const runtimeSeconds = (() => {
+    if (!workerStatus?.startedAt) return null;
+    const endRef = workerStatus.finishedAt && scriptState !== 'running' ? workerStatus.finishedAt : Date.now();
+    return Math.max(0, Math.round((endRef - workerStatus.startedAt) / 1000));
+  })();
+  const logEntries = [...(workerStatus?.logs ?? [])].slice(-8).reverse();
+  const miningState = miningStatus?.state ?? 'idle';
+  const miningStateLabels: Record<string, string> = {
+    idle: 'Ocioso',
+    approaching: 'Aproximando',
+    mining: 'Extraindo',
+  };
+  const miningStateColors: Record<string, string> = {
+    idle: '#4b5563',
+    approaching: '#38bdf8',
+    mining: '#fbbf24',
+  };
+  const miningBadgeColor = miningStateColors[miningState] ?? '#4b5563';
+  const miningBadgeLabel = miningStateLabels[miningState] ?? 'Ocioso';
 
   return (
-    <div style={{ position: 'absolute', top: topSpace + 6, right: 10, height: `calc(80vh - ${Math.max(topSpace, 0) + 24}px)`, width: open ? 320 : 44, zIndex: 5, pointerEvents: 'auto' }}>
+    <div style={{ position: 'absolute', top: topSpace + 6, right: 10, height: `calc(80vh - ${Math.max(topSpace, 0) + 24}px)`, width: open ? 360 : 44, zIndex: 5, pointerEvents: 'auto' }}>
       <div style={{ position: 'absolute', top: '50%', right: -14, transform: 'translateY(-50%)', zIndex: 9 }}>
         <button
           onClick={() => setOpen(!open)}
@@ -304,74 +369,145 @@ function RightDrawer({ game, open, setOpen, bottomSpace, topSpace }: { game: Gam
       <div style={{ height: '100%', background: 'rgba(13,19,36,0.88)', border: '1px solid #1c2541', borderRadius: 12, padding: 10, color: '#d3e0ff', overflow: 'hidden', transition: 'width 160ms', boxShadow: '0 8px 24px rgba(0,0,0,0.35)' }}>
         {open ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-              <button onClick={() => setTab('naves')} style={{ ...switchBtn(tab==='naves'), border: '1px solid #1c2541', borderRadius: 8 }}>Naves</button>
-              <button onClick={() => setTab('clusters')} style={{ ...switchBtn(tab==='clusters'), border: '1px solid #1c2541', borderRadius: 8 }}>Clusters</button>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              {tab === 'naves' && (
-                <div>
-                  {fleet.map((s) => (
-                    <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #1c2541' }}>
-                      <div>
-                        <div style={{ fontWeight: 600 }}>{s.name}</div>
-                        <div style={{ fontSize: 12, opacity: 0.8 }}>Pos: {s.position.x.toFixed(0)}, {s.position.y.toFixed(0)}, {s.position.z.toFixed(0)} km</div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={() => game?.focusCameraOn && game.focusCameraOn({ x: s.position.x, y: s.position.y, z: s.position.z }, 80)} style={{ ...smallBtn, padding: '6px 8px' }}>Focar</button>
-                        <button
-                          onClick={() => {
-                            if (!game?.setFollowShip) return;
-                            const next = !following;
-                            game.setFollowShip(next);
-                            setFollowing(next);
-                          }}
-                          style={{ ...smallBtn, padding: '6px 8px', background: following ? '#26446e' : '#1a2a4a' }}
-                        >{following ? 'Seguindo' : 'Seguir'}</button>
-                      </div>
-                    </div>
-                  ))}
+            <div style={{ flex: 'none', paddingBottom: 4 }}>
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div style={sectionTitle}>Operação HAL</div>
+                  <span style={{ background: workerBadgeColor, color: '#0b1120', borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{workerBadgeLabel}</span>
                 </div>
-              )}
-              {tab === 'clusters' && (
-                <div>
-                  {clusters.length === 0 && (
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>Nenhum cluster descoberto ainda. Aproxime-se e use o Com‑Link “Escaneie o setor”.</div>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{scriptName}</div>
+                <div style={{ fontSize: 12, opacity: 0.8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <div>Iniciado: {workerStatus?.startedAt ? new Date(workerStatus.startedAt).toLocaleTimeString() : '—'}</div>
+                  <div>Duração: {runtimeSeconds != null ? `${runtimeSeconds}s` : '—'}</div>
+                </div>
+                {workerStatus?.lastError && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: '#fca5a5' }}>Erro: {workerStatus.lastError}</div>
+                )}
+                {workerStatus?.lastMessage && scriptState !== 'error' && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: '#9bb0d9' }}>Último evento: {workerStatus.lastMessage}</div>
+                )}
+              </div>
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div style={sectionTitle}>Mineração</div>
+                  <span style={{ background: miningBadgeColor, color: '#0b1120', borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{miningBadgeLabel}</span>
+                </div>
+                <div style={{ fontSize: 12, opacity: 0.85, lineHeight: '18px' }}>
+                  {miningStatus?.targetId ? (
+                    <>
+                      <div>Alvo: {miningStatus.targetId} ({miningStatus.resource || 'desconhecido'})</div>
+                      <div>Distância: {miningStatus.distance != null ? `${miningStatus.distance.toFixed?.(0)} km` : '—'}</div>
+                      <div>Restante: {miningStatus.remaining != null ? `${miningStatus.remaining.toFixed?.(1)} t` : '—'} @ {miningStatus.rate ?? '?'} t/s</div>
+                    </>
+                  ) : (
+                    <div>Nenhum alvo selecionado.</div>
                   )}
-                  {clusters.map((c) => (
-                    <div key={c.id} style={{ marginBottom: 6 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div onClick={() => expandCluster(c.id)} style={{ cursor: 'pointer' }}>
-                          <span style={{ fontWeight: 600 }}>{c.id}</span> <span style={{ opacity: 0.8 }}>({c.type})</span>
+                </div>
+              </div>
+              <div style={cardStyle}>
+                <div style={sectionTitle}>Nave Mãe</div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{shipStatus ? 'USS [Nome da Nave]' : 'Nave não carregada'}</div>
+                <div style={{ fontSize: 12, opacity: 0.85, lineHeight: '18px' }}>
+                  <div>Posição: {shipStatus ? `${shipStatus.position.x.toFixed(1)}, ${shipStatus.position.y.toFixed(1)}, ${shipStatus.position.z.toFixed(1)} km` : '—'}</div>
+                  <div>Destino: {shipStatus?.destination ? `${shipStatus.destination.x}, ${shipStatus.destination.y}, ${shipStatus.destination.z}` : '—'}</div>
+                  <div>Velocidade: {shipStatus ? `${shipStatus.speed.toFixed(2)} km/s` : '—'}</div>
+                  <div>Inventário: Fe {resources.iron} · Si {resources.silicon} · U {resources.uranium}</div>
+                </div>
+              </div>
+              <div style={{ ...cardStyle, marginBottom: 12 }}>
+                <div style={sectionTitle}>Logs do Script</div>
+                <div style={{ background: 'rgba(6,10,20,0.65)', border: '1px solid #1c2541', borderRadius: 8, padding: '6px 8px', maxHeight: 150, overflowY: 'auto', fontSize: 12 }}>
+                  {logEntries.length === 0 ? (
+                    <div style={{ opacity: 0.6 }}>Sem logs ainda. Console.log do worker aparecerá aqui.</div>
+                  ) : (
+                    logEntries.map((log) => {
+                      const rel = workerStatus?.startedAt ? Math.max(0, Math.round((log.timestamp - workerStatus.startedAt) / 1000)) : null;
+                      const label = rel != null ? `+${rel}s` : new Date(log.timestamp).toLocaleTimeString();
+                      const color = log.level === 'error' ? '#fca5a5' : log.level === 'warn' ? '#fcd34d' : '#dbeafe';
+                      return (
+                        <div key={`${log.id}-${log.timestamp}`} style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+                          <span style={{ color: '#8fa2cd', minWidth: 48 }}>{label}</span>
+                          <span style={{ color, flex: 1 }}>{log.message}</span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{ opacity: 0.8 }}>Descobertos: {c.discovered}</div>
-                          <button onClick={() => game?.focusCameraOn && game.focusCameraOn(c.center, Math.max(120, Math.min(600, c.radius * 1.5)))} style={{ ...smallBtn, padding: '4px 6px', fontSize: 12 }}>Focar</button>
-                          <button onClick={() => game?.moveTo && game.moveTo(c.center)} style={{ ...smallBtn, padding: '4px 6px', fontSize: 12 }}>Ir</button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                <button onClick={() => setTab('naves')} style={{ ...switchBtn(tab==='naves'), border: '1px solid #1c2541', borderRadius: 8, flex: 1 }}>Naves</button>
+                <button onClick={() => setTab('clusters')} style={{ ...switchBtn(tab==='clusters'), border: '1px solid #1c2541', borderRadius: 8, flex: 1 }}>Clusters</button>
+              </div>
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                {tab === 'naves' && (
+                  <div>
+                    {fleet.map((s) => (
+                      <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #1c2541' }}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{s.name}</div>
+                          <div style={{ fontSize: 12, opacity: 0.8 }}>Pos: {s.position.x.toFixed(0)}, {s.position.y.toFixed(0)}, {s.position.z.toFixed(0)} km</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => game?.focusCameraOn && game.focusCameraOn({ x: s.position.x, y: s.position.y, z: s.position.z }, 80)} style={{ ...smallBtn, padding: '6px 8px' }}>Focar</button>
+                          <button
+                            onClick={() => {
+                              if (!game?.setFollowShip) return;
+                              const next = !following;
+                              game.setFollowShip(next);
+                              setFollowing(next);
+                            }}
+                            style={{ ...smallBtn, padding: '6px 8px', background: following ? '#26446e' : '#1a2a4a' }}
+                          >{following ? 'Seguindo' : 'Seguir'}</button>
                         </div>
                       </div>
-                      {expanded[c.id] && (
-                        <div style={{ marginTop: 4, paddingLeft: 8 }}>
-                          {(asteroidsByCluster[c.id] || []).map((a) => (
-                            <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '2px 0' }}>
-                              <span>{a.resource} @ ({Math.round(a.position.x)}, {Math.round(a.position.y)}, {Math.round(a.position.z)})</span>
-                              <button onClick={() => game?.focusCameraOn && game.focusCameraOn({ x: a.position.x, y: a.position.y, z: a.position.z }, 70)} style={{ ...smallBtn, padding: '2px 6px', fontSize: 12 }}>Ir</button>
-                            </div>
-                          ))}
-                          {(asteroidsByCluster[c.id] || []).length === 0 && (
-                            <div style={{ fontSize: 12, opacity: 0.75 }}>Nenhum asteroide escaneado neste cluster.</div>
-                          )}
+                    ))}
+                    {fleet.length === 0 && (
+                      <div style={{ fontSize: 12, opacity: 0.75 }}>Nenhuma nave detectada.</div>
+                    )}
+                  </div>
+                )}
+                {tab === 'clusters' && (
+                  <div>
+                    {clusters.length === 0 && (
+                      <div style={{ fontSize: 12, opacity: 0.75 }}>Nenhum cluster descoberto ainda. Aproxime-se e use o Com‑Link “Escaneie o setor”.</div>
+                    )}
+                    {clusters.map((c) => (
+                      <div key={c.id} style={{ marginBottom: 6 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div onClick={() => expandCluster(c.id)} style={{ cursor: 'pointer' }}>
+                            <span style={{ fontWeight: 600 }}>{c.id}</span> <span style={{ opacity: 0.8 }}>({c.type})</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ opacity: 0.8 }}>Descobertos: {c.discovered}</div>
+                            <button onClick={() => game?.focusCameraOn && game.focusCameraOn(c.center, Math.max(120, Math.min(600, c.radius * 1.5)))} style={{ ...smallBtn, padding: '4px 6px', fontSize: 12 }}>Focar</button>
+                            <button onClick={() => game?.moveTo && game.moveTo(c.center)} style={{ ...smallBtn, padding: '4px 6px', fontSize: 12 }}>Ir</button>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+                        {expanded[c.id] && (
+                          <div style={{ marginTop: 4, paddingLeft: 8 }}>
+                            {(asteroidsByCluster[c.id] || []).map((a) => (
+                              <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '2px 0' }}>
+                                <span>{a.resource} @ ({Math.round(a.position.x)}, {Math.round(a.position.y)}, {Math.round(a.position.z)})</span>
+                                <button onClick={() => game?.focusCameraOn && game.focusCameraOn({ x: a.position.x, y: a.position.y, z: a.position.z }, 70)} style={{ ...smallBtn, padding: '2px 6px', fontSize: 12 }}>Ir</button>
+                              </div>
+                            ))}
+                            {(asteroidsByCluster[c.id] || []).length === 0 && (
+                              <div style={{ fontSize: 12, opacity: 0.75 }}>Nenhum asteroide escaneado neste cluster.</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>Dica: use o Com‑Link “Escaneie o setor”.</div>
             </div>
-            <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>Dica: use o Com‑Link “Escaneie o setor”.</div>
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', height: '100%', justifyContent: 'center', writingMode: 'vertical-rl', transform: 'rotate(180deg)', color: '#9bb0d9' }}>Scanner</div>
+          <div style={{ display: 'flex', alignItems: 'center', height: '100%', justifyContent: 'center', writingMode: 'vertical-rl', transform: 'rotate(180deg)', color: '#9bb0d9' }}>Operações</div>
         )}
       </div>
     </div>
