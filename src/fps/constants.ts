@@ -1,34 +1,63 @@
 import { Color3 } from "babylonjs";
 
-export const GRID_SIZE = 2;
+// Core metric references keep the scene grounded in human scale (meters, kilograms, seconds).
+export const HUMAN_DIMENSIONS = {
+  height: 1.8,
+  eyeLevel: 1.72,
+} as const;
+
+export const SHIP_INTERIOR_DIMENSIONS = {
+  deckClearance: 2.1,
+  doorHeight: 1.85,
+} as const;
+
+export const GRID_SIZE = 0.5;
 
 export const WALL_DIMENSIONS = {
-  width: 2,
-  height: 3,
-  thickness: 0.3,
+  width: 1,
+  height: SHIP_INTERIOR_DIMENSIONS.deckClearance,
+  thickness: 0.18,
 } as const;
 
 export const HULL_DIMENSIONS = {
-  width: 18,
-  length: 26,
-  height: 6,
+  width: 4.2,
+  length: 9.6,
+  height: SHIP_INTERIOR_DIMENSIONS.deckClearance,
 } as const;
 
 export const LAMP_DIMENSIONS = {
-  height: 2.4,
-  radius: 0.35,
-  stemRadius: 0.08,
+  height: 1.6,
+  radius: 0.2,
+  stemRadius: 0.05,
 } as const;
 
 export const CAMERA_SETTINGS = {
-  speed: 0.45,
-  sprintMultiplier: 2.1,
+  speed: 1.6,
+  sprintMultiplier: 1.75,
   minZ: 0.05,
   maxZ: 250,
   angularSensibility: 2600,
-  inertia: 0.06,
-  ellipsoid: { x: 0.4, y: 0.9, z: 0.4 },
+  inertia: 0.05,
+  ellipsoid: { x: 0.35, y: 0.9, z: 0.35 },
   ellipsoidOffset: { x: 0, y: 0.9, z: 0 },
+  eyeLevel: HUMAN_DIMENSIONS.eyeLevel,
+} as const;
+
+export const WALL_LIGHT_STRIP = {
+  count: 6,
+  height: 1.95,
+  inset: 0.28,
+  tilt: -0.18,
+  cone: Math.PI / 3.1,
+  range: 14,
+  warm: {
+    color: new Color3(1, 0.83, 0.58),
+    intensity: 1.25,
+  },
+  cool: {
+    color: new Color3(0.58, 0.8, 1),
+    intensity: 1.15,
+  },
 } as const;
 
 export const INPUT_KEYS = {

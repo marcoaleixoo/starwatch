@@ -5,8 +5,8 @@ import type { BuilderWall } from "../types";
 import { clamp, degreesToRadians } from "../utils/math";
 
 export function snapWallPosition(point: Vector3) {
-  const halfWidth = HULL_DIMENSIONS.width / 2 - GRID_SIZE / 2;
-  const halfLength = HULL_DIMENSIONS.length / 2 - GRID_SIZE / 2;
+  const halfWidth = HULL_DIMENSIONS.width / 2 - WALL_DIMENSIONS.width / 2;
+  const halfLength = HULL_DIMENSIONS.length / 2 - WALL_DIMENSIONS.width / 2;
 
   const snappedX = clamp(
     Math.round(point.x / GRID_SIZE) * GRID_SIZE,

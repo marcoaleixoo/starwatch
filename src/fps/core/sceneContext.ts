@@ -3,28 +3,32 @@ import {
   Color4,
   Engine,
   GlowLayer,
-  HemisphericLight,
   Mesh,
   MeshBuilder,
   Scene,
-  ShadowGenerator,
-  SpotLight,
   StandardMaterial,
   UniversalCamera,
   Vector3,
 } from "babylonjs";
-import { CAMERA_SETTINGS, HULL_DIMENSIONS, INPUT_KEYS } from "../constants";
+import {
+  CAMERA_SETTINGS,
+  GRID_SIZE,
+  HULL_DIMENSIONS,
+  INPUT_KEYS,
+  LAMP_DIMENSIONS,
+  WALL_DIMENSIONS,
+} from "../constants";
+import { createLamp, nextLampColor } from "../placement/lampBuilder";
+import type { BuilderLamp } from "../types";
 
 export interface SceneContext {
   engine: Engine;
   scene: Scene;
   camera: UniversalCamera;
   glowLayer: GlowLayer;
-  ambientLight: HemisphericLight;
-  keyLight: SpotLight;
-  keyShadow: ShadowGenerator;
   floor: Mesh;
   staticMeshes: Mesh[];
+  structuralLamps: BuilderLamp[];
   dispose(): void;
 }
 
@@ -37,11 +41,15 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
 
   const scene = new Scene(engine);
   scene.clearColor = new Color4(5 / 255, 6 / 255, 10 / 255, 1);
-  scene.ambientColor = new Color3(0.06, 0.12, 0.18);
-  scene.gravity = new Vector3(0, -0.9, 0);
+  scene.ambientColor = Color3.Black();
+  scene.gravity = new Vector3(0, -9.81, 0);
   scene.collisionsEnabled = true;
 
-  const camera = new UniversalCamera("fpCam", new Vector3(0, 1.7, -HULL_DIMENSIONS.length / 2 + 4), scene);
+  const camera = new UniversalCamera(
+    "fpCam",
+    new Vector3(0, CAMERA_SETTINGS.eyeLevel, -HULL_DIMENSIONS.length / 2 + 4),
+    scene,
+  );
   camera.minZ = CAMERA_SETTINGS.minZ;
   camera.maxZ = CAMERA_SETTINGS.maxZ;
   camera.speed = CAMERA_SETTINGS.speed;
@@ -66,32 +74,7 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
   camera.attachControl(canvas, true);
 
   const glowLayer = new GlowLayer("hangar-glow", scene);
-  glowLayer.intensity = 0.35;
-
-  const ambientLight = new HemisphericLight("ambient", new Vector3(0, 1, 0), scene);
-  ambientLight.diffuse = new Color3(0.35, 0.52, 0.76);
-  ambientLight.specular = new Color3(0.22, 0.38, 0.54);
-  ambientLight.groundColor = new Color3(0.05, 0.09, 0.14);
-  ambientLight.intensity = 0.65;
-
-  const keyLight = new SpotLight(
-    "key-light",
-    new Vector3(0, HULL_DIMENSIONS.height - 0.3, 0),
-    new Vector3(0, -1, 0),
-    Math.PI / 2.5,
-    2,
-    scene,
-  );
-  keyLight.diffuse = new Color3(1, 0.86, 0.64);
-  keyLight.specular = new Color3(1, 0.92, 0.78);
-  keyLight.intensity = 1.35;
-  keyLight.range = 35;
-
-  const keyShadow = new ShadowGenerator(2048, keyLight);
-  keyShadow.usePercentageCloserFiltering = true;
-  keyShadow.filteringQuality = ShadowGenerator.QUALITY_HIGH;
-  keyShadow.darkness = 0.45;
-  keyShadow.bias = 0.0006;
+  glowLayer.intensity = 0.25;
 
   const { floor, staticMeshes } = buildHangar(scene);
   floor.receiveShadows = true;
@@ -99,7 +82,11 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
   staticMeshes.forEach((mesh) => {
     mesh.receiveShadows = true;
     mesh.checkCollisions = true;
-    keyShadow.addShadowCaster(mesh, true);
+  });
+
+  const structuralLamps = createStructuralLamps(scene);
+  structuralLamps.forEach((lamp) => {
+    lamp.mesh.checkCollisions = true;
   });
 
   engine.runRenderLoop(() => {
@@ -116,14 +103,17 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
     scene,
     camera,
     glowLayer,
-    ambientLight,
-    keyLight,
-    keyShadow,
     floor,
     staticMeshes,
+    structuralLamps,
     dispose: () => {
       window.removeEventListener("resize", resize);
       glowLayer.dispose();
+      structuralLamps.forEach((lamp) => {
+        lamp.shadow.dispose();
+        lamp.light.dispose();
+        lamp.mesh.dispose(false, true);
+      });
       scene.dispose();
       engine.dispose();
     },
@@ -131,12 +121,16 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
 }
 
 function buildHangar(scene: Scene) {
+  const floorSubdivisionsX = Math.max(1, Math.round(HULL_DIMENSIONS.width / GRID_SIZE));
+  const floorSubdivisionsZ = Math.max(1, Math.round(HULL_DIMENSIONS.length / GRID_SIZE));
+
   const floor = MeshBuilder.CreateGround(
     "hangar-floor",
     {
       width: HULL_DIMENSIONS.width,
       height: HULL_DIMENSIONS.length,
-      subdivisions: HULL_DIMENSIONS.width,
+      subdivisionsX: floorSubdivisionsX,
+      subdivisionsY: floorSubdivisionsZ,
     },
     scene,
   );
@@ -144,7 +138,8 @@ function buildHangar(scene: Scene) {
 
   const floorMaterial = new StandardMaterial("floor-mat", scene);
   floorMaterial.diffuseColor = new Color3(0.07, 0.09, 0.12);
-  floorMaterial.specularColor = new Color3(0.18, 0.2, 0.24);
+  floorMaterial.specularColor = new Color3(0.32, 0.36, 0.42);
+  floorMaterial.specularPower = 64;
   floorMaterial.emissiveColor = new Color3(0.02, 0.03, 0.04);
   floor.material = floorMaterial;
 
@@ -153,21 +148,21 @@ function buildHangar(scene: Scene) {
       name: "wall-north",
       width: HULL_DIMENSIONS.width,
       height: HULL_DIMENSIONS.height,
-      depth: 0.4,
+      depth: WALL_DIMENSIONS.thickness,
       position: new Vector3(0, HULL_DIMENSIONS.height / 2, -HULL_DIMENSIONS.length / 2),
     }),
     createHullWall(scene, {
       name: "wall-south",
       width: HULL_DIMENSIONS.width,
       height: HULL_DIMENSIONS.height,
-      depth: 0.4,
+      depth: WALL_DIMENSIONS.thickness,
       position: new Vector3(0, HULL_DIMENSIONS.height / 2, HULL_DIMENSIONS.length / 2),
     }),
     createHullWall(scene, {
       name: "wall-east",
       width: HULL_DIMENSIONS.length,
       height: HULL_DIMENSIONS.height,
-      depth: 0.4,
+      depth: WALL_DIMENSIONS.thickness,
       position: new Vector3(HULL_DIMENSIONS.width / 2, HULL_DIMENSIONS.height / 2, 0),
       rotationY: Math.PI / 2,
     }),
@@ -175,7 +170,7 @@ function buildHangar(scene: Scene) {
       name: "wall-west",
       width: HULL_DIMENSIONS.length,
       height: HULL_DIMENSIONS.height,
-      depth: 0.4,
+      depth: WALL_DIMENSIONS.thickness,
       position: new Vector3(-HULL_DIMENSIONS.width / 2, HULL_DIMENSIONS.height / 2, 0),
       rotationY: Math.PI / 2,
     }),
@@ -186,7 +181,8 @@ function buildHangar(scene: Scene) {
     {
       width: HULL_DIMENSIONS.width,
       height: HULL_DIMENSIONS.length,
-      subdivisions: HULL_DIMENSIONS.width,
+      subdivisionsX: floorSubdivisionsX,
+      subdivisionsY: floorSubdivisionsZ,
     },
     scene,
   );
@@ -241,6 +237,22 @@ function createHullWall(
   return wall;
 }
 
+function createStructuralLamps(scene: Scene): BuilderLamp[] {
+  const centerY = LAMP_DIMENSIONS.height / 2;
+  const halfLength = HULL_DIMENSIONS.length / 2 - LAMP_DIMENSIONS.radius;
+  const longitudinalOffsets = [-0.35, 0, 0.35].map((ratio) => HULL_DIMENSIONS.length * ratio);
+
+  return longitudinalOffsets.map((offset, index) => {
+    const clampedOffset = Math.max(-halfLength, Math.min(halfLength, offset));
+    const position = new Vector3(0, centerY, clampedOffset);
+    const lamp = createLamp(scene, position, nextLampColor(index));
+    lamp.mesh.metadata = { type: "structural-lamp", key: lamp.key };
+    lamp.light.intensity = 2.1;
+    lamp.light.range = Math.max(HULL_DIMENSIONS.length, HULL_DIMENSIONS.width) * 1.35;
+    lamp.shadow.darkness = 0.26;
+    return lamp;
+  });
+}
 function createWindowCutout(
   scene: Scene,
   wall: Mesh,

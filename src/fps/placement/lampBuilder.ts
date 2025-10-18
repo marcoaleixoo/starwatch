@@ -13,8 +13,8 @@ import type { BuilderLamp } from "../types";
 import { clamp } from "../utils/math";
 
 export function snapLampPosition(point: Vector3) {
-  const halfWidth = HULL_DIMENSIONS.width / 2 - GRID_SIZE / 2;
-  const halfLength = HULL_DIMENSIONS.length / 2 - GRID_SIZE / 2;
+  const halfWidth = HULL_DIMENSIONS.width / 2 - LAMP_DIMENSIONS.radius;
+  const halfLength = HULL_DIMENSIONS.length / 2 - LAMP_DIMENSIONS.radius;
 
   const snappedX = clamp(
     Math.round(point.x / GRID_SIZE) * GRID_SIZE,
@@ -98,18 +98,20 @@ export function createLamp(scene: Scene, position: Vector3, color: Color3): Buil
   );
   light.diffuse = color;
   light.specular = color.scale(0.9);
-  light.intensity = 2.55;
-  light.range = 24;
+  light.intensity = 2.25;
+  light.range = 16;
   light.shadowEnabled = true;
   light.parent = merged;
   light.position = new Vector3(0, LAMP_DIMENSIONS.height / 2 - LAMP_DIMENSIONS.radius * 0.6, 0);
   light.setDirectionToTarget(new Vector3(0, -1, 0));
 
   const shadow = new ShadowGenerator(1024, light);
-  shadow.useBlurExponentialShadowMap = true;
-  shadow.blurScale = 1.5;
-  shadow.darkness = 0.32;
-  shadow.bias = 0.0009;
+  shadow.usePercentageCloserFiltering = true;
+  shadow.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+  shadow.bias = 0.00065;
+  shadow.normalBias = 0.35;
+  shadow.darkness = 0.24;
+  shadow.frustumEdgeFalloff = 0.12;
 
   return {
     mesh: merged,

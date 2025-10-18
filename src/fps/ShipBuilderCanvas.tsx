@@ -15,8 +15,18 @@ export function ShipBuilderCanvas() {
 
     const sceneContext = createSceneContext(canvas);
     const ghostSet = createGhostSet(sceneContext.scene);
-    const shadowNetwork = createShadowNetwork(sceneContext.keyShadow);
-    shadowNetwork.registerStatic([sceneContext.floor, ...sceneContext.staticMeshes]);
+    const shadowNetwork = createShadowNetwork(
+      sceneContext.structuralLamps.map((lamp) => lamp.shadow),
+    );
+    const staticMeshes = [
+      sceneContext.floor,
+      ...sceneContext.staticMeshes,
+      ...sceneContext.structuralLamps.map((lamp) => lamp.mesh),
+    ];
+    sceneContext.structuralLamps.forEach((lamp) => {
+      shadowNetwork.attachLamp(lamp);
+    });
+    shadowNetwork.registerStatic(staticMeshes);
 
     const placementController = createPlacementController({
       scene: sceneContext.scene,
@@ -45,4 +55,3 @@ export function ShipBuilderCanvas() {
     />
   );
 }
-
