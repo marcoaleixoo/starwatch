@@ -34,14 +34,17 @@ export default function App() {
           quick prototyping of construction flow.
         </p>
         <ul style={{ margin: "6px 0 0", paddingLeft: 16, fontSize: 13 }}>
-          <li>WASD — move</li>
+          <li>WASD — move / Shift — sprint</li>
           <li>Mouse — look (click canvas to lock)</li>
-          <li>Left click — place wall</li>
-          <li>Right click — remove wall</li>
-          <li>R — rotate placement (90° steps)</li>
-          <li>Shift — sprint</li>
+          <li>1 — wall mode / 2 — lamp mode</li>
+          <li>Left click — place item / Right click — remove</li>
+          <li>R — rotate walls (90° steps)</li>
           <li>Esc — release cursor lock</li>
         </ul>
+        <p style={{ margin: "10px 0 0", fontSize: 12, opacity: 0.85 }}>
+          Lamps cycle between warm and cool tones and cast soft shadows—perfect
+          for finding that cozy blue-gold balance.
+        </p>
       </div>
     </div>
   );
