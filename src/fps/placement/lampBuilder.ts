@@ -1,7 +1,9 @@
 import {
   Color3,
+  Light,
   Mesh,
   MeshBuilder,
+  PointLight,
   Scene,
   ShadowGenerator,
   SpotLight,
@@ -11,6 +13,18 @@ import {
 import { GRID_SIZE, HULL_DIMENSIONS, LAMP_COLOR_PALETTE, LAMP_DIMENSIONS } from "../constants";
 import type { BuilderLamp } from "../types";
 import { clamp } from "../utils/math";
+
+interface LampOptions {
+  shadowMapSize?: number;
+  contactHardening?: boolean;
+  spotAngle?: number;
+  spotInnerRatio?: number;
+  spotExponent?: number;
+  spotIntensity?: number;
+  spotRange?: number;
+  fillIntensity?: number;
+  fillRange?: number;
+}
 
 export function snapLampPosition(point: Vector3) {
   const halfWidth = HULL_DIMENSIONS.width / 2 - LAMP_DIMENSIONS.radius;
@@ -38,7 +52,24 @@ export function nextLampColor(index: number) {
   return LAMP_COLOR_PALETTE[index % LAMP_COLOR_PALETTE.length];
 }
 
-export function createLamp(scene: Scene, position: Vector3, color: Color3): BuilderLamp {
+export function createLamp(
+  scene: Scene,
+  position: Vector3,
+  color: Color3,
+  options: LampOptions = {},
+): BuilderLamp {
+  const {
+    shadowMapSize = 512,
+    contactHardening = false,
+    spotAngle = Math.PI / 1.4,
+    spotInnerRatio = 0.62,
+    spotExponent = 0.95,
+    spotIntensity = 2.25,
+    spotRange = 16,
+    fillIntensity = 0.58,
+    fillRange = 8.5,
+  } = options;
+
   const stemHeight = LAMP_DIMENSIONS.height - LAMP_DIMENSIONS.radius * 2;
 
   const stand = MeshBuilder.CreateCylinder(
@@ -92,31 +123,57 @@ export function createLamp(scene: Scene, position: Vector3, color: Color3): Buil
     `${lampName}-light`,
     merged.position.clone(),
     new Vector3(0, -1, 0),
-    Math.PI / 2.15,
-    2.2,
+    spotAngle,
+    spotExponent,
     scene,
   );
   light.diffuse = color;
   light.specular = color.scale(0.9);
-  light.intensity = 2.25;
-  light.range = 16;
+  light.intensity = spotIntensity;
+  light.innerAngle = light.angle * spotInnerRatio;
+  light.exponent = spotExponent;
+  light.falloffType = Light.FALLOFF_PHYSICAL;
+  light.range = spotRange;
   light.shadowEnabled = true;
+  light.shadowMinZ = 0.1;
+  light.shadowMaxZ = spotRange * 1.05;
   light.parent = merged;
   light.position = new Vector3(0, LAMP_DIMENSIONS.height / 2 - LAMP_DIMENSIONS.radius * 0.6, 0);
   light.setDirectionToTarget(new Vector3(0, -1, 0));
 
-  const shadow = new ShadowGenerator(1024, light);
-  shadow.usePercentageCloserFiltering = true;
+  const fillLight = new PointLight(
+    `${lampName}-fill`,
+    merged.position.clone(),
+    scene,
+  );
+  fillLight.diffuse = color.scale(0.55);
+  fillLight.specular = color.scale(0.18);
+  fillLight.intensity = fillIntensity;
+  fillLight.range = fillRange;
+  fillLight.parent = merged;
+  fillLight.position = new Vector3(0, LAMP_DIMENSIONS.height * 0.15, 0);
+  fillLight.falloffType = Light.FALLOFF_PHYSICAL;
+  fillLight.shadowEnabled = false;
+
+  const shadow = new ShadowGenerator(shadowMapSize, light);
+  shadow.bias = 0.0006;
+  shadow.darkness = 0.2;
+  shadow.normalBias = 0.22;
+  shadow.frustumEdgeFalloff = 0.18;
   shadow.filteringQuality = ShadowGenerator.QUALITY_HIGH;
-  shadow.bias = 0.00065;
-  shadow.normalBias = 0.35;
-  shadow.darkness = 0.24;
-  shadow.frustumEdgeFalloff = 0.12;
+
+  if (contactHardening) {
+    shadow.useContactHardeningShadow = true;
+    shadow.contactHardeningLightSizeUVRatio = 0.4;
+  } else {
+    shadow.usePercentageCloserFiltering = true;
+  }
 
   return {
     mesh: merged,
     light,
     shadow,
+    fillLight,
     key,
   };
 }

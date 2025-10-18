@@ -1,4 +1,4 @@
-import type { Mesh, ShadowGenerator, SpotLight } from "babylonjs";
+import type { Mesh, PointLight, ShadowGenerator, SpotLight } from "babylonjs";
 
 export type PlacementMode = "wall" | "lamp";
 
@@ -11,6 +11,7 @@ export interface BuilderLamp {
   mesh: Mesh;
   light: SpotLight;
   shadow: ShadowGenerator;
+  fillLight?: PointLight;
   key: string;
 }
 

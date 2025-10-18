@@ -44,6 +44,9 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
   scene.ambientColor = Color3.Black();
   scene.gravity = new Vector3(0, -9.81, 0);
   scene.collisionsEnabled = true;
+  scene.imageProcessingConfiguration.toneMappingEnabled = true;
+  scene.imageProcessingConfiguration.exposure = 1.08;
+  scene.imageProcessingConfiguration.contrast = 1.04;
 
   const camera = new UniversalCamera(
     "fpCam",
@@ -74,7 +77,7 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
   camera.attachControl(canvas, true);
 
   const glowLayer = new GlowLayer("hangar-glow", scene);
-  glowLayer.intensity = 0.25;
+  glowLayer.intensity = 0.18;
 
   const { floor, staticMeshes } = buildHangar(scene);
   floor.receiveShadows = true;
@@ -112,6 +115,7 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
       structuralLamps.forEach((lamp) => {
         lamp.shadow.dispose();
         lamp.light.dispose();
+        lamp.fillLight?.dispose();
         lamp.mesh.dispose(false, true);
       });
       scene.dispose();
@@ -137,10 +141,10 @@ function buildHangar(scene: Scene) {
   floor.position.y = 0;
 
   const floorMaterial = new StandardMaterial("floor-mat", scene);
-  floorMaterial.diffuseColor = new Color3(0.07, 0.09, 0.12);
-  floorMaterial.specularColor = new Color3(0.32, 0.36, 0.42);
-  floorMaterial.specularPower = 64;
-  floorMaterial.emissiveColor = new Color3(0.02, 0.03, 0.04);
+  floorMaterial.diffuseColor = new Color3(0.12, 0.14, 0.18);
+  floorMaterial.specularColor = new Color3(0.26, 0.29, 0.33);
+  floorMaterial.specularPower = 48;
+  floorMaterial.emissiveColor = new Color3(0.015, 0.02, 0.026);
   floor.material = floorMaterial;
 
   const walls = [
@@ -190,8 +194,9 @@ function buildHangar(scene: Scene) {
   ceiling.rotation.x = Math.PI;
 
   const ceilingMaterial = new StandardMaterial("ceiling-mat", scene);
-  ceilingMaterial.diffuseColor = new Color3(0.11, 0.13, 0.18);
-  ceilingMaterial.specularColor = new Color3(0.09, 0.1, 0.13);
+  ceilingMaterial.diffuseColor = new Color3(0.14, 0.17, 0.22);
+  ceilingMaterial.specularColor = new Color3(0.16, 0.18, 0.23);
+  ceilingMaterial.specularPower = 34;
   ceiling.material = ceilingMaterial;
 
   return {
@@ -227,9 +232,10 @@ function createHullWall(
   }
 
   const material = new StandardMaterial(`${options.name}-mat`, scene);
-  material.diffuseColor = new Color3(0.05, 0.08, 0.11);
-  material.specularColor = new Color3(0.08, 0.1, 0.14);
-  material.emissiveColor = new Color3(0.01, 0.02, 0.03);
+  material.diffuseColor = new Color3(0.09, 0.11, 0.15);
+  material.specularColor = new Color3(0.17, 0.21, 0.26);
+  material.specularPower = 36;
+  material.emissiveColor = new Color3(0.012, 0.018, 0.024);
   wall.material = material;
 
   createWindowCutout(scene, wall, options);
@@ -245,11 +251,15 @@ function createStructuralLamps(scene: Scene): BuilderLamp[] {
   return longitudinalOffsets.map((offset, index) => {
     const clampedOffset = Math.max(-halfLength, Math.min(halfLength, offset));
     const position = new Vector3(0, centerY, clampedOffset);
-    const lamp = createLamp(scene, position, nextLampColor(index));
+    const lamp = createLamp(scene, position, nextLampColor(index), {
+      shadowMapSize: 1024,
+      spotIntensity: 2.05,
+      spotRange: Math.max(HULL_DIMENSIONS.length, HULL_DIMENSIONS.width) * 1.2,
+      fillIntensity: 0.82,
+      fillRange: Math.max(HULL_DIMENSIONS.length, HULL_DIMENSIONS.width) * 0.52,
+    });
     lamp.mesh.metadata = { type: "structural-lamp", key: lamp.key };
-    lamp.light.intensity = 2.1;
-    lamp.light.range = Math.max(HULL_DIMENSIONS.length, HULL_DIMENSIONS.width) * 1.35;
-    lamp.shadow.darkness = 0.26;
+    lamp.shadow.darkness = 0.22;
     return lamp;
   });
 }

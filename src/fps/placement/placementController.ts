@@ -126,6 +126,7 @@ export function createPlacementController(options: PlacementControllerOptions): 
       shadowNetwork.unregisterDynamic(entry.mesh);
       entry.shadow.dispose();
       entry.light.dispose();
+      entry.fillLight?.dispose();
       entry.mesh.dispose(false, true);
       lamps.delete(meta.key);
     }
@@ -231,6 +232,7 @@ export function createPlacementController(options: PlacementControllerOptions): 
       lamps.forEach((lamp) => {
         lamp.shadow.dispose();
         lamp.light.dispose();
+        lamp.fillLight?.dispose();
         lamp.mesh.dispose(false, true);
       });
       walls.clear();
