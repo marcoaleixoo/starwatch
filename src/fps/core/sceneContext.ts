@@ -3,22 +3,17 @@ import {
   Color4,
   Engine,
   GlowLayer,
+  Light,
   Mesh,
   MeshBuilder,
   Scene,
+  ShadowGenerator,
+  SpotLight,
   StandardMaterial,
   UniversalCamera,
   Vector3,
 } from "babylonjs";
-import {
-  CAMERA_SETTINGS,
-  GRID_SIZE,
-  HULL_DIMENSIONS,
-  INPUT_KEYS,
-  LAMP_DIMENSIONS,
-  WALL_DIMENSIONS,
-} from "../constants";
-import { createLamp, nextLampColor } from "../placement/lampBuilder";
+import { CAMERA_SETTINGS, GRID_SIZE, HULL_DIMENSIONS, INPUT_KEYS, WALL_DIMENSIONS } from "../constants";
 import type { BuilderLamp } from "../types";
 
 export interface SceneContext {
@@ -89,7 +84,8 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
 
   const structuralLamps = createStructuralLamps(scene);
   structuralLamps.forEach((lamp) => {
-    lamp.mesh.checkCollisions = true;
+    lamp.mesh.checkCollisions = false;
+    lamp.mesh.isPickable = false;
   });
 
   engine.runRenderLoop(() => {
@@ -244,24 +240,134 @@ function createHullWall(
 }
 
 function createStructuralLamps(scene: Scene): BuilderLamp[] {
-  const centerY = LAMP_DIMENSIONS.height / 2;
-  const halfLength = HULL_DIMENSIONS.length / 2 - LAMP_DIMENSIONS.radius;
-  const longitudinalOffsets = [-0.35, 0, 0.35].map((ratio) => HULL_DIMENSIONS.length * ratio);
+  const color = new Color3(0.6, 0.78, 1);
+  const height = HULL_DIMENSIONS.height - 0.22;
+  const bandDepth = 0.22;
+  const bandThickness = 0.12;
+  const inset = bandDepth / 2 + 0.015;
+  const spanX = HULL_DIMENSIONS.width * 0.62;
+  const spanZ = HULL_DIMENSIONS.length * 0.62;
+  const range = Math.max(HULL_DIMENSIONS.length, HULL_DIMENSIONS.width) * 1.25;
 
-  return longitudinalOffsets.map((offset, index) => {
-    const clampedOffset = Math.max(-halfLength, Math.min(halfLength, offset));
-    const position = new Vector3(0, centerY, clampedOffset);
-    const lamp = createLamp(scene, position, nextLampColor(index), {
-      shadowMapSize: 1024,
-      spotIntensity: 2.05,
-      spotRange: Math.max(HULL_DIMENSIONS.length, HULL_DIMENSIONS.width) * 1.2,
-      fillIntensity: 0.82,
-      fillRange: Math.max(HULL_DIMENSIONS.length, HULL_DIMENSIONS.width) * 0.52,
-    });
-    lamp.mesh.metadata = { type: "structural-lamp", key: lamp.key };
-    lamp.shadow.darkness = 0.22;
-    return lamp;
-  });
+  return [
+    createWallBandLamp(scene, {
+      name: "structural-light-north",
+      span: spanX,
+      thickness: bandThickness,
+      depth: bandDepth,
+      position: new Vector3(0, height, -HULL_DIMENSIONS.length / 2 + inset),
+      direction: new Vector3(0, -0.45, 1),
+      color,
+      range,
+    }),
+    createWallBandLamp(scene, {
+      name: "structural-light-south",
+      span: spanX,
+      thickness: bandThickness,
+      depth: bandDepth,
+      position: new Vector3(0, height, HULL_DIMENSIONS.length / 2 - inset),
+      direction: new Vector3(0, -0.45, -1),
+      color,
+      range,
+    }),
+    createWallBandLamp(scene, {
+      name: "structural-light-east",
+      span: spanZ,
+      thickness: bandThickness,
+      depth: bandDepth,
+      position: new Vector3(HULL_DIMENSIONS.width / 2 - inset, height, 0),
+      rotationY: Math.PI / 2,
+      direction: new Vector3(-1, -0.45, 0),
+      color,
+      range,
+    }),
+    createWallBandLamp(scene, {
+      name: "structural-light-west",
+      span: spanZ,
+      thickness: bandThickness,
+      depth: bandDepth,
+      position: new Vector3(-HULL_DIMENSIONS.width / 2 + inset, height, 0),
+      rotationY: Math.PI / 2,
+      direction: new Vector3(1, -0.45, 0),
+      color,
+      range,
+    }),
+  ];
+}
+
+function createWallBandLamp(
+  scene: Scene,
+  config: {
+    name: string;
+    span: number;
+    thickness: number;
+    depth: number;
+    position: Vector3;
+    direction: Vector3;
+    color: Color3;
+    range: number;
+    rotationY?: number;
+    angle?: number;
+    shadowMapSize?: number;
+  },
+): BuilderLamp {
+  const fixture = MeshBuilder.CreateBox(
+    `${config.name}-fixture`,
+    {
+      width: config.span,
+      height: config.thickness,
+      depth: config.depth,
+    },
+    scene,
+  );
+
+  fixture.position = config.position.clone();
+  if (config.rotationY !== undefined) {
+    fixture.rotation.y = config.rotationY;
+  }
+  fixture.isPickable = false;
+  fixture.checkCollisions = false;
+  fixture.metadata = { type: "structural-lamp", key: config.name };
+
+  const fixtureMaterial = new StandardMaterial(`${config.name}-mat`, scene);
+  fixtureMaterial.diffuseColor = config.color.scale(0.18);
+  fixtureMaterial.specularColor = config.color.scale(0.26);
+  fixtureMaterial.emissiveColor = config.color.scale(1.2);
+  fixtureMaterial.backFaceCulling = false;
+  fixture.material = fixtureMaterial;
+
+  const direction = Vector3.Normalize(config.direction);
+  const light = new SpotLight(
+    `${config.name}-light`,
+    fixture.position.add(direction.scale(0.05)),
+    direction,
+    config.angle ?? Math.PI / 2.6,
+    1.05,
+    scene,
+  );
+  light.diffuse = config.color;
+  light.specular = config.color.scale(0.32);
+  light.intensity = 1.85;
+  light.range = config.range;
+  light.falloffType = Light.FALLOFF_PHYSICAL;
+  light.shadowEnabled = true;
+  light.shadowMinZ = 0.1;
+  light.shadowMaxZ = config.range * 1.08;
+
+  const shadow = new ShadowGenerator(config.shadowMapSize ?? 640, light);
+  shadow.usePercentageCloserFiltering = true;
+  shadow.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+  shadow.bias = 0.00055;
+  shadow.normalBias = 0.16;
+  shadow.darkness = 0.17;
+  shadow.frustumEdgeFalloff = 0.16;
+
+  return {
+    mesh: fixture,
+    light,
+    shadow,
+    key: config.name,
+  };
 }
 function createWindowCutout(
   scene: Scene,
