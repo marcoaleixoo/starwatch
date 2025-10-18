@@ -36,8 +36,8 @@ export default function App() {
         <ul style={{ margin: "6px 0 0", paddingLeft: 16, fontSize: 13 }}>
           <li>WASD — move / Shift — sprint</li>
           <li>Mouse — look (click canvas to lock)</li>
-          <li>1 — wall mode / 2 — lamp mode</li>
-          <li>Left click — place item / Right click — remove</li>
+          <li>1 — wall mode / 2 — lamp mode / 3 — remove mode</li>
+          <li>Left click — place item / Delete mode + click (ou botão direito) — remove</li>
           <li>R — rotate walls (90° steps)</li>
           <li>Esc — release cursor lock</li>
         </ul>

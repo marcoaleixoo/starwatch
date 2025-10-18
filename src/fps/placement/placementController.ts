@@ -6,7 +6,7 @@ import {
   UniversalCamera,
   Vector3,
 } from "babylonjs";
-import { CAMERA_SETTINGS, INPUT_KEYS } from "../constants";
+import { CAMERA_SETTINGS, INPUT_KEYS, SELECTION_OUTLINE_COLOR } from "../constants";
 import { createLamp, lampKey, nextLampColor, snapLampPosition } from "./lampBuilder";
 import { createWall, snapWallPosition, wallKey } from "./wallBuilder";
 import type { BuilderLamp, BuilderWall, PlacementMode, PlacementState } from "../types";
@@ -19,15 +19,27 @@ interface PlacementControllerOptions {
   camera: UniversalCamera;
   ghostSet: GhostSet;
   shadowNetwork: ShadowNetwork;
+  initialWalls?: BuilderWall[];
+  initialLamps?: BuilderLamp[];
 }
 
 export interface PlacementController {
   getState(): PlacementState;
+  setMode(mode: PlacementMode): void;
+  subscribe(listener: (state: PlacementState) => void): () => void;
   dispose(): void;
 }
 
 export function createPlacementController(options: PlacementControllerOptions): PlacementController {
-  const { scene, canvas, camera, ghostSet, shadowNetwork } = options;
+  const {
+    scene,
+    canvas,
+    camera,
+    ghostSet,
+    shadowNetwork,
+    initialWalls = [],
+    initialLamps = [],
+  } = options;
 
   const state: PlacementState = {
     mode: "wall",
@@ -39,11 +51,65 @@ export function createPlacementController(options: PlacementControllerOptions): 
   const lamps = new Map<string, BuilderLamp>();
   const baseCameraSpeed = CAMERA_SETTINGS.speed;
   const sprintKeys = new Set<string>(Array.from(INPUT_KEYS.sprint));
+  const listeners = new Set<(state: PlacementState) => void>();
+  let highlighted: AbstractMesh | null = null;
+
+  const notify = () => {
+    const snapshot = { ...state };
+    listeners.forEach((listener) => listener(snapshot));
+  };
+
+  const clearHighlight = () => {
+    if (!highlighted) {
+      return;
+    }
+    highlighted.renderOutline = false;
+    highlighted = null;
+  };
+
+  const applyHighlight = (mesh?: AbstractMesh | null) => {
+    const target = mesh ?? null;
+    if (!target || target === highlighted) {
+      if (!target) {
+        clearHighlight();
+      }
+      return;
+    }
+
+    clearHighlight();
+    target.renderOutline = true;
+    target.outlineColor = SELECTION_OUTLINE_COLOR;
+    target.outlineWidth = 0.018;
+    highlighted = target;
+  };
+
+  const pickRemovable = () =>
+    scene.pick(
+      scene.pointerX,
+      scene.pointerY,
+      (mesh?: AbstractMesh) => {
+        const type = mesh?.metadata?.type;
+        return type === "builder-wall" || type === "builder-lamp";
+      },
+    );
 
   const setMode = (mode: PlacementMode) => {
+    if (state.mode === mode) {
+      return;
+    }
     state.mode = mode;
     ghostSet.setMode(mode);
+    clearHighlight();
+    notify();
   };
+
+  initialWalls.forEach((wall) => {
+    walls.set(wall.key, wall);
+  });
+
+  initialLamps.forEach((lamp) => {
+    lamps.set(lamp.key, lamp);
+  });
 
   const showPlacementPreview = (point: Vector3) => {
     if (state.mode === "wall") {
@@ -59,6 +125,20 @@ export function createPlacementController(options: PlacementControllerOptions): 
     if (pointerInfo.type !== PointerEventTypes.POINTERMOVE) {
       return;
     }
+
+    if (state.mode === "delete") {
+      const pick = pickRemovable();
+      const targetMesh = pick?.pickedMesh;
+      if (targetMesh) {
+        applyHighlight(targetMesh);
+      } else {
+        clearHighlight();
+      }
+      ghostSet.hide();
+      return;
+    }
+
+    clearHighlight();
 
     const pick = scene.pick(
       scene.pointerX,
@@ -108,6 +188,11 @@ export function createPlacementController(options: PlacementControllerOptions): 
       return;
     }
 
+    if (mesh === highlighted) {
+      highlighted.renderOutline = false;
+      highlighted = null;
+    }
+
     const meta = mesh.metadata as { type: string; key: string };
     if (meta.type === "builder-wall") {
       const entry = walls.get(meta.key);
@@ -130,6 +215,7 @@ export function createPlacementController(options: PlacementControllerOptions): 
       entry.mesh.dispose(false, true);
       lamps.delete(meta.key);
     }
+    clearHighlight();
   };
 
   const pointerDownObserver = scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
@@ -142,6 +228,15 @@ export function createPlacementController(options: PlacementControllerOptions): 
     if (event.button === 0) {
       if (document.pointerLockElement !== canvas) {
         canvas.requestPointerLock();
+      }
+
+      if (state.mode === "delete") {
+        const pick = pickRemovable();
+        const mesh = pick?.pickedMesh;
+        if (mesh) {
+          removeTarget(mesh);
+        }
+        return;
       }
 
       const pick = scene.pick(
@@ -199,6 +294,10 @@ export function createPlacementController(options: PlacementControllerOptions): 
     if (event.code === INPUT_KEYS.lampMode) {
       setMode("lamp");
     }
+
+    if (event.code === INPUT_KEYS.deleteMode) {
+      setMode("delete");
+    }
   };
 
   const handleKeyUp = (event: KeyboardEvent) => {
@@ -213,6 +312,7 @@ export function createPlacementController(options: PlacementControllerOptions): 
   const handlePointerLockChange = () => {
     if (document.pointerLockElement !== canvas) {
       ghostSet.hide();
+      clearHighlight();
     }
   };
 
@@ -220,6 +320,14 @@ export function createPlacementController(options: PlacementControllerOptions): 
 
   return {
     getState: () => ({ ...state }),
+    setMode,
+    subscribe: (listener: (snapshot: PlacementState) => void) => {
+      listeners.add(listener);
+      listener({ ...state });
+      return () => {
+        listeners.delete(listener);
+      };
+    },
     dispose: () => {
       scene.onPointerObservable.remove(pointerMoveObserver);
       scene.onPointerObservable.remove(pointerDownObserver);
@@ -237,6 +345,8 @@ export function createPlacementController(options: PlacementControllerOptions): 
       });
       walls.clear();
       lamps.clear();
+      listeners.clear();
+      clearHighlight();
     },
   };
 }

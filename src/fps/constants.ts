@@ -71,9 +71,12 @@ export const INPUT_KEYS = {
   sprint: ["ShiftLeft", "ShiftRight"],
   wallMode: "Digit1",
   lampMode: "Digit2",
+  deleteMode: "Digit3",
 } as const;
 
 export const LAMP_COLOR_PALETTE = [
   new Color3(0.98, 0.82, 0.62),
   new Color3(0.72, 0.84, 1),
 ] as const;
+
+export const SELECTION_OUTLINE_COLOR = new Color3(0.2, 0.65, 1);

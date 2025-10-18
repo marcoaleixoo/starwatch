@@ -135,6 +135,7 @@ function buildHangar(scene: Scene) {
     scene,
   );
   floor.position.y = 0;
+  floor.metadata = { type: "ship-foundation" };
 
   const floorMaterial = new StandardMaterial("floor-mat", scene);
   floorMaterial.diffuseColor = new Color3(0.12, 0.14, 0.18);
@@ -188,6 +189,7 @@ function buildHangar(scene: Scene) {
   );
   ceiling.position.y = HULL_DIMENSIONS.height;
   ceiling.rotation.x = Math.PI;
+  ceiling.metadata = { type: "ship-foundation" };
 
   const ceilingMaterial = new StandardMaterial("ceiling-mat", scene);
   ceilingMaterial.diffuseColor = new Color3(0.14, 0.17, 0.22);
@@ -233,6 +235,7 @@ function createHullWall(
   material.specularPower = 36;
   material.emissiveColor = new Color3(0.012, 0.018, 0.024);
   wall.material = material;
+  wall.metadata = { type: "ship-wall" };
 
   createWindowCutout(scene, wall, options);
 
@@ -327,7 +330,7 @@ function createWallBandLamp(
   }
   fixture.isPickable = false;
   fixture.checkCollisions = false;
-  fixture.metadata = { type: "structural-lamp", key: config.name };
+  fixture.metadata = { type: "builder-lamp", key: config.name };
 
   const fixtureMaterial = new StandardMaterial(`${config.name}-mat`, scene);
   fixtureMaterial.diffuseColor = config.color.scale(0.18);
