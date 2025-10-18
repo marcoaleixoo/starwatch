@@ -1,42 +1,47 @@
-# Repository Guidelines
+# Starwatch Field Manual
 
-This guide captures the essentials for contributing to Starwatch so new and returning agents can get productive quickly.
+Welcome aboard the Mad Dash Initiative. We rebuilt the project structure mid-flight to chase a new goal: a first-person ship builder you can live inside, driven by AI automation. This document keeps everyone oriented—especially as we keep the previous stack mothballed for reference.
 
-## Project Structure & Module Organization
-- `src/ui/` hosts React panels such as `Chat.tsx` and `MonacoEditor.tsx`.
-- `src/game/` contains Babylon.js logic (`Game.ts`, `world.ts`) and related assets.
-- `src/hal/` bridges HAL tool calls, including `halLLM.ts`.
-- `src/App.tsx` and `src/main.tsx` bootstrap the Vite UI; `index.html` defines the entry point.
-- Keep docs in `docs/`, releases in `releases/`, and production bundles in the ignored `dist/`.
+## Current Timeline
+- **2025-10-18** — Operation One Shot: we froze the original chat/editor/game UI in `src/legacy/` and spun up a fresh FPS hangar to stress-test wall placement, rotation, and general feel.
+- Earlier commits predate the reset and live entirely inside the legacy tree; treat them as historical artifacts unless you are backporting specific ideas.
 
-## Build, Test, and Development Commands
-- `pnpm install` — install all project dependencies.
-- `pnpm dev` — start Vite at http://localhost:5173/ for iterative development.
-- `pnpm build` — run TypeScript checks and emit the production bundle to `dist/`.
-- `pnpm preview` — serve the built bundle locally for smoke testing.
-- Reserve `pnpm test` for the Vitest suite once specs land so the command remains discoverable.
+## Code Constellation
+- `src/` now hosts the new MVP:
+  - `App.tsx`, `main.tsx` — minimal bootstrap for the builder prototype.
+  - `fps/ShipBuilderCanvas.tsx` — Babylon.js scene for first-person movement, grid snapping, wall placement/removal, and ghost previews.
+- `src/legacy/` shelters the previous React panels, HAL wiring, and Babylon scene (`game/`, `ui/`, `hal/`, plus old entry points). Use this when you need to reference assets or revive older features without polluting the new loop.
+- `dist/`, `docs/`, and `releases/` retain their original purposes; respect `.gitignore` for generated assets.
 
-## Coding Style & Naming Conventions
-- TypeScript everywhere, strict typing, and avoid `any`.
-- Two-space indentation, camelCase for helpers, PascalCase for React components in `src/ui/`.
-- Keep inline styles minimal; prefer existing styling patterns.
-- Use eslint/prettier configs already committed; run `pnpm lint` if added in the future.
+## Build & Run Checklist
+- `pnpm install` — install dependencies (Babylon.js already bundled; expect large builds).
+- `pnpm dev` — Vite dev server for rapid iteration on the FPS builder.
+- `pnpm build` — TypeScript check + production bundle (watch for >500 kB chunk warnings due to Babylon; we will code-split later).
+- `pnpm preview` — smoke-test the built assets.
+- Keep `pnpm test` reserved for the future Vitest suite (no specs yet post-reset).
 
-## Testing Guidelines
-- Adopt Vitest with React Testing Library for UI and deterministic unit tests in `src/game/` and `src/hal/`.
-- Name specs `*.test.ts` or `*.test.tsx` alongside their modules.
-- Aim for fast, deterministic tests; keep coverage expectations explicit in PRs.
+## Coding Playbook
+- Strict TypeScript—no `any`. Use Babylon types (`Mesh`, `PointerInfo`, etc.) to keep editor assistance sharp.
+- Two-space indent, camelCase helpers, PascalCase React components.
+- Inline styles acceptable for HUD prototypes; migrate to shared styling once components settle.
+- Add comments only where Babylon abstractions or math need extra context.
 
-## Commit & Pull Request Guidelines
-- Follow Conventional Commits like `feat: add mining scanner HUD` or `fix: stabilize world tick`.
-- Branch naming: `feat/<scope>` or `fix/<scope>`.
-- PRs need a concise summary, linked issues, relevant screenshots/GIFs for UI work, and manual verification steps (`pnpm dev`, `pnpm preview`).
+## Testing & Telemetry
+- Vitest + React Testing Library remain the plan. For now, favor small utility tests when you introduce deterministic builders or data serializers.
+- Record manual repro steps when you tweak input handling (mouse lock, sprint, rotation) so the next agent can verify quickly.
 
-## Security & Configuration Tips
-- Never commit real API keys. `.env` is ignored; ship a sanitized `.env.example` with `OPENAI_API_KEY` and optional `OPENAI_MODEL`.
-- Access environment variables via `import.meta.env.OPENAI_*` within the client.
+## Collaboration Protocols
+- Conventional Commits (`feat:`, `fix:`, `chore:`…). Branch as `feat/builder-controls` or similar.
+- PRs: include summary GIFs or short clips showing the builder interactions; list manual verification commands (`pnpm dev`, `pnpm build`).
+- Leave the legacy code untouched unless you are extracting assets or documenting behavior; if you do open it, call it out in your PR description.
 
-## Architecture Overview
-- Babylon.js governs gameplay: sectors, scanning, and mining federation.
-- The HAL layer translates LLM intents into tool calls.
-- React UI panels host chat, editor, and HUD, coordinating with game and HAL modules without crossing concerns.
+## Security & Configuration
+- `.env` continues to be ignored; share sanitized `.env.example` values for any future HAL/LLM work (`OPENAI_API_KEY`, `OPENAI_MODEL` placeholders).
+- Environment variables load through `import.meta.env.OPENAI_*`; validate in both dev and preview builds.
+
+## Mission Ahead
+- Short term: expand the builder with inventory selection, persistence, and undo/redo.
+- Mid term: bring back HAL control, AI crew, and automation routines on top of the new world state.
+- Long term: merge the rebuilt FPS core with narrative/chat layers once the construction loop feels right. Cross-check ideas with `MANIFESTO.md` whenever we plan new systems; that living document still captures the grand strategy and narrative tone we aim to restore.
+
+Document the weird, celebrate the breakthroughs, and keep shipping. The hangar is ours now.
