@@ -1,4 +1,4 @@
-import { Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, MeshBuilder, Color3, StandardMaterial, Mesh, Color4, DynamicTexture, ParticleSystem, Texture, VertexBuffer, GlowLayer, PointLight } from 'babylonjs';
+import { Engine, Scene, ArcRotateCamera, UniversalCamera, Vector3, HemisphericLight, MeshBuilder, Color3, StandardMaterial, Mesh, Color4, DynamicTexture, ParticleSystem, Texture, VertexBuffer, GlowLayer, PointLight, Scalar, KeyboardEventTypes } from 'babylonjs';
 import type { ResourceType, Sector } from './world';
 import { generateSector } from './world';
 
@@ -18,10 +18,37 @@ type WorkerStatus = {
   lastError?: string;
 };
 
+export type TerminalId = 'engineering' | 'construction';
+export type TerminalInfo = { id: TerminalId; label: string; hint: string; description?: string };
+
+type TerminalInstance = TerminalInfo & {
+  mesh: Mesh;
+  screen: Mesh;
+  interactDistance: number;
+  idleColor: Color3;
+  activeColor: Color3;
+  light?: PointLight | null;
+};
+
+type GameOptions = {
+  onTerminalProximity?: (info: TerminalInfo | null) => void;
+  onTerminalInteract?: (info: TerminalInfo) => void;
+  onPointerLockChange?: (locked: boolean) => void;
+};
+
 export class Game {
   private engine: Engine;
   private scene: Scene;
   private camera: ArcRotateCamera;
+  private fpCamera: UniversalCamera;
+  private options: GameOptions;
+  private inputPaused = false;
+  private pointerLocked = false;
+  private terminals: TerminalInstance[] = [];
+  private nearbyTerminal: TerminalInstance | null = null;
+  private activeTerminalId: TerminalId | null = null;
+  private canvasClickHandler: (() => void) | null = null;
+  private pointerLockHandler: (() => void) | null = null;
   private ship = { mesh: null as unknown as Mesh, velocity: new Vector3(0, 0, 0), maxSpeed: 1.8, destination: null as Vector3 | null };
   private world!: Sector;
   private asteroidMeshes = new Map<string, Mesh>();
@@ -43,11 +70,13 @@ export class Game {
   private starfield?: Mesh;
   private dustEmitter?: Mesh;
   private dustSystem?: ParticleSystem;
+  private distantStars: Array<{ material: StandardMaterial; base: number; amplitude: number; speed: number; phase: number; color: Color3 }> = [];
   private followingShip = false;
   // Script Library (persisted)
   private scriptLibrary: Map<string, ScriptEntry> = new Map();
 
-  constructor(private canvas: HTMLCanvasElement) {
+  constructor(private canvas: HTMLCanvasElement, options: GameOptions = {}) {
+    this.options = options;
     this.engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
     this.scene = new Scene(this.engine);
     this.scene.clearColor = new Color4(0.02, 0.04, 0.08, 1); // deep space
@@ -57,13 +86,35 @@ export class Game {
     (this.scene as any).fogStart = 2500;
     (this.scene as any).fogEnd = 9000;
 
-    // Camera: top-down, small angle
+    // Camera: top-down legacy (mantida para automações táticas)
     this.camera = new ArcRotateCamera('camera', Math.PI / 2, 1.2, 120, new Vector3(0, 0, 0), this.scene);
-    this.camera.attachControl(canvas, true);
     this.camera.panningSensibility = 50;
     this.camera.lowerRadiusLimit = 40;
     this.camera.upperRadiusLimit = 1000;
     this.camera.minZ = 0.1;
+
+    // First-person camera inside the ship
+    this.scene.collisionsEnabled = true;
+    this.scene.gravity = new Vector3(0, -0.6, 0);
+    this.fpCamera = new UniversalCamera('fpCamera', new Vector3(0, 1.7, 6), this.scene);
+    this.fpCamera.minZ = 0.05;
+    this.fpCamera.speed = 1.8;
+    this.fpCamera.inertia = 0.6;
+    this.fpCamera.angularSensibility = 5200;
+    this.fpCamera.applyGravity = true;
+    this.fpCamera.checkCollisions = true;
+    this.fpCamera.ellipsoid = new Vector3(0.5, 0.9, 0.5);
+    this.fpCamera.keysUp.push(87, 38); // W / ArrowUp
+    this.fpCamera.keysDown.push(83, 40); // S / ArrowDown
+    this.fpCamera.keysLeft.push(65, 37); // A / ArrowLeft
+    this.fpCamera.keysRight.push(68, 39); // D / ArrowRight
+    this.scene.activeCamera = this.fpCamera;
+    this.fpCamera.attachControl(canvas, true);
+    const fpMouse = (this.fpCamera.inputs.attached as any)?.mouse;
+    if (fpMouse) {
+      fpMouse.usePointerLock = true;
+    }
+    this.setupPointerLock();
 
     new HemisphericLight('light1', new Vector3(1, 1, 0), this.scene);
 
@@ -89,7 +140,9 @@ export class Game {
     // Background: starfield skybox + subtle dust + sun
     this.createStarfield();
     this.createSpaceDust();
+    this.createDistantStars();
     this.createSun();
+    this.createShipInterior();
 
     // Input: selection picking
     this.setupPicking();
@@ -107,7 +160,40 @@ export class Game {
     window.addEventListener('resize', () => this.engine.resize());
   }
 
+  private setupPointerLock() {
+    if (this.canvasClickHandler) {
+      this.canvas.removeEventListener('click', this.canvasClickHandler);
+    }
+    if (this.pointerLockHandler) {
+      document.removeEventListener('pointerlockchange', this.pointerLockHandler);
+    }
+    this.canvasClickHandler = () => {
+      if (this.inputPaused) return;
+      if (document.pointerLockElement !== this.canvas) {
+        this.canvas.requestPointerLock();
+      }
+    };
+    this.pointerLockHandler = () => {
+      const locked = document.pointerLockElement === this.canvas;
+      this.pointerLocked = locked;
+      this.options.onPointerLockChange?.(locked);
+    };
+    this.canvas.addEventListener('click', this.canvasClickHandler);
+    document.addEventListener('pointerlockchange', this.pointerLockHandler);
+  }
+
   dispose() {
+    if (document.pointerLockElement === this.canvas) {
+      document.exitPointerLock();
+    }
+    if (this.canvasClickHandler) {
+      this.canvas.removeEventListener('click', this.canvasClickHandler);
+      this.canvasClickHandler = null;
+    }
+    if (this.pointerLockHandler) {
+      document.removeEventListener('pointerlockchange', this.pointerLockHandler);
+      this.pointerLockHandler = null;
+    }
     if (this.logicTimer) window.clearInterval(this.logicTimer);
     if (this.worker) {
       this.worker.terminate();
@@ -909,13 +995,13 @@ ${userCode.split('\n').map((line) => `          ${line}`).join('\n')}
   private createSpaceDust() {
     // subtle particles travelling with the camera to sugerir volume ao redor
     this.dustEmitter = MeshBuilder.CreateSphere('dustEmitter', { diameter: 0.1 }, this.scene);
-    this.dustEmitter.parent = this.camera;
+    this.dustEmitter.parent = this.fpCamera;
     this.dustEmitter.position.set(0, 0, 0);
     this.dustEmitter.isPickable = false;
     this.dustEmitter.isVisible = false;
     this.dustEmitter.doNotSyncBoundingInfo = true;
 
-    const ps = new ParticleSystem('spaceDust', 2800, this.scene);
+    const ps = new ParticleSystem('spaceDust', 2400, this.scene);
     const size = 32;
     const dot = new DynamicTexture('dustDot', { width: size, height: size }, this.scene, true);
     const ctx = dot.getContext();
@@ -930,36 +1016,433 @@ ${userCode.split('\n').map((line) => `          ${line}`).join('\n')}
 
     ps.particleTexture = dot as unknown as Texture;
     ps.emitter = this.dustEmitter;
-    ps.minEmitBox = new Vector3(-180, -100, -180);
-    ps.maxEmitBox = new Vector3(180, 100, 180);
-    ps.minSize = 0.3;
-    ps.maxSize = 1.6;
-    ps.minLifeTime = 18;
-    ps.maxLifeTime = 36;
-    ps.emitRate = 180;
-    ps.minEmitPower = 0.08;
-    ps.maxEmitPower = 0.26;
-    ps.minAngularSpeed = -0.4;
-    ps.maxAngularSpeed = 0.4;
-    ps.direction1 = new Vector3(-0.2, -0.02, 0.2);
-    ps.direction2 = new Vector3(0.2, 0.02, -0.2);
-    ps.color1 = new Color4(1, 1, 1, 0.18);
-    ps.color2 = new Color4(0.76, 0.86, 1, 0.12);
-    ps.colorDead = new Color4(0.45, 0.6, 1, 0.02);
+    ps.minEmitBox = Vector3.Zero();
+    ps.maxEmitBox = Vector3.Zero();
+    ps.minSize = 0.08;
+    ps.maxSize = 0.35;
+    ps.minLifeTime = 32;
+    ps.maxLifeTime = 56;
+    ps.emitRate = 140;
+    ps.minEmitPower = 0.006;
+    ps.maxEmitPower = 0.02;
+    ps.minAngularSpeed = -0.15;
+    ps.maxAngularSpeed = 0.15;
+    ps.direction1 = new Vector3(-0.02, -0.004, 0.02);
+    ps.direction2 = new Vector3(0.02, 0.004, -0.02);
+    ps.color1 = new Color4(1, 1, 1, 0.08);
+    ps.color2 = new Color4(0.75, 0.85, 1, 0.05);
+    ps.colorDead = new Color4(0.45, 0.6, 1, 0.01);
     ps.blendMode = ParticleSystem.BLENDMODE_ADD;
     ps.gravity = Vector3.Zero();
+    ps.updateSpeed = 0.004;
+    const minRadius = 220;
+    const maxRadius = 460;
+    const verticalRange = 140;
+    ps.startPositionFunction = (_, position) => {
+      const theta = Scalar.RandomRange(0, Math.PI * 2);
+      const radiusFactor = 1 - Math.pow(Math.random(), 3.2);
+      const radius = minRadius + radiusFactor * (maxRadius - minRadius);
+      const verticalBias = Scalar.RandomRange(-0.55, 0.55);
+      position.copyFromFloats(
+        Math.cos(theta) * radius,
+        verticalBias * verticalRange * (0.6 + radiusFactor * 0.4),
+        Math.sin(theta) * radius
+      );
+    };
+    ps.startDirectionFunction = (_, direction) => {
+      direction.copyFromFloats(
+        Scalar.RandomRange(-0.012, 0.012),
+        Scalar.RandomRange(-0.006, 0.006),
+        Scalar.RandomRange(-0.012, 0.012)
+      );
+    };
 
     ps.start();
     this.dustSystem = ps;
     let t = 0;
     this.scene.registerBeforeRender(() => {
       if (!this.dustEmitter) return;
-      t += this.scene.getEngine().getDeltaTime() * 0.00006;
-      const sway = 24;
+      t += this.scene.getEngine().getDeltaTime() * 0.00004;
+      const sway = 18;
       this.dustEmitter.position.x = Math.sin(t) * sway;
-      this.dustEmitter.position.y = Math.sin(t * 1.8) * 8;
-      this.dustEmitter.position.z = Math.cos(t * 1.2) * sway;
+      this.dustEmitter.position.y = Math.sin(t * 1.6) * 5;
+      this.dustEmitter.position.z = Math.cos(t * 1.1) * sway;
     });
+  }
+
+  private createShipInterior() {
+    const roomHeight = 4.6;
+    const roomWidth = 16;
+    const roomDepth = 24;
+    const wallThickness = 0.5;
+
+    const floor = MeshBuilder.CreateGround('shipFloor', { width: roomWidth, height: roomDepth }, this.scene);
+    floor.position.y = 0;
+    floor.checkCollisions = true;
+    const floorTex = new DynamicTexture('shipFloorTex', { width: 512, height: 512 }, this.scene, true);
+    const fctx = floorTex.getContext();
+    fctx.fillStyle = '#0a101a';
+    fctx.fillRect(0, 0, 512, 512);
+    fctx.strokeStyle = 'rgba(60,100,160,0.3)';
+    fctx.lineWidth = 2;
+    const gridX = 8;
+    const gridY = 12;
+    for (let i = 0; i <= gridX; i += 1) {
+      const x = (512 / gridX) * i;
+      fctx.beginPath();
+      fctx.moveTo(x, 0);
+      fctx.lineTo(x, 512);
+      fctx.stroke();
+    }
+    for (let i = 0; i <= gridY; i += 1) {
+      const y = (512 / gridY) * i;
+      fctx.beginPath();
+      fctx.moveTo(0, y);
+      fctx.lineTo(512, y);
+      fctx.stroke();
+    }
+    floorTex.update(false);
+    const floorMat = new StandardMaterial('shipFloorMat', this.scene);
+    floorMat.diffuseTexture = floorTex as unknown as Texture;
+    floorMat.specularColor = new Color3(0.12, 0.16, 0.22);
+    floorMat.emissiveColor = new Color3(0.01, 0.015, 0.02);
+    floor.material = floorMat;
+
+    const ceiling = MeshBuilder.CreateGround('shipCeiling', { width: roomWidth, height: roomDepth }, this.scene);
+    ceiling.position = new Vector3(0, roomHeight, 0);
+    ceiling.rotation.x = Math.PI;
+    ceiling.checkCollisions = true;
+    const ceilingMat = new StandardMaterial('shipCeilingMat', this.scene);
+    ceilingMat.diffuseColor = new Color3(0.07, 0.09, 0.14);
+    ceilingMat.specularColor = new Color3(0.12, 0.16, 0.2);
+    ceilingMat.emissiveColor = new Color3(0.008, 0.012, 0.02);
+    ceiling.material = ceilingMat;
+
+    const wallMat = new StandardMaterial('shipWallMat', this.scene);
+    wallMat.diffuseColor = new Color3(0.05, 0.07, 0.1);
+    wallMat.specularColor = new Color3(0.12, 0.16, 0.22);
+    wallMat.emissiveColor = new Color3(0.008, 0.012, 0.018);
+
+    const makeWall = (name: string, opts: { width: number; height: number; depth: number }, position: Vector3) => {
+      const wall = MeshBuilder.CreateBox(name, opts, this.scene);
+      wall.position = position;
+      wall.material = wallMat;
+      wall.checkCollisions = true;
+      wall.isPickable = false;
+      return wall;
+    };
+    makeWall('wallNorth', { width: roomWidth, height: roomHeight, depth: wallThickness }, new Vector3(0, roomHeight / 2, -roomDepth / 2));
+    makeWall('wallEast', { width: wallThickness, height: roomHeight, depth: roomDepth }, new Vector3(roomWidth / 2, roomHeight / 2, 0));
+    makeWall('wallWest', { width: wallThickness, height: roomHeight, depth: roomDepth }, new Vector3(-roomWidth / 2, roomHeight / 2, 0));
+
+    const frameColor = new Color3(0.18, 0.28, 0.42);
+    const windowWidth = 8;
+    const frameSideWidth = (roomWidth - windowWidth) / 2;
+    const sillHeight = 1.0;
+    const headerHeight = 0.8;
+    const glassInset = roomDepth / 2 - 0.12;
+    const frameMat = new StandardMaterial('windowFrameMat', this.scene);
+    frameMat.diffuseColor = frameColor.clone();
+    frameMat.specularColor = new Color3(0.2, 0.28, 0.4);
+    frameMat.emissiveColor = frameColor.scale(0.12);
+
+    const makeFrame = (name: string, size: { width: number; height: number; depth: number }, position: Vector3) => {
+      const frame = MeshBuilder.CreateBox(name, size, this.scene);
+      frame.position = position;
+      frame.material = frameMat;
+      frame.checkCollisions = true;
+      frame.isPickable = false;
+      return frame;
+    };
+
+    const southZ = roomDepth / 2;
+    makeFrame('windowFrameLeft', { width: frameSideWidth, height: roomHeight, depth: wallThickness }, new Vector3(-(windowWidth / 2 + frameSideWidth / 2), roomHeight / 2, southZ));
+    makeFrame('windowFrameRight', { width: frameSideWidth, height: roomHeight, depth: wallThickness }, new Vector3(windowWidth / 2 + frameSideWidth / 2, roomHeight / 2, southZ));
+    makeFrame('windowHeader', { width: windowWidth, height: headerHeight, depth: wallThickness }, new Vector3(0, roomHeight - headerHeight / 2, southZ));
+    makeFrame('windowSill', { width: windowWidth, height: sillHeight, depth: wallThickness }, new Vector3(0, sillHeight / 2, southZ));
+
+    const glassHeight = roomHeight - headerHeight - sillHeight;
+    const glass = MeshBuilder.CreatePlane('windowGlass', { width: windowWidth, height: glassHeight, sideOrientation: Mesh.DOUBLESIDE }, this.scene);
+    glass.position = new Vector3(0, sillHeight + glassHeight / 2, glassInset);
+    const glassMat = new StandardMaterial('windowGlassMat', this.scene);
+    glassMat.diffuseColor = new Color3(0.3, 0.55, 0.9);
+    glassMat.alpha = 0.32;
+    glassMat.specularColor = new Color3(0.5, 0.7, 0.9);
+    glassMat.emissiveColor = new Color3(0.18, 0.32, 0.48);
+    glassMat.backFaceCulling = false;
+    glass.material = glassMat;
+    glass.checkCollisions = true;
+
+    const rimLight = new PointLight('windowRimLight', new Vector3(0, roomHeight - 0.4, southZ - 1.2), this.scene);
+    rimLight.diffuse = new Color3(0.35, 0.55, 0.9);
+    rimLight.specular = rimLight.diffuse.clone();
+    rimLight.intensity = 0.55;
+    rimLight.range = 12;
+
+    const mezzanine = MeshBuilder.CreateBox('shipDeck', { width: 12, height: 0.4, depth: 8 }, this.scene);
+    mezzanine.position = new Vector3(0, 0.2, -7);
+    mezzanine.checkCollisions = true;
+    const mezzMat = new StandardMaterial('shipDeckMat', this.scene);
+    mezzMat.diffuseColor = new Color3(0.08, 0.11, 0.17);
+    mezzMat.specularColor = new Color3(0.14, 0.18, 0.24);
+    mezzMat.emissiveColor = new Color3(0.015, 0.02, 0.03);
+    mezzanine.material = mezzMat;
+
+    const stripMat = new StandardMaterial('shipStrip', this.scene);
+    stripMat.diffuseColor = new Color3(0.2, 0.4, 0.8);
+    stripMat.emissiveColor = new Color3(0.08, 0.18, 0.35);
+    stripMat.specularColor = new Color3(0.1, 0.16, 0.28);
+    const stripL = MeshBuilder.CreateBox('stripL', { width: 0.2, height: 0.2, depth: 10 }, this.scene);
+    stripL.position = new Vector3(-7.6, 4.2, -2);
+    stripL.material = stripMat;
+    stripL.isPickable = false;
+    const stripR = MeshBuilder.CreateBox('stripR', { width: 0.2, height: 0.2, depth: 10 }, this.scene);
+    stripR.position = new Vector3(7.6, 4.2, -2);
+    stripR.material = stripMat;
+    stripR.isPickable = false;
+
+    this.addTerminal(
+      'engineering',
+      new Vector3(-4.6, 1.1, -6.5),
+      Math.PI / 8,
+      {
+        label: 'Terminal de Engenharia',
+        hint: 'acessar HAL e varrer asteroides',
+        description: 'Computador HAL-9001 integrado aos sensores de mineração.',
+        color: new Color3(0.35, 0.65, 1),
+      }
+    );
+    this.addTerminal(
+      'construction',
+      new Vector3(4.6, 1.1, -6.5),
+      -Math.PI / 8,
+      {
+        label: 'Terminal de Construção',
+        hint: 'planejar novos módulos',
+        description: 'Interface de drones de construção — módulo em atualização.',
+        color: new Color3(0.65, 0.45, 1),
+      }
+    );
+
+    const glow = new GlowLayer('interiorGlow', this.scene);
+    glow.intensity = 0.35;
+
+    this.scene.registerBeforeRender(() => {
+      this.updateTerminalLogic();
+    });
+
+    this.scene.onKeyboardObservable.add((kbInfo) => {
+      if (kbInfo.type === KeyboardEventTypes.KEYDOWN) {
+        const key = kbInfo.event.key.toLowerCase();
+        if (key === 'e' && !this.inputPaused && !this.activeTerminalId && this.nearbyTerminal) {
+          this.beginTerminalInteraction(this.nearbyTerminal);
+        }
+      }
+    });
+  }
+
+  private addTerminal(id: TerminalId, origin: Vector3, rotationY: number, opts: { label: string; hint: string; description?: string; color: Color3 }) {
+    const base = MeshBuilder.CreateBox(`terminalBase:${id}`, { width: 1.4, height: 1.4, depth: 0.6 }, this.scene);
+    base.position = origin.clone();
+    base.rotation.y = rotationY;
+    base.checkCollisions = true;
+    const baseMat = new StandardMaterial(`terminalBaseMat:${id}`, this.scene);
+    baseMat.diffuseColor = new Color3(0.08, 0.12, 0.18);
+    baseMat.specularColor = opts.color.scale(0.2);
+    baseMat.emissiveColor = opts.color.scale(0.08);
+    base.material = baseMat;
+
+    const screen = MeshBuilder.CreatePlane(`terminalScreen:${id}`, { width: 1.1, height: 1 }, this.scene);
+    screen.parent = base;
+    screen.position = new Vector3(0, 0.35, -0.33);
+    screen.rotation.x = 0.08;
+    const tex = new DynamicTexture(`terminalTex:${id}`, { width: 512, height: 512 }, this.scene, true);
+    const ctx = tex.getContext();
+    ctx.fillStyle = 'rgba(10,18,32,0.92)';
+    ctx.fillRect(0, 0, 512, 512);
+    const grad = ctx.createLinearGradient(0, 0, 512, 512);
+    grad.addColorStop(0, `rgba(${(opts.color.r * 255).toFixed(0)},${(opts.color.g * 255).toFixed(0)},${(opts.color.b * 255).toFixed(0)},0.5)`);
+    grad.addColorStop(1, `rgba(${(opts.color.r * 255).toFixed(0)},${(opts.color.g * 255).toFixed(0)},${(opts.color.b * 255).toFixed(0)},0.1)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 512, 512);
+    ctx.fillStyle = '#dce9ff';
+    ctx.font = 'bold 38px system-ui';
+    ctx.fillText(opts.label, 28, 82);
+    ctx.font = '22px system-ui';
+    ctx.fillText(`• ${opts.hint}`, 28, 150);
+    ctx.fillText('Pressione [E] para interagir', 28, 196);
+    tex.update(false);
+    const screenMat = new StandardMaterial(`terminalScreenMat:${id}`, this.scene);
+    screenMat.disableLighting = true;
+    screenMat.diffuseTexture = tex as unknown as Texture;
+    screenMat.emissiveTexture = tex as unknown as Texture;
+    screenMat.opacityTexture = tex as unknown as Texture;
+    screenMat.emissiveColor = opts.color.scale(0.8);
+    screen.material = screenMat;
+
+    const light = new PointLight(`terminalLight:${id}`, origin.add(new Vector3(0, 1.6, -0.8)), this.scene);
+    light.diffuse = opts.color.clone();
+    light.specular = opts.color.clone();
+    light.intensity = 0.5;
+    light.range = 8.5;
+
+    this.terminals.push({
+      id,
+      label: opts.label,
+      hint: opts.hint,
+      description: opts.description,
+      mesh: base,
+      screen,
+      interactDistance: 2.8,
+      idleColor: opts.color.scale(0.35),
+      activeColor: opts.color.scale(1.25),
+      light,
+    });
+  }
+
+  private toTerminalInfo(term: TerminalInstance): TerminalInfo {
+    return { id: term.id, label: term.label, hint: term.hint, description: term.description };
+  }
+
+  private updateTerminalLogic() {
+    for (const term of this.terminals) {
+      const screenMat = term.screen.material as StandardMaterial | null;
+      if (screenMat) {
+        const distance = Vector3.Distance(term.mesh.getAbsolutePosition(), this.fpCamera.position);
+        const factor = Math.max(0.2, Math.min(1, 1 - distance / term.interactDistance));
+        const emissive = term.idleColor.scale(0.4).add(term.activeColor.scale(factor * 0.6));
+        screenMat.emissiveColor = emissive;
+      }
+      if (term.light) {
+        const distance = Vector3.Distance(term.mesh.getAbsolutePosition(), this.fpCamera.position);
+        const factor = Math.max(0.25, Math.min(1, 1 - distance / term.interactDistance));
+        term.light.intensity = 0.3 + factor * 0.55;
+      }
+    }
+
+    if (this.inputPaused || this.activeTerminalId) {
+      this.setNearbyTerminal(null);
+      return;
+    }
+
+    let best: TerminalInstance | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    const camPos = this.fpCamera.position;
+    for (const term of this.terminals) {
+      const distance = Vector3.Distance(term.mesh.getAbsolutePosition(), camPos);
+      if (distance < term.interactDistance && distance < bestDistance) {
+        best = term;
+        bestDistance = distance;
+      }
+    }
+    this.setNearbyTerminal(best);
+  }
+
+  private setNearbyTerminal(term: TerminalInstance | null) {
+    if (this.nearbyTerminal === term) return;
+    if (term) {
+      this.options.onTerminalProximity?.(this.toTerminalInfo(term));
+    } else if (this.nearbyTerminal) {
+      this.options.onTerminalProximity?.(null);
+    }
+    this.nearbyTerminal = term;
+  }
+
+  private beginTerminalInteraction(term: TerminalInstance) {
+    if (this.activeTerminalId) return;
+    this.activeTerminalId = term.id;
+    this.setNearbyTerminal(null);
+    this.setInputPaused(true);
+    this.options.onTerminalInteract?.(this.toTerminalInfo(term));
+  }
+
+  setInputPaused(paused: boolean) {
+    this.inputPaused = paused;
+    if (paused) {
+      this.fpCamera.detachControl();
+      if (document.pointerLockElement === this.canvas) {
+        document.exitPointerLock();
+      }
+    } else {
+      this.fpCamera.attachControl(this.canvas, true);
+      const fpMouse = (this.fpCamera.inputs.attached as any)?.mouse;
+      if (fpMouse) fpMouse.usePointerLock = true;
+    }
+  }
+
+  closeTerminalInteraction() {
+    this.activeTerminalId = null;
+    this.setNearbyTerminal(null);
+    this.setInputPaused(false);
+  }
+
+  private createDistantStars() {
+    const count = 28;
+    const minDistance = Math.max(5400, this.world.bounds * 3.0);
+    const maxDistance = Math.max(9000, this.world.bounds * 4.1);
+    const baseColor = new Color3(0.55, 0.82, 1.2);
+    const spriteSize = 128;
+    const starTexture = new DynamicTexture('distantStarSprite', { width: spriteSize, height: spriteSize }, this.scene, true);
+    const starCtx = starTexture.getContext();
+    starCtx.clearRect(0, 0, spriteSize, spriteSize);
+    const starGrad = starCtx.createRadialGradient(spriteSize / 2, spriteSize / 2, 0, spriteSize / 2, spriteSize / 2, spriteSize / 2);
+    starGrad.addColorStop(0, 'rgba(255,255,255,1)');
+    starGrad.addColorStop(0.35, 'rgba(160,200,255,0.9)');
+    starGrad.addColorStop(0.7, 'rgba(90,140,255,0.35)');
+    starGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    starCtx.fillStyle = starGrad;
+    starCtx.fillRect(0, 0, spriteSize, spriteSize);
+    starTexture.update(false);
+    for (let i = 0; i < count; i += 1) {
+      const size = Scalar.RandomRange(28, 56);
+      const star = MeshBuilder.CreatePlane(`distantStar:${i}`, { width: size, height: size }, this.scene);
+      star.billboardMode = Mesh.BILLBOARDMODE_ALL;
+      const dir = new Vector3(Scalar.RandomRange(-1, 1), Scalar.RandomRange(-0.35, 0.5), Scalar.RandomRange(-1, 1));
+      if (dir.lengthSquared() < 0.001) {
+        dir.set(0.3, 0.25, -0.2);
+      }
+      dir.normalize();
+      const distance = Scalar.RandomRange(minDistance, maxDistance);
+      star.position.copyFrom(dir.scale(distance));
+      const mat = new StandardMaterial(`distantStarMat:${i}`, this.scene);
+      mat.disableLighting = true;
+      mat.backFaceCulling = false;
+      mat.diffuseTexture = starTexture as unknown as Texture;
+      mat.emissiveTexture = starTexture as unknown as Texture;
+      mat.opacityTexture = starTexture as unknown as Texture;
+      (mat as any).useAlphaFromDiffuseTexture = true;
+      mat.alphaMode = Engine.ALPHA_ADD;
+      const intensity = Scalar.RandomRange(2.4, 3.8);
+      mat.emissiveColor = baseColor.scale(intensity);
+      mat.diffuseColor = Color3.Black();
+      star.material = mat;
+      star.isPickable = false;
+      (star as any).applyFog = false;
+      (star as any).infiniteDistance = true;
+      const amplitude = Scalar.RandomRange(0.35, 0.6);
+      const speed = Scalar.RandomRange(0.45, 1.1);
+      const phase = Scalar.RandomRange(0, Math.PI * 2);
+      this.distantStars.push({
+        material: mat,
+        base: intensity,
+        amplitude,
+        speed,
+        phase,
+        color: baseColor.scale(Scalar.RandomRange(0.95, 1.25)),
+      });
+    }
+
+    if (this.distantStars.length > 0) {
+      let flickerTime = 0;
+      this.scene.registerBeforeRender(() => {
+        const delta = this.scene.getEngine().getDeltaTime() * 0.001;
+        flickerTime += delta;
+        for (const star of this.distantStars) {
+          const intensity = star.base + Math.sin(flickerTime * star.speed + star.phase) * star.amplitude;
+          star.material.emissiveColor = star.color.scale(Math.max(0.2, intensity));
+        }
+      });
+    }
   }
 
   private createSun() {

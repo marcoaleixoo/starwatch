@@ -1,31 +1,42 @@
 # Repository Guidelines
 
+This guide captures the essentials for contributing to Starwatch so new and returning agents can get productive quickly.
+
 ## Project Structure & Module Organization
-The app code lives in `src/`, split into focused modules:
 - `src/ui/` hosts React panels such as `Chat.tsx` and `MonacoEditor.tsx`.
-- `src/game/` contains Babylon.js gameplay logic (`Game.ts`, `world.ts`).
-- `src/hal/` bridges HAL tool calls (`halLLM.ts`).
-- `src/App.tsx` and `src/main.tsx` bootstrap the UI; `index.html` configures Vite entry.
-Keep build artifacts in `dist/` (ignored), docs in `docs/`, and release notes in `releases/`.
+- `src/game/` contains Babylon.js logic (`Game.ts`, `world.ts`) and related assets.
+- `src/hal/` bridges HAL tool calls, including `halLLM.ts`.
+- `src/App.tsx` and `src/main.tsx` bootstrap the Vite UI; `index.html` defines the entry point.
+- Keep docs in `docs/`, releases in `releases/`, and production bundles in the ignored `dist/`.
 
 ## Build, Test, and Development Commands
-- `pnpm install` — install dependencies (pnpm is the supported package manager).
-- `pnpm dev` — start the Vite dev server at http://localhost:5173/.
-- `pnpm build` — run TypeScript checks and create a production bundle in `dist/`.
+- `pnpm install` — install all project dependencies.
+- `pnpm dev` — start Vite at http://localhost:5173/ for iterative development.
+- `pnpm build` — run TypeScript checks and emit the production bundle to `dist/`.
 - `pnpm preview` — serve the built bundle locally for smoke testing.
-Add `pnpm test` once Vitest suites land so the command stays discoverable.
+- Reserve `pnpm test` for the Vitest suite once specs land so the command remains discoverable.
 
 ## Coding Style & Naming Conventions
-Use TypeScript with strict types; avoid `any`. Keep indentation at two spaces. Components in `src/ui/` are PascalCase files exporting function components. Favor camelCase for variables and helpers. Keep inline styles minimal and aligned with existing patterns.
+- TypeScript everywhere, strict typing, and avoid `any`.
+- Two-space indentation, camelCase for helpers, PascalCase for React components in `src/ui/`.
+- Keep inline styles minimal; prefer existing styling patterns.
+- Use eslint/prettier configs already committed; run `pnpm lint` if added in the future.
 
 ## Testing Guidelines
-Adopt Vitest with React Testing Library for UI and deterministic unit tests for `src/game/world.ts` and `src/hal/halLLM.ts`. Name specs `*.test.ts` or `*.test.tsx` near their subjects. Run the suite via `pnpm test`; ensure tests complete quickly to support the feedback loop.
+- Adopt Vitest with React Testing Library for UI and deterministic unit tests in `src/game/` and `src/hal/`.
+- Name specs `*.test.ts` or `*.test.tsx` alongside their modules.
+- Aim for fast, deterministic tests; keep coverage expectations explicit in PRs.
 
 ## Commit & Pull Request Guidelines
-Follow Conventional Commits (`feat:`, `fix:`, `chore:`). Scope branches as `feat/<scope>` or `fix/<scope>`. PRs should include a concise summary, linked issues, screenshots or GIFs for UI updates, and manual verification steps (`pnpm dev` or `pnpm preview`).
+- Follow Conventional Commits like `feat: add mining scanner HUD` or `fix: stabilize world tick`.
+- Branch naming: `feat/<scope>` or `fix/<scope>`.
+- PRs need a concise summary, linked issues, relevant screenshots/GIFs for UI work, and manual verification steps (`pnpm dev`, `pnpm preview`).
 
 ## Security & Configuration Tips
-Never commit real API keys; `.env` is ignored. Provide contributors a sanitized `.env.example` with `OPENAI_API_KEY` and optional `OPENAI_MODEL`. Vite exposes `OPENAI_*` variables via `import.meta.env`, so reference them through that accessor.
+- Never commit real API keys. `.env` is ignored; ship a sanitized `.env.example` with `OPENAI_API_KEY` and optional `OPENAI_MODEL`.
+- Access environment variables via `import.meta.env.OPENAI_*` within the client.
 
 ## Architecture Overview
-The Babylon.js game orchestrates sectors and scanning/mining interactions, the HAL layer translates LLM intents into tool calls, and the React UI hosts the chat, editor, and canvas HUD. Understanding these boundaries keeps changes localized and reviewable.
+- Babylon.js governs gameplay: sectors, scanning, and mining federation.
+- The HAL layer translates LLM intents into tool calls.
+- React UI panels host chat, editor, and HUD, coordinating with game and HAL modules without crossing concerns.
