@@ -1,17 +1,4 @@
-import {
-  AbstractMesh,
-  Color3,
-  Light,
-  Matrix,
-  MeshBuilder,
-  PickingInfo,
-  Quaternion,
-  Scene,
-  ShadowGenerator,
-  SpotLight,
-  StandardMaterial,
-  Vector3,
-} from "babylonjs";
+import { AbstractMesh, Color3, Light, Matrix, MeshBuilder, PickingInfo, PointLight, Quaternion, Scene, ShadowGenerator, SpotLight, StandardMaterial, Vector3 } from "babylonjs";
 import { GRID_SIZE, LAMP_COLOR_PALETTE, WALL_LAMP_PLACEMENT } from "../constants";
 import type { BuilderLamp, WallLampPlacement } from "../types";
 import { clamp } from "../utils/math";
@@ -146,6 +133,17 @@ export function createLamp(scene: Scene, placement: WallLampPlacement, color: Co
   light.shadowMaxZ = WALL_LAMP_PLACEMENT.range * 1.05;
   light.parent = fixture;
 
+  const fillLight = new PointLight(
+    `lamp-fill-${Date.now()}`,
+    placement.position.clone(),
+    scene,
+  );
+  fillLight.diffuse = color.scale(0.52);
+  fillLight.specular = color.scale(0.12);
+  fillLight.intensity = WALL_LAMP_PLACEMENT.intensity * 0.22;
+  fillLight.range = WALL_LAMP_PLACEMENT.range * 0.75;
+  fillLight.parent = fixture;
+
   const shadow = new ShadowGenerator(WALL_LAMP_PLACEMENT.shadowMapSize, light);
   shadow.usePercentageCloserFiltering = true;
   shadow.filteringQuality = ShadowGenerator.QUALITY_HIGH;
@@ -158,6 +156,7 @@ export function createLamp(scene: Scene, placement: WallLampPlacement, color: Co
     mesh: fixture,
     light,
     shadow,
+    fillLight,
     key: lampKeyValue,
   };
 }
