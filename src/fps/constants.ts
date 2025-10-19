@@ -79,4 +79,17 @@ export const LAMP_COLOR_PALETTE = [
   new Color3(0.72, 0.84, 1),
 ] as const;
 
+export const WALL_LAMP_PLACEMENT = {
+  width: 1.15,
+  height: 0.12,
+  depth: 0.22,
+  offset: 0.06,
+  tilt: 0.45,
+  shadowMapSize: 640,
+  intensity: 1.9,
+  range: 11,
+} as const;
+
 export const SELECTION_OUTLINE_COLOR = new Color3(0.2, 0.65, 1);
+
+export const INTERACTION_RANGE = 16;

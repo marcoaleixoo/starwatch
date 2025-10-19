@@ -6,10 +6,10 @@ import {
   UniversalCamera,
   Vector3,
 } from "babylonjs";
-import { CAMERA_SETTINGS, INPUT_KEYS, SELECTION_OUTLINE_COLOR } from "../constants";
-import { createLamp, lampKey, nextLampColor, snapLampPosition } from "./lampBuilder";
+import { CAMERA_SETTINGS, INPUT_KEYS, INTERACTION_RANGE, SELECTION_OUTLINE_COLOR } from "../constants";
+import { computeWallLampPlacement, createLamp, lampKey, nextLampColor } from "./lampBuilder";
 import { createWall, snapWallPosition, wallKey } from "./wallBuilder";
-import type { BuilderLamp, BuilderWall, PlacementMode, PlacementState } from "../types";
+import type { BuilderLamp, BuilderWall, PlacementMode, PlacementState, WallLampPlacement } from "../types";
 import type { GhostSet } from "./ghosts";
 import type { ShadowNetwork } from "../lighting/shadowNetwork";
 
@@ -53,6 +53,7 @@ export function createPlacementController(options: PlacementControllerOptions): 
   const sprintKeys = new Set<string>(Array.from(INPUT_KEYS.sprint));
   const listeners = new Set<(state: PlacementState) => void>();
   let highlighted: AbstractMesh | null = null;
+  let pendingLampPlacement: WallLampPlacement | null = null;
 
   const notify = () => {
     const snapshot = { ...state };
@@ -83,15 +84,27 @@ export function createPlacementController(options: PlacementControllerOptions): 
     highlighted = target;
   };
 
+  const withinRange = (point?: Vector3 | null) => {
+    if (!point) {
+      return false;
+    }
+    return Vector3.Distance(camera.position, point) <= INTERACTION_RANGE;
+  };
+
   const pickRemovable = () =>
-    scene.pick(
-      scene.pointerX,
-      scene.pointerY,
-      (mesh?: AbstractMesh) => {
-        const type = mesh?.metadata?.type;
-        return type === "builder-wall" || type === "builder-lamp";
-      },
-    );
+    scene.pick(scene.pointerX, scene.pointerY, (mesh?: AbstractMesh) => {
+      const type = mesh?.metadata?.type;
+      return type === "builder-wall" || type === "builder-lamp";
+    });
+
+  const pickLampSurface = () =>
+    scene.pick(scene.pointerX, scene.pointerY, (mesh?: AbstractMesh) => {
+      const type = mesh?.metadata?.type;
+      return type === "ship-wall" || type === "builder-wall";
+    }, false);
+
+  const pickFloor = () =>
+    scene.pick(scene.pointerX, scene.pointerY, (mesh?: AbstractMesh) => mesh?.name === "hangar-floor");
 
   const setMode = (mode: PlacementMode) => {
     if (state.mode === mode) {
@@ -100,6 +113,7 @@ export function createPlacementController(options: PlacementControllerOptions): 
     state.mode = mode;
     ghostSet.setMode(mode);
     clearHighlight();
+    pendingLampPlacement = null;
     notify();
   };
 
@@ -107,19 +121,11 @@ export function createPlacementController(options: PlacementControllerOptions): 
     walls.set(wall.key, wall);
   });
 
+  const persistentLampKeys = new Set(initialLamps.map((lamp) => lamp.key));
+
   initialLamps.forEach((lamp) => {
     lamps.set(lamp.key, lamp);
   });
-
-  const showPlacementPreview = (point: Vector3) => {
-    if (state.mode === "wall") {
-      const snapped = snapWallPosition(point);
-      ghostSet.showWall(snapped, state.rotation);
-    } else {
-      const snapped = snapLampPosition(point);
-      ghostSet.showLamp(snapped);
-    }
-  };
 
   const pointerMoveObserver = scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
     if (pointerInfo.type !== PointerEventTypes.POINTERMOVE) {
@@ -128,6 +134,12 @@ export function createPlacementController(options: PlacementControllerOptions): 
 
     if (state.mode === "delete") {
       const pick = pickRemovable();
+      if (!withinRange(pick?.pickedPoint)) {
+        clearHighlight();
+        ghostSet.hide();
+        return;
+      }
+
       const targetMesh = pick?.pickedMesh;
       if (targetMesh) {
         applyHighlight(targetMesh);
@@ -138,21 +150,43 @@ export function createPlacementController(options: PlacementControllerOptions): 
       return;
     }
 
+    if (state.mode === "lamp") {
+      const pick = pickLampSurface();
+      if (!withinRange(pick?.pickedPoint)) {
+        ghostSet.hide();
+        pendingLampPlacement = null;
+        return;
+      }
+
+      const placement = pick ? computeWallLampPlacement(pick) : null;
+      if (!placement) {
+        ghostSet.hide();
+        pendingLampPlacement = null;
+        return;
+      }
+
+      pendingLampPlacement = placement;
+      ghostSet.showLamp(placement);
+      clearHighlight();
+      return;
+    }
+
     clearHighlight();
 
-    const pick = scene.pick(
-      scene.pointerX,
-      scene.pointerY,
-      (mesh?: AbstractMesh) => mesh?.name === "hangar-floor",
-    );
-    const point = pick?.pickedPoint;
+    const pick = pickFloor();
+    if (!withinRange(pick?.pickedPoint)) {
+      ghostSet.hide();
+      return;
+    }
 
+    const point = pick?.pickedPoint;
     if (!point) {
       ghostSet.hide();
       return;
     }
 
-    showPlacementPreview(point);
+    const snapped = snapWallPosition(point);
+    ghostSet.showWall(snapped, state.rotation);
   });
 
   const placeWall = (point: Vector3) => {
@@ -167,9 +201,8 @@ export function createPlacementController(options: PlacementControllerOptions): 
     shadowNetwork.registerDynamic(wall.mesh);
   };
 
-  const placeLamp = (point: Vector3) => {
-    const snapped = snapLampPosition(point);
-    const key = lampKey(snapped);
+  const placeLamp = (placement: WallLampPlacement) => {
+    const key = lampKey(placement);
     if (lamps.has(key)) {
       return;
     }
@@ -177,7 +210,7 @@ export function createPlacementController(options: PlacementControllerOptions): 
     const color = nextLampColor(state.lampColorIndex);
     state.lampColorIndex = (state.lampColorIndex + 1) % Number.MAX_SAFE_INTEGER;
 
-    const lamp = createLamp(scene, snapped, color);
+    const lamp = createLamp(scene, placement, color);
     lamps.set(key, lamp);
     shadowNetwork.registerDynamic(lamp.mesh);
     shadowNetwork.attachLamp(lamp);
@@ -207,6 +240,7 @@ export function createPlacementController(options: PlacementControllerOptions): 
       if (!entry) {
         return;
       }
+      persistentLampKeys.delete(meta.key);
       shadowNetwork.detachLamp(entry);
       shadowNetwork.unregisterDynamic(entry.mesh);
       entry.shadow.dispose();
@@ -232,6 +266,9 @@ export function createPlacementController(options: PlacementControllerOptions): 
 
       if (state.mode === "delete") {
         const pick = pickRemovable();
+        if (!withinRange(pick?.pickedPoint)) {
+          return;
+        }
         const mesh = pick?.pickedMesh;
         if (mesh) {
           removeTarget(mesh);
@@ -239,34 +276,45 @@ export function createPlacementController(options: PlacementControllerOptions): 
         return;
       }
 
-      const pick = scene.pick(
-        scene.pointerX,
-        scene.pointerY,
-        (mesh?: AbstractMesh) => mesh?.name === "hangar-floor",
-      );
-      const point = pick?.pickedPoint;
-      if (!point) {
+      if (state.mode === "wall") {
+        const pick = pickFloor();
+        if (!withinRange(pick?.pickedPoint)) {
+          return;
+        }
+        const point = pick?.pickedPoint;
+        if (!point) {
+          return;
+        }
+
+        placeWall(point);
+        const snapped = snapWallPosition(point);
+        ghostSet.showWall(snapped, state.rotation);
         return;
       }
 
-      if (state.mode === "wall") {
-        placeWall(point);
-      } else {
-        placeLamp(point);
+      const placement = pendingLampPlacement ?? (() => {
+        const pick = pickLampSurface();
+        if (!withinRange(pick?.pickedPoint)) {
+          return null;
+        }
+        return pick ? computeWallLampPlacement(pick) : null;
+      })();
+
+      if (!placement) {
+        return;
       }
 
-      showPlacementPreview(point);
+      placeLamp(placement);
+      pendingLampPlacement = null;
+      ghostSet.showLamp(placement);
+      return;
     } else if (event.button === 2) {
       event.preventDefault();
 
-      const pick = scene.pick(
-        scene.pointerX,
-        scene.pointerY,
-        (mesh?: AbstractMesh) => {
-          const type = mesh?.metadata?.type;
-          return type === "builder-wall" || type === "builder-lamp";
-        },
-      );
+      const pick = pickRemovable();
+      if (!withinRange(pick?.pickedPoint)) {
+        return;
+      }
 
       removeTarget(pick?.pickedMesh ?? undefined);
     }
@@ -338,6 +386,9 @@ export function createPlacementController(options: PlacementControllerOptions): 
 
       walls.forEach((wall) => wall.mesh.dispose(false, true));
       lamps.forEach((lamp) => {
+        if (persistentLampKeys.has(lamp.key)) {
+          return;
+        }
         lamp.shadow.dispose();
         lamp.light.dispose();
         lamp.fillLight?.dispose();
@@ -346,6 +397,7 @@ export function createPlacementController(options: PlacementControllerOptions): 
       walls.clear();
       lamps.clear();
       listeners.clear();
+      persistentLampKeys.clear();
       clearHighlight();
     },
   };

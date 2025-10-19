@@ -234,6 +234,7 @@ function createHullWall(
   material.specularColor = new Color3(0.17, 0.21, 0.26);
   material.specularPower = 36;
   material.emissiveColor = new Color3(0.012, 0.018, 0.024);
+  material.backFaceCulling = false;
   wall.material = material;
   wall.metadata = { type: "ship-wall" };
 
@@ -328,7 +329,7 @@ function createWallBandLamp(
   if (config.rotationY !== undefined) {
     fixture.rotation.y = config.rotationY;
   }
-  fixture.isPickable = false;
+  fixture.isPickable = true;
   fixture.checkCollisions = false;
   fixture.metadata = { type: "builder-lamp", key: config.name };
 

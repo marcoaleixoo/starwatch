@@ -1,18 +1,20 @@
 import {
   Color3,
+  Matrix,
   Mesh,
   MeshBuilder,
+  Quaternion,
   Scene,
   StandardMaterial,
   Vector3,
 } from "babylonjs";
-import { LAMP_DIMENSIONS, WALL_DIMENSIONS } from "../constants";
-import type { PlacementMode } from "../types";
+import { WALL_DIMENSIONS, WALL_LAMP_PLACEMENT } from "../constants";
+import type { PlacementMode, WallLampPlacement } from "../types";
 import { degreesToRadians } from "../utils/math";
 
 export interface GhostSet {
   showWall(position: Vector3, rotation: number): void;
-  showLamp(position: Vector3): void;
+  showLamp(placement: WallLampPlacement): void;
   hide(): void;
   setMode(mode: PlacementMode): void;
   dispose(): void;
@@ -36,21 +38,22 @@ export function createGhostSet(scene: Scene): GhostSet {
   ghostWall.material = ghostWallMaterial;
   ghostWall.isPickable = false;
 
-  const ghostLamp = MeshBuilder.CreateCylinder(
+  const ghostLamp = MeshBuilder.CreateBox(
     "ghost-lamp",
     {
-      height: LAMP_DIMENSIONS.height,
-      diameter: LAMP_DIMENSIONS.radius * 2,
-      tessellation: 16,
+      width: WALL_LAMP_PLACEMENT.width,
+      height: WALL_LAMP_PLACEMENT.height,
+      depth: WALL_LAMP_PLACEMENT.depth,
     },
     scene,
   );
 
   const ghostLampMaterial = new StandardMaterial("ghost-lamp-mat", scene);
-  ghostLampMaterial.diffuseColor = new Color3(0.98, 0.85, 0.5);
-  ghostLampMaterial.alpha = 0.45;
-  ghostLampMaterial.specularColor = new Color3(0.2, 0.2, 0.2);
-  ghostLampMaterial.emissiveColor = new Color3(0.75, 0.62, 0.3);
+  ghostLampMaterial.diffuseColor = new Color3(0.58, 0.78, 0.98);
+  ghostLampMaterial.alpha = 0.38;
+  ghostLampMaterial.specularColor = new Color3(0.2, 0.35, 0.5);
+  ghostLampMaterial.emissiveColor = new Color3(0.32, 0.58, 0.86);
+  ghostLampMaterial.backFaceCulling = false;
   ghostLamp.material = ghostLampMaterial;
   ghostLamp.isPickable = false;
 
@@ -62,11 +65,13 @@ export function createGhostSet(scene: Scene): GhostSet {
       ghostWallMaterial.alpha = 0.32;
       ghostLamp.setEnabled(false);
       ghostLampMaterial.alpha = 0;
-    } else {
+    } else if (mode === "lamp") {
       ghostWall.setEnabled(false);
       ghostWallMaterial.alpha = 0;
       ghostLamp.setEnabled(true);
-      ghostLampMaterial.alpha = 0.45;
+      ghostLampMaterial.alpha = 0.38;
+    } else {
+      hide();
     }
   };
 
@@ -86,9 +91,15 @@ export function createGhostSet(scene: Scene): GhostSet {
       ghostWall.rotation.y = degreesToRadians(rotation);
       syncVisibility();
     },
-    showLamp: (position: Vector3) => {
+    showLamp: (placement: WallLampPlacement) => {
       mode = "lamp";
-      ghostLamp.position.copyFrom(position);
+      ghostLamp.position.copyFrom(placement.position);
+
+      const basis = new Matrix();
+      Matrix.FromXYZAxesToRef(placement.right, placement.up, placement.forward, basis);
+      const rotation = Quaternion.FromRotationMatrix(basis);
+      ghostLamp.rotationQuaternion = rotation;
+
       syncVisibility();
     },
     hide: () => {

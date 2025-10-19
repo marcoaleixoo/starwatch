@@ -45,6 +45,7 @@ export function createWall(scene: Scene, position: Vector3, rotation: number): B
   material.diffuseColor = new Color3(0.72, 0.74, 0.78);
   material.specularColor = new Color3(0.24, 0.26, 0.28);
   material.emissiveColor = new Color3(0.08, 0.1, 0.12);
+  material.backFaceCulling = false;
   wallMesh.material = material;
 
   const key = wallKey(position, rotation);
