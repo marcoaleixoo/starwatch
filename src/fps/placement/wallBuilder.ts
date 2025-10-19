@@ -49,7 +49,7 @@ export function createWall(scene: Scene, position: Vector3, rotation: number): B
   wallMesh.material = material;
 
   const key = wallKey(position, rotation);
-  wallMesh.metadata = { type: "builder-wall", key };
+  wallMesh.metadata = { toolId: "wall", key };
 
   return {
     mesh: wallMesh,

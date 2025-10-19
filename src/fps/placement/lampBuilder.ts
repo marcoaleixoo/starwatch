@@ -34,8 +34,10 @@ export function computeWallLampPlacement(pick: PickingInfo): WallLampPlacement |
     return null;
   }
 
-  const type = mesh.metadata?.type;
-  if (type !== "ship-wall" && type !== "builder-wall") {
+  const metadata = mesh.metadata as { type?: string; toolId?: string } | undefined;
+  const type = metadata?.type;
+  const toolId = metadata?.toolId;
+  if (toolId !== "wall" && type !== "ship-wall") {
     return null;
   }
 
@@ -120,7 +122,7 @@ export function createLamp(scene: Scene, placement: WallLampPlacement, color: Co
   fixture.material = material;
 
   const lampKeyValue = lampKey(placement);
-  fixture.metadata = { type: "builder-lamp", key: lampKeyValue };
+  fixture.metadata = { toolId: "lamp", key: lampKeyValue };
 
   const tiltDirection = Vector3.Normalize(
     placement.forward.scale(1).add(placement.up.scale(-WALL_LAMP_PLACEMENT.tilt)),

@@ -7,17 +7,17 @@ import {
   Vector3,
 } from "babylonjs";
 import { CAMERA_SETTINGS, INPUT_KEYS, INTERACTION_RANGE, SELECTION_OUTLINE_COLOR } from "../constants";
-import { computeWallLampPlacement, createLamp, lampKey, nextLampColor } from "./lampBuilder";
-import { createWall, snapWallPosition, wallKey } from "./wallBuilder";
-import type { BuilderLamp, BuilderWall, PlacementMode, PlacementState, WallLampPlacement } from "../types";
-import type { GhostSet } from "./ghosts";
 import type { ShadowNetwork } from "../lighting/shadowNetwork";
+import type { BuilderLamp, BuilderWall } from "../types";
+import type { GhostHost } from "./ghosts";
+import type { PlacementState, PlacementToolInstance, ToolMetadata, ToolRuntimeContext } from "./placementTypes";
+import { TOOL_DEFINITION_BY_ID, TOOL_DEFINITIONS } from "./tools";
 
 interface PlacementControllerOptions {
   scene: Scene;
   canvas: HTMLCanvasElement;
   camera: UniversalCamera;
-  ghostSet: GhostSet;
+  ghost: GhostHost;
   shadowNetwork: ShadowNetwork;
   initialWalls?: BuilderWall[];
   initialLamps?: BuilderLamp[];
@@ -25,43 +25,47 @@ interface PlacementControllerOptions {
 
 export interface PlacementController {
   getState(): PlacementState;
-  setMode(mode: PlacementMode): void;
+  setActiveTool(toolId: string): void;
   subscribe(listener: (state: PlacementState) => void): () => void;
   dispose(): void;
 }
 
 export function createPlacementController(options: PlacementControllerOptions): PlacementController {
-  const {
-    scene,
-    canvas,
-    camera,
-    ghostSet,
-    shadowNetwork,
-    initialWalls = [],
-    initialLamps = [],
-  } = options;
+  const { scene, canvas, camera, ghost, shadowNetwork } = options;
+  const initialWalls = options.initialWalls ?? [];
+  const initialLamps = options.initialLamps ?? [];
+
+  const defaultToolId = TOOL_DEFINITIONS[0]?.id ?? "wall";
 
   const state: PlacementState = {
-    mode: "wall",
-    rotation: 0,
-    lampColorIndex: 0,
+    activeToolId: defaultToolId,
   };
 
-  const walls = new Map<string, BuilderWall>();
-  const lamps = new Map<string, BuilderLamp>();
-  const baseCameraSpeed = CAMERA_SETTINGS.speed;
+  const toolBootstrap = new Map<string, unknown>();
+  if (initialWalls.length > 0) {
+    toolBootstrap.set("wall", initialWalls);
+  }
+  if (initialLamps.length > 0) {
+    toolBootstrap.set("lamp", initialLamps);
+  }
+
+  const listeners = new Set<(snapshot: PlacementState) => void>();
+  const toolInstances = new Map<string, PlacementToolInstance>();
   const sprintKeys = new Set<string>(Array.from(INPUT_KEYS.sprint));
-  const listeners = new Set<(state: PlacementState) => void>();
+  const hotkeyToToolId = new Map<string, string>();
+  const baseCameraSpeed = CAMERA_SETTINGS.speed;
+
+  let activeTool: PlacementToolInstance | null = null;
   let highlighted: AbstractMesh | null = null;
-  let pendingLampPlacement: WallLampPlacement | null = null;
 
   const notify = () => {
-    const snapshot = { ...state };
+    const snapshot: PlacementState = { ...state };
     listeners.forEach((listener) => listener(snapshot));
   };
 
   const clearHighlight = () => {
-    if (!highlighted) {
+    if (!highlighted || highlighted.isDisposed()) {
+      highlighted = null;
       return;
     }
     highlighted.renderOutline = false;
@@ -70,10 +74,12 @@ export function createPlacementController(options: PlacementControllerOptions): 
 
   const applyHighlight = (mesh?: AbstractMesh | null) => {
     const target = mesh ?? null;
-    if (!target || target === highlighted) {
-      if (!target) {
-        clearHighlight();
-      }
+    if (!target) {
+      clearHighlight();
+      return;
+    }
+
+    if (highlighted === target) {
       return;
     }
 
@@ -91,284 +97,197 @@ export function createPlacementController(options: PlacementControllerOptions): 
     return Vector3.Distance(camera.position, point) <= INTERACTION_RANGE;
   };
 
-  const pickRemovable = () =>
-    scene.pick(scene.pointerX, scene.pointerY, (mesh?: AbstractMesh) => {
-      const type = mesh?.metadata?.type;
-      return type === "builder-wall" || type === "builder-lamp";
-    });
-
-  const pickLampSurface = () =>
-    scene.pick(scene.pointerX, scene.pointerY, (mesh?: AbstractMesh) => {
-      const type = mesh?.metadata?.type;
-      return type === "ship-wall" || type === "builder-wall";
-    }, false);
-
-  const pickFloor = () =>
-    scene.pick(scene.pointerX, scene.pointerY, (mesh?: AbstractMesh) => mesh?.name === "hangar-floor");
-
-  const setMode = (mode: PlacementMode) => {
-    if (state.mode === mode) {
-      return;
-    }
-    state.mode = mode;
-    ghostSet.setMode(mode);
-    clearHighlight();
-    pendingLampPlacement = null;
-    notify();
-  };
-
-  initialWalls.forEach((wall) => {
-    walls.set(wall.key, wall);
+  hotkeyToToolId.clear();
+  TOOL_DEFINITIONS.forEach((definition) => {
+    hotkeyToToolId.set(definition.hotkey, definition.id);
   });
 
-  const persistentLampKeys = new Set(initialLamps.map((lamp) => lamp.key));
-
-  initialLamps.forEach((lamp) => {
-    lamps.set(lamp.key, lamp);
-  });
-
-  const pointerMoveObserver = scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
-    if (pointerInfo.type !== PointerEventTypes.POINTERMOVE) {
-      return;
-    }
-
-    if (state.mode === "delete") {
-      const pick = pickRemovable();
-      if (!withinRange(pick?.pickedPoint)) {
-        clearHighlight();
-        ghostSet.hide();
-        return;
-      }
-
-      const targetMesh = pick?.pickedMesh;
-      if (targetMesh) {
-        applyHighlight(targetMesh);
-      } else {
-        clearHighlight();
-      }
-      ghostSet.hide();
-      return;
-    }
-
-    if (state.mode === "lamp") {
-      const pick = pickLampSurface();
-      if (!withinRange(pick?.pickedPoint)) {
-        ghostSet.hide();
-        pendingLampPlacement = null;
-        return;
-      }
-
-      const placement = pick ? computeWallLampPlacement(pick) : null;
-      if (!placement) {
-        ghostSet.hide();
-        pendingLampPlacement = null;
-        return;
-      }
-
-      pendingLampPlacement = placement;
-      ghostSet.showLamp(placement);
-      clearHighlight();
-      return;
-    }
-
-    clearHighlight();
-
-    const pick = pickFloor();
-    if (!withinRange(pick?.pickedPoint)) {
-      ghostSet.hide();
-      return;
-    }
-
-    const point = pick?.pickedPoint;
-    if (!point) {
-      ghostSet.hide();
-      return;
-    }
-
-    const snapped = snapWallPosition(point);
-    ghostSet.showWall(snapped, state.rotation);
-  });
-
-  const placeWall = (point: Vector3) => {
-    const snapped = snapWallPosition(point);
-    const key = wallKey(snapped, state.rotation);
-    if (walls.has(key)) {
-      return;
-    }
-
-    const wall = createWall(scene, snapped, state.rotation);
-    walls.set(key, wall);
-    shadowNetwork.registerDynamic(wall.mesh);
-  };
-
-  const placeLamp = (placement: WallLampPlacement) => {
-    const key = lampKey(placement);
-    if (lamps.has(key)) {
-      return;
-    }
-
-    const color = nextLampColor(state.lampColorIndex);
-    state.lampColorIndex = (state.lampColorIndex + 1) % Number.MAX_SAFE_INTEGER;
-
-    const lamp = createLamp(scene, placement, color);
-    lamps.set(key, lamp);
-    shadowNetwork.registerDynamic(lamp.mesh);
-    shadowNetwork.attachLamp(lamp);
-  };
-
-  const removeTarget = (mesh?: AbstractMesh) => {
-    if (!mesh || !mesh.metadata) {
-      return;
-    }
-
-    if (mesh === highlighted) {
-      highlighted.renderOutline = false;
-      highlighted = null;
-    }
-
-    const meta = mesh.metadata as { type: string; key: string };
-    if (meta.type === "builder-wall") {
-      const entry = walls.get(meta.key);
-      if (!entry) {
-        return;
-      }
-      shadowNetwork.unregisterDynamic(entry.mesh);
-      entry.mesh.dispose(false, true);
-      walls.delete(meta.key);
-    } else if (meta.type === "builder-lamp") {
-      const entry = lamps.get(meta.key);
-      if (!entry) {
-        return;
-      }
-      persistentLampKeys.delete(meta.key);
-      shadowNetwork.detachLamp(entry);
-      shadowNetwork.unregisterDynamic(entry.mesh);
-      entry.shadow.dispose();
-      entry.light.dispose();
-      entry.fillLight?.dispose();
-      entry.mesh.dispose(false, true);
-      lamps.delete(meta.key);
-    }
-    clearHighlight();
-  };
-
-  const pointerDownObserver = scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
-    if (pointerInfo.type !== PointerEventTypes.POINTERDOWN) {
-      return;
-    }
-
-    const event = pointerInfo.event;
-
-    if (event.button === 0) {
+  const runtimeContext: ToolRuntimeContext = {
+    scene,
+    camera,
+    canvas,
+    shadowNetwork,
+    ghost,
+    withinRange,
+    requestPointerLock: () => {
       if (document.pointerLockElement !== canvas) {
         canvas.requestPointerLock();
       }
-
-      if (state.mode === "delete") {
-        const pick = pickRemovable();
-        if (!withinRange(pick?.pickedPoint)) {
-          return;
-        }
-        const mesh = pick?.pickedMesh;
-        if (mesh) {
-          removeTarget(mesh);
-        }
+    },
+    highlight: (mesh?: AbstractMesh | null) => {
+      if (!mesh) {
+        clearHighlight();
         return;
       }
-
-      if (state.mode === "wall") {
-        const pick = pickFloor();
-        if (!withinRange(pick?.pickedPoint)) {
-          return;
-        }
-        const point = pick?.pickedPoint;
-        if (!point) {
-          return;
-        }
-
-        placeWall(point);
-        const snapped = snapWallPosition(point);
-        ghostSet.showWall(snapped, state.rotation);
-        return;
+      applyHighlight(mesh);
+    },
+    removeMesh: (mesh?: AbstractMesh | null) => {
+      const removed = removeMesh(mesh);
+      if (removed) {
+        clearHighlight();
       }
+      return removed;
+    },
+  };
 
-      const placement = pendingLampPlacement ?? (() => {
-        const pick = pickLampSurface();
-        if (!withinRange(pick?.pickedPoint)) {
-          return null;
-        }
-        return pick ? computeWallLampPlacement(pick) : null;
-      })();
+  const getToolInstance = (toolId: string): PlacementToolInstance | null => {
+    const existing = toolInstances.get(toolId);
+    if (existing) {
+      return existing;
+    }
 
-      if (!placement) {
-        return;
-      }
+    const definition = TOOL_DEFINITION_BY_ID.get(toolId);
+    if (!definition) {
+      return null;
+    }
 
-      placeLamp(placement);
-      pendingLampPlacement = null;
-      ghostSet.showLamp(placement);
+    const bootstrap = toolBootstrap.get(toolId);
+    const instance = definition.create(runtimeContext, bootstrap);
+    toolInstances.set(toolId, instance);
+    return instance;
+  };
+
+  const removeMesh = (mesh?: AbstractMesh | null): boolean => {
+    if (!mesh) {
+      return false;
+    }
+
+    const metadata = mesh.metadata as ToolMetadata | undefined;
+    if (
+      !metadata ||
+      typeof metadata.toolId !== "string" ||
+      typeof metadata.key !== "string"
+    ) {
+      return false;
+    }
+
+    const tool = getToolInstance(metadata.toolId);
+    if (!tool || !tool.remove) {
+      return false;
+    }
+
+    const removed = tool.remove(metadata, mesh);
+    if (removed && mesh === highlighted) {
+      clearHighlight();
+    }
+    return removed;
+  };
+
+  const setActiveToolInternal = (toolId: string, fromHotkey = false) => {
+    if (state.activeToolId === toolId && !fromHotkey) {
       return;
-    } else if (event.button === 2) {
-      event.preventDefault();
+    }
 
-      const pick = pickRemovable();
-      if (!withinRange(pick?.pickedPoint)) {
-        return;
+    const next = getToolInstance(toolId);
+    if (!next) {
+      return;
+    }
+
+    if (activeTool && activeTool.onDeactivate) {
+      activeTool.onDeactivate();
+    }
+
+    activeTool = next;
+    state.activeToolId = toolId;
+    if (activeTool.onActivate) {
+      activeTool.onActivate();
+    }
+    notify();
+  };
+
+  const attemptRemoveAtPointer = () => {
+    const pick = scene.pick(
+      scene.pointerX,
+      scene.pointerY,
+      (mesh) => {
+        const metadata = mesh?.metadata as { toolId?: unknown } | undefined;
+        return typeof metadata?.toolId === "string";
+      },
+    );
+
+    if (!withinRange(pick?.pickedPoint)) {
+      return false;
+    }
+
+    return removeMesh(pick?.pickedMesh ?? null);
+  };
+
+  const pointerObserver = scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
+    switch (pointerInfo.type) {
+      case PointerEventTypes.POINTERMOVE:
+        activeTool?.onPointerMove?.(pointerInfo);
+        break;
+      case PointerEventTypes.POINTERDOWN: {
+        if (pointerInfo.event.button === 0) {
+          runtimeContext.requestPointerLock();
+        }
+
+        if (pointerInfo.event.button === 2) {
+          pointerInfo.event.preventDefault();
+          attemptRemoveAtPointer();
+          return;
+        }
+
+        activeTool?.onPointerDown?.(pointerInfo);
+        break;
       }
-
-      removeTarget(pick?.pickedMesh ?? undefined);
+      case PointerEventTypes.POINTERUP:
+        activeTool?.onPointerUp?.(pointerInfo);
+        break;
+      default:
+        break;
     }
   });
 
-  const handleContextMenu = (event: MouseEvent) => {
-    event.preventDefault();
-  };
-
-  canvas.addEventListener("contextmenu", handleContextMenu);
-
   const handleKeyDown = (event: KeyboardEvent) => {
-    if (event.code === INPUT_KEYS.rotate && state.mode === "wall") {
-      state.rotation = (state.rotation + 90) % 360;
-    }
-
     if (sprintKeys.has(event.code)) {
       camera.speed = baseCameraSpeed * CAMERA_SETTINGS.sprintMultiplier;
     }
 
-    if (event.code === INPUT_KEYS.wallMode) {
-      setMode("wall");
+    const toolId = hotkeyToToolId.get(event.code);
+    if (toolId) {
+      setActiveToolInternal(toolId, true);
+      return;
     }
 
-    if (event.code === INPUT_KEYS.lampMode) {
-      setMode("lamp");
-    }
-
-    if (event.code === INPUT_KEYS.deleteMode) {
-      setMode("delete");
-    }
+    activeTool?.onKeyDown?.(event);
   };
 
   const handleKeyUp = (event: KeyboardEvent) => {
     if (sprintKeys.has(event.code)) {
       camera.speed = baseCameraSpeed;
     }
+
+    activeTool?.onKeyUp?.(event);
+  };
+
+  const handlePointerLockChange = () => {
+    const locked = document.pointerLockElement === canvas;
+    if (!locked) {
+      ghost.hide();
+      clearHighlight();
+    }
+    activeTool?.onPointerLockChange?.(locked);
+  };
+
+  const handleContextMenu = (event: MouseEvent) => {
+    event.preventDefault();
   };
 
   window.addEventListener("keydown", handleKeyDown);
   window.addEventListener("keyup", handleKeyUp);
-
-  const handlePointerLockChange = () => {
-    if (document.pointerLockElement !== canvas) {
-      ghostSet.hide();
-      clearHighlight();
-    }
-  };
-
   document.addEventListener("pointerlockchange", handlePointerLockChange);
+  canvas.addEventListener("contextmenu", handleContextMenu);
+
+  const initialTool = getToolInstance(state.activeToolId);
+  activeTool = initialTool;
+  activeTool?.onActivate?.();
 
   return {
     getState: () => ({ ...state }),
-    setMode,
+    setActiveTool: (toolId: string) => {
+      setActiveToolInternal(toolId);
+    },
     subscribe: (listener: (snapshot: PlacementState) => void) => {
       listeners.add(listener);
       listener({ ...state });
@@ -377,28 +296,25 @@ export function createPlacementController(options: PlacementControllerOptions): 
       };
     },
     dispose: () => {
-      scene.onPointerObservable.remove(pointerMoveObserver);
-      scene.onPointerObservable.remove(pointerDownObserver);
+      scene.onPointerObservable.remove(pointerObserver);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       document.removeEventListener("pointerlockchange", handlePointerLockChange);
       canvas.removeEventListener("contextmenu", handleContextMenu);
 
-      walls.forEach((wall) => wall.mesh.dispose(false, true));
-      lamps.forEach((lamp) => {
-        if (persistentLampKeys.has(lamp.key)) {
-          return;
-        }
-        lamp.shadow.dispose();
-        lamp.light.dispose();
-        lamp.fillLight?.dispose();
-        lamp.mesh.dispose(false, true);
+      if (activeTool && activeTool.onDeactivate) {
+        activeTool.onDeactivate();
+      }
+
+      toolInstances.forEach((tool) => {
+        tool.dispose?.();
       });
-      walls.clear();
-      lamps.clear();
-      listeners.clear();
-      persistentLampKeys.clear();
+      toolInstances.clear();
+
+      ghost.clear();
       clearHighlight();
+      listeners.clear();
+      hotkeyToToolId.clear();
     },
   };
 }

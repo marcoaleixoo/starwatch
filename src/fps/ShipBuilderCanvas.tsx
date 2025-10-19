@@ -1,19 +1,39 @@
 import { useEffect, useRef, useState } from "react";
 import { createSceneContext } from "./core/sceneContext";
-import { createGhostSet } from "./placement/ghosts";
 import { createPlacementController } from "./placement/placementController";
 import type { PlacementController } from "./placement/placementController";
+import { createGhostHost } from "./placement/ghosts";
+import type { PlacementState } from "./placement/placementTypes";
+import { TOOL_DEFINITIONS } from "./placement/tools";
 import { createShadowNetwork } from "./lighting/shadowNetwork";
-import type { PlacementMode, PlacementState } from "./types";
+
+const defaultToolId = TOOL_DEFINITIONS[0]?.id ?? "wall";
+
+function formatHotkey(code: string) {
+  if (code.startsWith("Digit")) {
+    return code.slice(5);
+  }
+  if (code.startsWith("Key")) {
+    return code.slice(3);
+  }
+  if (code.startsWith("Numpad")) {
+    return `Num${code.slice(6)}`;
+  }
+  if (code.endsWith("Arrow")) {
+    return code.replace("Arrow", "");
+  }
+  if (code === "ShiftLeft" || code === "ShiftRight") {
+    return "Shift";
+  }
+  return code;
+}
 
 export function ShipBuilderCanvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<PlacementController | null>(null);
   const [placementState, setPlacementState] = useState<PlacementState>({
-    mode: "wall",
-    rotation: 0,
-    lampColorIndex: 0,
+    activeToolId: defaultToolId,
   });
 
   useEffect(() => {
@@ -23,7 +43,7 @@ export function ShipBuilderCanvas() {
     }
 
     const sceneContext = createSceneContext(canvas);
-    const ghostSet = createGhostSet(sceneContext.scene);
+    const ghost = createGhostHost();
     const shadowNetwork = createShadowNetwork(
       sceneContext.structuralLamps.map((lamp) => lamp.shadow),
     );
@@ -38,7 +58,7 @@ export function ShipBuilderCanvas() {
       scene: sceneContext.scene,
       canvas,
       camera: sceneContext.camera,
-      ghostSet,
+      ghost,
       shadowNetwork,
       initialLamps: sceneContext.structuralLamps,
     });
@@ -76,22 +96,23 @@ export function ShipBuilderCanvas() {
       unsubscribePlacement();
       placementController.dispose();
       controllerRef.current = null;
-      ghostSet.dispose();
+      ghost.dispose();
       shadowNetwork.dispose();
       sceneContext.dispose();
       cancelAnimationFrame(statsHandle);
     };
   }, []);
 
-  const handleModeClick = (mode: PlacementMode) => () => {
-    controllerRef.current?.setMode(mode);
+  const handleToolClick = (toolId: string) => () => {
+    controllerRef.current?.setActiveTool(toolId);
   };
 
-  const toolbarItems: Array<{ mode: PlacementMode; label: string; hint: string; icon: string }> = [
-    { mode: "wall", label: "Parede", hint: "1", icon: "▭" },
-    { mode: "lamp", label: "Lâmpada", hint: "2", icon: "◎" },
-    { mode: "delete", label: "Remover", hint: "3", icon: "✖" },
-  ];
+  const toolbarItems = TOOL_DEFINITIONS.map((tool) => ({
+    id: tool.id,
+    label: tool.label,
+    hint: formatHotkey(tool.hotkey),
+    icon: tool.icon,
+  }));
 
   return (
     <div
@@ -126,12 +147,12 @@ export function ShipBuilderCanvas() {
         }}
       >
         {toolbarItems.map((item) => {
-          const isActive = placementState.mode === item.mode;
+          const isActive = placementState.activeToolId === item.id;
           return (
             <button
-              key={item.mode}
+              key={item.id}
               type="button"
-              onClick={handleModeClick(item.mode)}
+              onClick={handleToolClick(item.id)}
               style={{
                 display: "flex",
                 flexDirection: "column",
