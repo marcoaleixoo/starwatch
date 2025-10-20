@@ -3,15 +3,14 @@ import {
   Color4,
   Engine,
   GlowLayer,
-  Light,
   Mesh,
   MeshBuilder,
   Scene,
-  ShadowGenerator,
-  SpotLight,
-  StandardMaterial,
   UniversalCamera,
   Vector3,
+  PBRMaterial,
+  Texture,
+  StandardMaterial,
 } from "babylonjs";
 import { CAMERA_SETTINGS, GRID_SIZE, HULL_DIMENSIONS, INPUT_KEYS, WALL_DIMENSIONS } from "../constants";
 import type { BuilderLamp } from "../types";
@@ -19,6 +18,48 @@ import { createSurfaceRegistry } from "../placement/surfaces/surfaceRegistry";
 import type { SurfaceRegistry } from "../placement/surfaces/surfaceRegistry";
 import { FloorSurface } from "../placement/surfaces/floorSurface";
 import { WallSurface } from "../placement/surfaces/wallSurface";
+import { createRectAreaLamp } from "../lighting/rectAreaLamp";
+import armorAlbedoUrl from "../../assets/armor-plating1-bl/armor-plating1_albedo.png?url";
+import armorNormalUrl from "../../assets/armor-plating1-bl/armor-plating1_normal-ogl.png?url";
+import armorRoughnessUrl from "../../assets/armor-plating1-bl/armor-plating1_roughness.png?url";
+import armorMetallicUrl from "../../assets/armor-plating1-bl/armor-plating1_metallic.png?url";
+import armorAoUrl from "../../assets/armor-plating1-bl/armor-plating1_ao.png?url";
+
+interface HangarTextureSet {
+  albedo: Texture;
+  normal: Texture;
+  roughness: Texture;
+  metallic: Texture;
+  ao: Texture;
+}
+
+const hangarTextureCache = new WeakMap<Scene, HangarTextureSet>();
+
+function createHangarTextureSet(scene: Scene): HangarTextureSet {
+  const albedo = new Texture(armorAlbedoUrl, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
+  const normal = new Texture(armorNormalUrl, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
+  const roughness = new Texture(armorRoughnessUrl, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
+  const metallic = new Texture(armorMetallicUrl, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
+  const ao = new Texture(armorAoUrl, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
+
+  [albedo, normal, roughness, metallic, ao].forEach((texture) => {
+    texture.wrapU = Texture.WRAP_ADDRESSMODE;
+    texture.wrapV = Texture.WRAP_ADDRESSMODE;
+  });
+  normal.invertZ = true;
+  normal.gammaSpace = false;
+
+  return { albedo, normal, roughness, metallic, ao };
+}
+
+function getHangarTextures(scene: Scene): HangarTextureSet {
+  let textures = hangarTextureCache.get(scene);
+  if (!textures) {
+    textures = createHangarTextureSet(scene);
+    hangarTextureCache.set(scene, textures);
+  }
+  return textures;
+}
 
 export interface SceneContext {
   engine: Engine;
@@ -146,7 +187,13 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
       structuralLamps.forEach((lamp) => {
         lamp.shadow.dispose();
         lamp.light.dispose();
+        lamp.areaLight?.dispose();
         lamp.fillLight?.dispose();
+        lamp.auxiliaryLights?.forEach((aux) => aux.dispose());
+        if (lamp.gi) {
+          lamp.gi.solution.dispose();
+          lamp.gi.rsm.dispose();
+        }
         lamp.mesh.dispose(false, true);
       });
       surfaceRegistry.dispose();
@@ -186,11 +233,30 @@ function createHangarFloor(scene: Scene): Mesh {
   floor.position.y = 0;
   floor.metadata = { type: "ship-foundation" };
 
-  const floorMaterial = new StandardMaterial("floor-mat", scene);
-  floorMaterial.diffuseColor = new Color3(0.12, 0.14, 0.18);
-  floorMaterial.specularColor = new Color3(0.26, 0.29, 0.33);
-  floorMaterial.specularPower = 48;
-  floorMaterial.emissiveColor = new Color3(0.015, 0.02, 0.026);
+  const textures = getHangarTextures(scene);
+  const floorMaterial = new PBRMaterial("floor-pbr", scene);
+  const floorAlbedo = textures.albedo.clone();
+  const floorNormal = textures.normal.clone();
+  const floorMetallic = textures.metallic.clone();
+  const floorAO = textures.ao.clone();
+  const floorTileU = 4.2;
+  const floorTileV = 6.0;
+  [floorAlbedo, floorNormal, floorMetallic, floorAO].forEach((texture) => {
+    texture.uScale = floorTileU;
+    texture.vScale = floorTileV;
+  });
+  floorMaterial.albedoTexture = floorAlbedo;
+  floorMaterial.bumpTexture = floorNormal;
+  floorMaterial.metallicTexture = floorMetallic;
+  floorMaterial.ambientTexture = floorAO;
+  floorMaterial.ambientTextureStrength = 0.92;
+  floorMaterial.useAmbientInGrayScale = true;
+  floorMaterial.metallic = 0.42;
+  floorMaterial.roughness = 0.84;
+  floorMaterial.microSurface = 0.86;
+  floorMaterial.environmentIntensity = 0.72;
+  floorMaterial.specularIntensity = 1.1;
+  floorMaterial.backFaceCulling = true;
   floor.material = floorMaterial;
 
   return floor;
@@ -214,10 +280,29 @@ function createHangarCeiling(scene: Scene): Mesh {
   ceiling.rotation.x = Math.PI;
   ceiling.metadata = { type: "ship-foundation" };
 
-  const ceilingMaterial = new StandardMaterial("ceiling-mat", scene);
-  ceilingMaterial.diffuseColor = new Color3(0.14, 0.17, 0.22);
-  ceilingMaterial.specularColor = new Color3(0.16, 0.18, 0.23);
-  ceilingMaterial.specularPower = 34;
+  const textures = getHangarTextures(scene);
+  const ceilingMaterial = new PBRMaterial("ceiling-pbr", scene);
+  const albedo = textures.albedo.clone();
+  const normal = textures.normal.clone();
+  const metallic = textures.metallic.clone();
+  const ao = textures.ao.clone();
+  const tileU = 3.4;
+  const tileV = 5.0;
+  [albedo, normal, metallic, ao].forEach((texture) => {
+    texture.uScale = tileU;
+    texture.vScale = tileV;
+  });
+  ceilingMaterial.albedoTexture = albedo;
+  ceilingMaterial.bumpTexture = normal;
+  ceilingMaterial.metallicTexture = metallic;
+  ceilingMaterial.ambientTexture = ao;
+  ceilingMaterial.ambientTextureStrength = 0.85;
+  ceilingMaterial.useAmbientInGrayScale = true;
+  ceilingMaterial.metallic = 0.28;
+  ceilingMaterial.roughness = 0.9;
+  ceilingMaterial.microSurface = 0.78;
+  ceilingMaterial.environmentIntensity = 0.66;
+  ceilingMaterial.specularIntensity = 0.9;
   ceiling.material = ceilingMaterial;
 
   return ceiling;
@@ -284,13 +369,31 @@ function createHangarWall(
   wall.checkCollisions = true;
   wall.isPickable = true;
 
-  const material = new StandardMaterial(`${config.name}-mat`, scene);
-  material.diffuseColor = new Color3(0.09, 0.11, 0.15);
-  material.specularColor = new Color3(0.17, 0.21, 0.26);
-  material.specularPower = 36;
-  material.emissiveColor = new Color3(0.012, 0.018, 0.024);
-  material.backFaceCulling = false;
-  wall.material = material;
+  const textures = getHangarTextures(scene);
+  const wallMaterial = new PBRMaterial(`${config.name}-pbr`, scene);
+  const albedo = textures.albedo.clone();
+  const normal = textures.normal.clone();
+  const metallic = textures.metallic.clone();
+  const ao = textures.ao.clone();
+  const tileU = Math.max(config.size.width, config.size.height) * 0.9;
+  const tileV = config.size.height * 0.95;
+  [albedo, normal, metallic, ao].forEach((texture) => {
+    texture.uScale = tileU;
+    texture.vScale = tileV;
+  });
+  wallMaterial.albedoTexture = albedo;
+  wallMaterial.bumpTexture = normal;
+  wallMaterial.metallicTexture = metallic;
+  wallMaterial.ambientTexture = ao;
+  wallMaterial.ambientTextureStrength = 0.94;
+  wallMaterial.useAmbientInGrayScale = true;
+  wallMaterial.metallic = 0.36;
+  wallMaterial.roughness = 0.88;
+  wallMaterial.microSurface = 0.8;
+  wallMaterial.environmentIntensity = 0.7;
+  wallMaterial.specularIntensity = 1.0;
+  wallMaterial.backFaceCulling = false;
+  wall.material = wallMaterial;
 
   const inward = config.inward.clone().normalize();
   const up = Vector3.Up();
@@ -398,40 +501,49 @@ function createWallBandLamp(
   const fixtureMaterial = new StandardMaterial(`${config.name}-mat`, scene);
   fixtureMaterial.diffuseColor = config.color.scale(0.18);
   fixtureMaterial.specularColor = config.color.scale(0.26);
-  fixtureMaterial.emissiveColor = config.color.scale(1.2);
+  fixtureMaterial.emissiveColor = config.color.scale(1.12);
   fixtureMaterial.backFaceCulling = false;
   fixture.material = fixtureMaterial;
 
-  const direction = Vector3.Normalize(config.direction);
-  const light = new SpotLight(
-    `${config.name}-light`,
-    fixture.position.add(direction.scale(0.05)),
-    direction,
-    config.angle ?? Math.PI / 2.6,
-    1.05,
+  const forward = Vector3.Normalize(config.direction);
+  let right = Vector3.Cross(Vector3.Up(), forward);
+  if (right.lengthSquared() < 1e-4) {
+    right = new Vector3(1, 0, 0);
+  }
+  right.normalize();
+
+  const lamp = createRectAreaLamp({
+    name: config.name,
     scene,
-  );
-  light.diffuse = config.color;
-  light.specular = config.color.scale(0.32);
-  light.intensity = 1.85;
-  light.range = config.range;
-  light.falloffType = Light.FALLOFF_PHYSICAL;
-  light.shadowEnabled = true;
-  light.shadowMinZ = 0.1;
-  light.shadowMaxZ = config.range * 1.08;
-
-  const shadow = new ShadowGenerator(config.shadowMapSize ?? 640, light);
-  shadow.usePercentageCloserFiltering = true;
-  shadow.filteringQuality = ShadowGenerator.QUALITY_HIGH;
-  shadow.bias = 0.00055;
-  shadow.normalBias = 0.16;
-  shadow.darkness = 0.17;
-  shadow.frustumEdgeFalloff = 0.16;
-
-  return {
-    mesh: fixture,
-    light,
-    shadow,
-    key: config.name,
-  };
+    fixture,
+    position: fixture.position.clone(),
+    right,
+    up: Vector3.Up(),
+    forward,
+    areaSize: { width: config.span, height: config.thickness },
+    color: config.color,
+    range: config.range,
+    tilt: 0.4,
+    twoSided: true,
+    areaIntensity: 24,
+    shadowIntensity: 1.6,
+    ambientIntensity: 0.42,
+    ambientRangeMultiplier: 0.76,
+    ambientAttenuation: 0.58,
+    shadowAngle: config.angle ?? Math.PI / 2.3,
+    shadowMapSize: config.shadowMapSize ?? 1024,
+    shadowBias: 0.00048,
+    shadowNormalBias: 0.14,
+    areaOffset: config.depth * 0.45,
+    enableRsm: true,
+    rsmTextureSize: 256,
+    rsmNumSamples: 220,
+    rsmRadius: 0.24,
+    rsmIntensity: 0.26,
+    rsmEdgeCorrection: 0.09,
+    rsmRotateSample: true,
+    rsmNoiseFactor: 90,
+  });
+  lamp.key = config.name;
+  return lamp;
 }

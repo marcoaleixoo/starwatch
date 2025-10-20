@@ -231,7 +231,13 @@ export const lampToolDefinition: PlacementToolDefinition = {
         context.shadowNetwork.unregisterDynamic(entry.mesh);
         entry.shadow.dispose();
         entry.light.dispose();
+        entry.areaLight?.dispose();
         entry.fillLight?.dispose();
+        entry.auxiliaryLights?.forEach((aux) => aux.dispose());
+        if (entry.gi) {
+          entry.gi.solution.dispose();
+          entry.gi.rsm.dispose();
+        }
         entry.mesh.dispose(false, true);
         lamps.delete(metadata.key);
         return true;
@@ -247,7 +253,13 @@ export const lampToolDefinition: PlacementToolDefinition = {
           context.shadowNetwork.unregisterDynamic(lamp.mesh);
           lamp.shadow.dispose();
           lamp.light.dispose();
+          lamp.areaLight?.dispose();
           lamp.fillLight?.dispose();
+          lamp.auxiliaryLights?.forEach((aux) => aux.dispose());
+          if (lamp.gi) {
+            lamp.gi.solution.dispose();
+            lamp.gi.rsm.dispose();
+          }
           lamp.mesh.dispose(false, true);
         });
         lamps.clear();

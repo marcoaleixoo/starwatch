@@ -1,4 +1,14 @@
-import type { AbstractMesh, Mesh, PointLight, ShadowGenerator, SpotLight, Vector3 } from "babylonjs";
+import type {
+  AbstractMesh,
+  GIRSM,
+  Light,
+  Mesh,
+  RectAreaLight,
+  ReflectiveShadowMap,
+  ShadowGenerator,
+  ShadowLight,
+  Vector3,
+} from "babylonjs";
 
 export interface BuilderWall {
   mesh: Mesh;
@@ -7,9 +17,15 @@ export interface BuilderWall {
 
 export interface BuilderLamp {
   mesh: Mesh;
-  light: SpotLight;
+  light: ShadowLight;
   shadow: ShadowGenerator;
-  fillLight?: PointLight;
+  areaLight?: RectAreaLight;
+  fillLight?: Light;
+  auxiliaryLights?: Light[];
+  gi?: {
+    rsm: ReflectiveShadowMap;
+    solution: GIRSM;
+  };
   key: string;
 }
 

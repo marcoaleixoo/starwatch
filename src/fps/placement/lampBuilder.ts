@@ -1,6 +1,7 @@
-import { Color3, Light, Matrix, MeshBuilder, PointLight, Quaternion, Scene, ShadowGenerator, SpotLight, StandardMaterial, Vector3 } from "babylonjs";
+import { Color3, Matrix, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector3 } from "babylonjs";
 import { LAMP_COLOR_PALETTE, WALL_LAMP_PLACEMENT } from "../constants";
 import type { BuilderLamp, WallLampPlacement } from "../types";
+import { createRectAreaLamp } from "../lighting/rectAreaLamp";
 
 export function nextLampColor(index: number) {
   return LAMP_COLOR_PALETTE[index % LAMP_COLOR_PALETTE.length];
@@ -22,12 +23,17 @@ export function createLamp(scene: Scene, placement: WallLampPlacement, color: Co
     scene,
   );
 
+  const forwardDir = placement.forward.clone();
+  const upDir = placement.up.clone();
+  const rightDir = placement.right.clone();
+
   const basis = new Matrix();
-  Matrix.FromXYZAxesToRef(placement.right, placement.up, placement.forward, basis);
+  Matrix.FromXYZAxesToRef(rightDir, upDir, forwardDir, basis);
   const rotation = Quaternion.FromRotationMatrix(basis);
 
   fixture.rotationQuaternion = rotation;
-  fixture.position = placement.position.clone();
+  const anchoredPosition = placement.position.clone();
+  fixture.position = anchoredPosition;
   fixture.isPickable = true;
   fixture.checkCollisions = false;
 
@@ -41,52 +47,38 @@ export function createLamp(scene: Scene, placement: WallLampPlacement, color: Co
   const lampKeyValue = lampKey(placement);
   fixture.metadata = { toolId: "lamp", key: lampKeyValue };
 
-  const tiltDirection = Vector3.Normalize(
-    placement.forward.scale(1).add(placement.up.scale(-WALL_LAMP_PLACEMENT.tilt)),
-  );
-
-  const light = new SpotLight(
-    `lamp-light-${Date.now()}`,
-    placement.position.clone(),
-    tiltDirection,
-    Math.PI / 2.45,
-    1.05,
+  const lamp = createRectAreaLamp({
+    name: `lamp-${lampKeyValue}`,
     scene,
-  );
-  light.diffuse = color;
-  light.specular = color.scale(0.32);
-  light.intensity = WALL_LAMP_PLACEMENT.intensity;
-  light.falloffType = Light.FALLOFF_PHYSICAL;
-  light.range = WALL_LAMP_PLACEMENT.range;
-  light.shadowEnabled = true;
-  light.shadowMinZ = 0.1;
-  light.shadowMaxZ = WALL_LAMP_PLACEMENT.range * 1.05;
-  light.parent = fixture;
-
-  const fillLight = new PointLight(
-    `lamp-fill-${Date.now()}`,
-    placement.position.clone(),
-    scene,
-  );
-  fillLight.diffuse = color.scale(0.52);
-  fillLight.specular = color.scale(0.12);
-  fillLight.intensity = WALL_LAMP_PLACEMENT.intensity * 0.22;
-  fillLight.range = WALL_LAMP_PLACEMENT.range * 0.75;
-  fillLight.parent = fixture;
-
-  const shadow = new ShadowGenerator(WALL_LAMP_PLACEMENT.shadowMapSize, light);
-  shadow.usePercentageCloserFiltering = true;
-  shadow.filteringQuality = ShadowGenerator.QUALITY_HIGH;
-  shadow.bias = 0.00052;
-  shadow.normalBias = 0.16;
-  shadow.darkness = 0.18;
-  shadow.frustumEdgeFalloff = 0.14;
-
-  return {
-    mesh: fixture,
-    light,
-    shadow,
-    fillLight,
-    key: lampKeyValue,
-  };
+    fixture,
+    position: anchoredPosition.clone(),
+    right: rightDir,
+    up: upDir,
+    forward: forwardDir,
+    areaSize: { width: WALL_LAMP_PLACEMENT.width, height: WALL_LAMP_PLACEMENT.height },
+    color,
+    range: WALL_LAMP_PLACEMENT.range,
+    tilt: WALL_LAMP_PLACEMENT.tilt,
+    twoSided: true,
+    areaIntensity: WALL_LAMP_PLACEMENT.intensity * 8,
+    shadowIntensity: WALL_LAMP_PLACEMENT.intensity,
+    ambientIntensity: WALL_LAMP_PLACEMENT.intensity * 0.28,
+    ambientRangeMultiplier: 0.7,
+    ambientAttenuation: 0.52,
+    shadowAngle: Math.PI / 2.35,
+    shadowMapSize: WALL_LAMP_PLACEMENT.shadowMapSize,
+    shadowBias: 0.0005,
+    shadowNormalBias: 0.15,
+    areaOffset: WALL_LAMP_PLACEMENT.depth * 0.42,
+    enableRsm: true,
+    rsmTextureSize: 192,
+    rsmNumSamples: 160,
+    rsmRadius: 0.18,
+    rsmIntensity: 0.22,
+    rsmEdgeCorrection: 0.1,
+    rsmNoiseFactor: 70,
+  });
+  lamp.key = lampKeyValue;
+  lamp.mesh.metadata = { toolId: "lamp", key: lampKeyValue };
+  return lamp;
 }
