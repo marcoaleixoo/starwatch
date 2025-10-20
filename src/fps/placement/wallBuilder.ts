@@ -41,6 +41,7 @@ export function createWall(scene: Scene, position: Vector3, rotation: number): B
   wallMesh.position = position.clone();
   wallMesh.rotation.y = degreesToRadians(rotation);
   wallMesh.checkCollisions = true;
+  wallMesh.receiveShadows = true;
 
   const armorTextures = getHangarTextureSet(scene, "armor");
   const material = new PBRMaterial(`builder-wall-pbr-${Date.now()}`, scene);
@@ -54,7 +55,8 @@ export function createWall(scene: Scene, position: Vector3, rotation: number): B
   material.microSurface = 0.8;
   material.environmentIntensity = 0.7;
   material.specularIntensity = 1.0;
-  material.backFaceCulling = false;
+  material.backFaceCulling = true;
+  material.twoSidedLighting = false;
   material.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
   wallMesh.material = material;
 

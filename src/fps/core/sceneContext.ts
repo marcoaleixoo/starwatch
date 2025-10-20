@@ -347,7 +347,8 @@ function createHangarWall(
   wallMaterial.microSurface = 0.8;
   wallMaterial.environmentIntensity = 0.7;
   wallMaterial.specularIntensity = 1.0;
-  wallMaterial.backFaceCulling = false;
+  wallMaterial.backFaceCulling = true;
+  wallMaterial.twoSidedLighting = false;
   wallMaterial.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
   wall.material = wallMaterial;
 
@@ -494,7 +495,7 @@ function createWallBandLamp(
     color: config.color,
     range: config.range,
     tilt: 0.4,
-    twoSided: true,
+    twoSided: false,
     areaIntensity: 24,
     shadowIntensity: 1.6,
     ambientIntensity: 0.42,
@@ -502,8 +503,9 @@ function createWallBandLamp(
     ambientAttenuation: 0.58,
     shadowAngle: config.angle ?? Math.PI / 2.3,
     shadowMapSize: config.shadowMapSize ?? 1024,
-    shadowBias: 0.00048,
-    shadowNormalBias: 0.14,
+    shadowBias: 0.0005,
+    shadowNormalBias: 0.02,
+    forceBackFacesOnly: false,
     areaOffset: config.depth * 0.45,
     enableRsm: true,
     rsmTextureSize: 256,

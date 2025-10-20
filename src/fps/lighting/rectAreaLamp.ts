@@ -40,6 +40,7 @@ export interface RectAreaLampOptions {
   shadowMapSize?: number;
   shadowBias?: number;
   shadowNormalBias?: number;
+  forceBackFacesOnly?: boolean;
   areaOffset?: number;
   enableRsm?: boolean;
   rsmTextureSize?: number;
@@ -53,6 +54,9 @@ export interface RectAreaLampOptions {
 }
 
 const DEFAULT_AREA_OFFSET = 0.015;
+const DEFAULT_SHADOW_BIAS = 0.0005;
+const DEFAULT_SHADOW_NORMAL_BIAS = 0.02;
+const DEFAULT_FORCE_BACK_FACES_ONLY = false;
 
 function safeOrthonormalBasis(forward: Vector3, upHint: Vector3, rightHint: Vector3) {
   const forwardNorm = forward.clone();
@@ -95,8 +99,9 @@ export function createRectAreaLamp(options: RectAreaLampOptions): BuilderLamp {
     ambientAttenuation = 0.6,
     shadowAngle = Math.PI / 2.15,
     shadowMapSize = 1024,
-    shadowBias = 0.00045,
-    shadowNormalBias = 0.12,
+    shadowBias = DEFAULT_SHADOW_BIAS,
+    shadowNormalBias = DEFAULT_SHADOW_NORMAL_BIAS,
+    forceBackFacesOnly = DEFAULT_FORCE_BACK_FACES_ONLY,
     areaOffset = DEFAULT_AREA_OFFSET,
     enableRsm = false,
     rsmTextureSize = 256,
@@ -165,7 +170,8 @@ export function createRectAreaLamp(options: RectAreaLampOptions): BuilderLamp {
   shadow.usePercentageCloserFiltering = true;
   shadow.filteringQuality = ShadowGenerator.QUALITY_HIGH;
   shadow.bias = shadowBias;
-  shadow.normalBias = shadowNormalBias;
+  shadow.normalBias = Math.min(Math.max(shadowNormalBias, 0), 0.1);
+  shadow.forceBackFacesOnly = forceBackFacesOnly;
   shadow.contactHardeningLightSizeUVRatio = 0.28;
   shadow.darkness = 0.18;
   shadow.frustumEdgeFalloff = 0.18;
