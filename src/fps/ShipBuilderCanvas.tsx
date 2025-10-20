@@ -208,12 +208,12 @@ export function ShipBuilderCanvas() {
           fontFamily: "monospace",
           fontSize: "12px",
           lineHeight: "16px",
-          whiteSpace: "pre",
           borderRadius: 8,
           border: "1px solid rgba(95, 136, 180, 0.45)",
           pointerEvents: "none",
           boxShadow: "0 4px 20px rgba(0, 0, 0, 0.35)",
           textShadow: "0 0 6px rgba(40, 132, 210, 0.4)",
+          whiteSpace: "pre",
         }}
       />
     </div>

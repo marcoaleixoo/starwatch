@@ -1,8 +1,9 @@
-import { Color3, Matrix, MeshBuilder, StandardMaterial, Vector3 } from "babylonjs";
+import { Matrix, MeshBuilder, PBRMaterial, Vector3 } from "babylonjs";
 import type { Scene } from "babylonjs";
-import { GRID_SIZE, HULL_DIMENSIONS, WALL_DIMENSIONS } from "../constants";
+import { GRID_SIZE, HULL_DIMENSIONS, WALL_DIMENSIONS, LIGHTING_LIMITS } from "../constants";
 import type { BuilderWall } from "../types";
 import { clamp, degreesToRadians } from "../utils/math";
+import { applyHangarTextures, disposeHangarMaterial, getHangarTextureSet } from "../core/hangarTextures";
 
 export function snapWallPosition(point: Vector3) {
   const halfWidth = HULL_DIMENSIONS.width / 2 - WALL_DIMENSIONS.width / 2;
@@ -41,11 +42,20 @@ export function createWall(scene: Scene, position: Vector3, rotation: number): B
   wallMesh.rotation.y = degreesToRadians(rotation);
   wallMesh.checkCollisions = true;
 
-  const material = new StandardMaterial(`builder-wall-mat-${Date.now()}`, scene);
-  material.diffuseColor = new Color3(0.72, 0.74, 0.78);
-  material.specularColor = new Color3(0.24, 0.26, 0.28);
-  material.emissiveColor = new Color3(0.08, 0.1, 0.12);
+  const armorTextures = getHangarTextureSet(scene, "armor");
+  const material = new PBRMaterial(`builder-wall-pbr-${Date.now()}`, scene);
+  const tileU = Math.max(WALL_DIMENSIONS.width, WALL_DIMENSIONS.height) * 0.9;
+  const tileV = WALL_DIMENSIONS.height * 0.95;
+  applyHangarTextures(material, armorTextures, { u: tileU, v: tileV });
+  material.ambientTextureStrength = 0.94;
+  material.useAmbientInGrayScale = true;
+  material.metallic = 0.36;
+  material.roughness = 0.88;
+  material.microSurface = 0.8;
+  material.environmentIntensity = 0.7;
+  material.specularIntensity = 1.0;
   material.backFaceCulling = false;
+  material.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
   wallMesh.material = material;
 
   const key = wallKey(position, rotation);
@@ -60,7 +70,12 @@ export function createWall(scene: Scene, position: Vector3, rotation: number): B
       forward: inward.asArray(),
       up: up.asArray(),
     },
+    textureTiling: { u: tileU, v: tileV },
   };
+
+  wallMesh.onDisposeObservable.add(() => {
+    disposeHangarMaterial(material);
+  });
 
   return {
     mesh: wallMesh,

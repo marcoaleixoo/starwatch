@@ -9,57 +9,29 @@ import {
   UniversalCamera,
   Vector3,
   PBRMaterial,
-  Texture,
   StandardMaterial,
 } from "babylonjs";
-import { CAMERA_SETTINGS, GRID_SIZE, HULL_DIMENSIONS, INPUT_KEYS, WALL_DIMENSIONS } from "../constants";
+import {
+  CAMERA_SETTINGS,
+  GRID_SIZE,
+  HULL_DIMENSIONS,
+  INPUT_KEYS,
+  WALL_DIMENSIONS,
+  LIGHTING_LIMITS,
+} from "../constants";
 import type { BuilderLamp } from "../types";
 import { createSurfaceRegistry } from "../placement/surfaces/surfaceRegistry";
 import type { SurfaceRegistry } from "../placement/surfaces/surfaceRegistry";
 import { FloorSurface } from "../placement/surfaces/floorSurface";
 import { WallSurface } from "../placement/surfaces/wallSurface";
 import { createRectAreaLamp } from "../lighting/rectAreaLamp";
-import armorAlbedoUrl from "../../assets/armor-plating1-bl/armor-plating1_albedo.png?url";
-import armorNormalUrl from "../../assets/armor-plating1-bl/armor-plating1_normal-ogl.png?url";
-import armorRoughnessUrl from "../../assets/armor-plating1-bl/armor-plating1_roughness.png?url";
-import armorMetallicUrl from "../../assets/armor-plating1-bl/armor-plating1_metallic.png?url";
-import armorAoUrl from "../../assets/armor-plating1-bl/armor-plating1_ao.png?url";
-
-interface HangarTextureSet {
-  albedo: Texture;
-  normal: Texture;
-  roughness: Texture;
-  metallic: Texture;
-  ao: Texture;
-}
-
-const hangarTextureCache = new WeakMap<Scene, HangarTextureSet>();
-
-function createHangarTextureSet(scene: Scene): HangarTextureSet {
-  const albedo = new Texture(armorAlbedoUrl, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
-  const normal = new Texture(armorNormalUrl, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
-  const roughness = new Texture(armorRoughnessUrl, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
-  const metallic = new Texture(armorMetallicUrl, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
-  const ao = new Texture(armorAoUrl, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
-
-  [albedo, normal, roughness, metallic, ao].forEach((texture) => {
-    texture.wrapU = Texture.WRAP_ADDRESSMODE;
-    texture.wrapV = Texture.WRAP_ADDRESSMODE;
-  });
-  normal.invertZ = true;
-  normal.gammaSpace = false;
-
-  return { albedo, normal, roughness, metallic, ao };
-}
-
-function getHangarTextures(scene: Scene): HangarTextureSet {
-  let textures = hangarTextureCache.get(scene);
-  if (!textures) {
-    textures = createHangarTextureSet(scene);
-    hangarTextureCache.set(scene, textures);
-  }
-  return textures;
-}
+import {
+  applyHangarTextures,
+  disposeHangarMaterial,
+  disposeHangarTextureCache,
+  getHangarTextureSet,
+  type HangarTextureSet,
+} from "./hangarTextures";
 
 export interface SceneContext {
   engine: Engine;
@@ -79,6 +51,7 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
     stencil: true,
     doNotHandleContextLost: true,
   });
+  engine.disableUniformBuffers = true;
 
   const scene = new Scene(engine);
   scene.clearColor = new Color4(5 / 255, 6 / 255, 10 / 255, 1);
@@ -120,7 +93,13 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
   const glowLayer = new GlowLayer("hangar-glow", scene);
   glowLayer.intensity = 0.18;
 
-  const { floor, ceiling, walls } = buildHangar(scene);
+  const floorTextures = getHangarTextureSet(scene, "metal");
+  const wallTextures = getHangarTextureSet(scene, "armor");
+
+  const { floor, ceiling, walls } = buildHangar(scene, {
+    floor: floorTextures,
+    wall: wallTextures,
+  });
   const surfaceRegistry = createSurfaceRegistry();
   surfaceRegistry.register(
     new FloorSurface({
@@ -172,7 +151,7 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
   };
   window.addEventListener("resize", resize);
 
-  return {
+  const sceneContext: SceneContext = {
     engine,
     scene,
     camera,
@@ -197,10 +176,13 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
         lamp.mesh.dispose(false, true);
       });
       surfaceRegistry.dispose();
+      disposeHangarMaterials([floor, ceiling, ...walls]);
+      disposeHangarTextureCache(scene);
       scene.dispose();
       engine.dispose();
     },
   };
+  return sceneContext;
 }
 
 interface HangarAssets {
@@ -209,14 +191,20 @@ interface HangarAssets {
   walls: Mesh[];
 }
 
-function buildHangar(scene: Scene): HangarAssets {
-  const floor = createHangarFloor(scene);
-  const ceiling = createHangarCeiling(scene);
-  const walls = createHangarWalls(scene);
+function buildHangar(
+  scene: Scene,
+  textures: {
+    floor: HangarTextureSet;
+    wall: HangarTextureSet;
+  },
+): HangarAssets {
+  const floor = createHangarFloor(scene, textures.floor);
+  const ceiling = createHangarCeiling(scene, textures.floor);
+  const walls = createHangarWalls(scene, textures.wall);
   return { floor, ceiling, walls };
 }
 
-function createHangarFloor(scene: Scene): Mesh {
+function createHangarFloor(scene: Scene, textures: HangarTextureSet): Mesh {
   const subdivisionsX = Math.max(1, Math.round(HULL_DIMENSIONS.width / GRID_SIZE));
   const subdivisionsZ = Math.max(1, Math.round(HULL_DIMENSIONS.length / GRID_SIZE));
 
@@ -231,24 +219,10 @@ function createHangarFloor(scene: Scene): Mesh {
     scene,
   );
   floor.position.y = 0;
-  floor.metadata = { type: "ship-foundation" };
+  floor.metadata = { type: "ship-foundation", textureTiling: { u: 4.2, v: 6.0 } };
 
-  const textures = getHangarTextures(scene);
   const floorMaterial = new PBRMaterial("floor-pbr", scene);
-  const floorAlbedo = textures.albedo.clone();
-  const floorNormal = textures.normal.clone();
-  const floorMetallic = textures.metallic.clone();
-  const floorAO = textures.ao.clone();
-  const floorTileU = 4.2;
-  const floorTileV = 6.0;
-  [floorAlbedo, floorNormal, floorMetallic, floorAO].forEach((texture) => {
-    texture.uScale = floorTileU;
-    texture.vScale = floorTileV;
-  });
-  floorMaterial.albedoTexture = floorAlbedo;
-  floorMaterial.bumpTexture = floorNormal;
-  floorMaterial.metallicTexture = floorMetallic;
-  floorMaterial.ambientTexture = floorAO;
+  applyHangarTextures(floorMaterial, textures, (floor.metadata as { textureTiling: { u: number; v: number } }).textureTiling);
   floorMaterial.ambientTextureStrength = 0.92;
   floorMaterial.useAmbientInGrayScale = true;
   floorMaterial.metallic = 0.42;
@@ -257,12 +231,13 @@ function createHangarFloor(scene: Scene): Mesh {
   floorMaterial.environmentIntensity = 0.72;
   floorMaterial.specularIntensity = 1.1;
   floorMaterial.backFaceCulling = true;
+  floorMaterial.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
   floor.material = floorMaterial;
 
   return floor;
 }
 
-function createHangarCeiling(scene: Scene): Mesh {
+function createHangarCeiling(scene: Scene, textures: HangarTextureSet): Mesh {
   const subdivisionsX = Math.max(1, Math.round(HULL_DIMENSIONS.width / GRID_SIZE));
   const subdivisionsZ = Math.max(1, Math.round(HULL_DIMENSIONS.length / GRID_SIZE));
 
@@ -278,24 +253,14 @@ function createHangarCeiling(scene: Scene): Mesh {
   );
   ceiling.position.y = HULL_DIMENSIONS.height;
   ceiling.rotation.x = Math.PI;
-  ceiling.metadata = { type: "ship-foundation" };
+  ceiling.metadata = { type: "ship-foundation", textureTiling: { u: 3.4, v: 5.0 } };
 
-  const textures = getHangarTextures(scene);
   const ceilingMaterial = new PBRMaterial("ceiling-pbr", scene);
-  const albedo = textures.albedo.clone();
-  const normal = textures.normal.clone();
-  const metallic = textures.metallic.clone();
-  const ao = textures.ao.clone();
-  const tileU = 3.4;
-  const tileV = 5.0;
-  [albedo, normal, metallic, ao].forEach((texture) => {
-    texture.uScale = tileU;
-    texture.vScale = tileV;
-  });
-  ceilingMaterial.albedoTexture = albedo;
-  ceilingMaterial.bumpTexture = normal;
-  ceilingMaterial.metallicTexture = metallic;
-  ceilingMaterial.ambientTexture = ao;
+  applyHangarTextures(
+    ceilingMaterial,
+    textures,
+    (ceiling.metadata as { textureTiling: { u: number; v: number } }).textureTiling,
+  );
   ceilingMaterial.ambientTextureStrength = 0.85;
   ceilingMaterial.useAmbientInGrayScale = true;
   ceilingMaterial.metallic = 0.28;
@@ -303,36 +268,37 @@ function createHangarCeiling(scene: Scene): Mesh {
   ceilingMaterial.microSurface = 0.78;
   ceilingMaterial.environmentIntensity = 0.66;
   ceilingMaterial.specularIntensity = 0.9;
+  ceilingMaterial.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
   ceiling.material = ceilingMaterial;
 
   return ceiling;
 }
 
-function createHangarWalls(scene: Scene): Mesh[] {
+function createHangarWalls(scene: Scene, textures: HangarTextureSet): Mesh[] {
   const halfHeight = HULL_DIMENSIONS.height / 2;
   const thickness = WALL_DIMENSIONS.thickness;
 
   return [
-    createHangarWall(scene, {
+    createHangarWall(scene, textures, {
       name: "wall-north",
       size: { width: HULL_DIMENSIONS.width, height: HULL_DIMENSIONS.height, depth: thickness },
       position: new Vector3(0, halfHeight, -HULL_DIMENSIONS.length / 2),
       inward: new Vector3(0, 0, 1),
     }),
-    createHangarWall(scene, {
+    createHangarWall(scene, textures, {
       name: "wall-south",
       size: { width: HULL_DIMENSIONS.width, height: HULL_DIMENSIONS.height, depth: thickness },
       position: new Vector3(0, halfHeight, HULL_DIMENSIONS.length / 2),
       inward: new Vector3(0, 0, -1),
     }),
-    createHangarWall(scene, {
+    createHangarWall(scene, textures, {
       name: "wall-east",
       size: { width: HULL_DIMENSIONS.length, height: HULL_DIMENSIONS.height, depth: thickness },
       position: new Vector3(HULL_DIMENSIONS.width / 2, halfHeight, 0),
       rotationY: Math.PI / 2,
       inward: new Vector3(-1, 0, 0),
     }),
-    createHangarWall(scene, {
+    createHangarWall(scene, textures, {
       name: "wall-west",
       size: { width: HULL_DIMENSIONS.length, height: HULL_DIMENSIONS.height, depth: thickness },
       position: new Vector3(-HULL_DIMENSIONS.width / 2, halfHeight, 0),
@@ -344,6 +310,7 @@ function createHangarWalls(scene: Scene): Mesh[] {
 
 function createHangarWall(
   scene: Scene,
+  textures: HangarTextureSet,
   config: {
     name: string;
     size: { width: number; height: number; depth: number };
@@ -369,22 +336,10 @@ function createHangarWall(
   wall.checkCollisions = true;
   wall.isPickable = true;
 
-  const textures = getHangarTextures(scene);
   const wallMaterial = new PBRMaterial(`${config.name}-pbr`, scene);
-  const albedo = textures.albedo.clone();
-  const normal = textures.normal.clone();
-  const metallic = textures.metallic.clone();
-  const ao = textures.ao.clone();
   const tileU = Math.max(config.size.width, config.size.height) * 0.9;
   const tileV = config.size.height * 0.95;
-  [albedo, normal, metallic, ao].forEach((texture) => {
-    texture.uScale = tileU;
-    texture.vScale = tileV;
-  });
-  wallMaterial.albedoTexture = albedo;
-  wallMaterial.bumpTexture = normal;
-  wallMaterial.metallicTexture = metallic;
-  wallMaterial.ambientTexture = ao;
+  applyHangarTextures(wallMaterial, textures, { u: tileU, v: tileV });
   wallMaterial.ambientTextureStrength = 0.94;
   wallMaterial.useAmbientInGrayScale = true;
   wallMaterial.metallic = 0.36;
@@ -393,19 +348,33 @@ function createHangarWall(
   wallMaterial.environmentIntensity = 0.7;
   wallMaterial.specularIntensity = 1.0;
   wallMaterial.backFaceCulling = false;
+  wallMaterial.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
   wall.material = wallMaterial;
 
   const inward = config.inward.clone().normalize();
   const up = Vector3.Up();
+  const existingMetadata = (wall.metadata as Record<string, unknown>) ?? {};
   wall.metadata = {
+    ...existingMetadata,
     type: "ship-wall",
     lampOrientation: {
       forward: inward.asArray(),
       up: up.asArray(),
     },
+    textureTiling: { u: tileU, v: tileV },
   };
 
   return wall;
+}
+
+function disposeHangarMaterials(meshes: Mesh[]) {
+  meshes.forEach((mesh) => {
+    const material = mesh.material;
+    if (material instanceof PBRMaterial) {
+      disposeHangarMaterial(material);
+      material.dispose(false, true);
+    }
+  });
 }
 
 function createStructuralLamps(scene: Scene): BuilderLamp[] {
@@ -503,6 +472,7 @@ function createWallBandLamp(
   fixtureMaterial.specularColor = config.color.scale(0.26);
   fixtureMaterial.emissiveColor = config.color.scale(1.12);
   fixtureMaterial.backFaceCulling = false;
+  fixtureMaterial.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
   fixture.material = fixtureMaterial;
 
   const forward = Vector3.Normalize(config.direction);

@@ -90,6 +90,10 @@ export const WALL_LAMP_PLACEMENT = {
   range: 11,
 } as const;
 
+export const LIGHTING_LIMITS = {
+  maxSimultaneousLights: 24,
+} as const;
+
 export const SELECTION_OUTLINE_COLOR = new Color3(0.2, 0.65, 1);
 
 export const INTERACTION_RANGE = 16;

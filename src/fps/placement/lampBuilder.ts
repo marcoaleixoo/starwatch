@@ -1,5 +1,5 @@
 import { Color3, Matrix, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector3 } from "babylonjs";
-import { LAMP_COLOR_PALETTE, WALL_LAMP_PLACEMENT } from "../constants";
+import { LAMP_COLOR_PALETTE, WALL_LAMP_PLACEMENT, LIGHTING_LIMITS } from "../constants";
 import type { BuilderLamp, WallLampPlacement } from "../types";
 import { createRectAreaLamp } from "../lighting/rectAreaLamp";
 
@@ -42,6 +42,7 @@ export function createLamp(scene: Scene, placement: WallLampPlacement, color: Co
   material.specularColor = color.scale(0.24);
   material.emissiveColor = color.scale(1.18);
   material.backFaceCulling = false;
+  material.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
   fixture.material = material;
 
   const lampKeyValue = lampKey(placement);
