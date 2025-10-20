@@ -1,6 +1,8 @@
 import type { AbstractMesh, PointerInfo, Scene, UniversalCamera, Vector3 } from "babylonjs";
 import type { ShadowNetwork } from "../lighting/shadowNetwork";
 import type { GhostHost } from "./ghosts";
+import type { SurfaceRegistry } from "./surfaces/surfaceRegistry";
+import type { PlacementSolver } from "./placementSolver";
 
 export interface ToolMetadata {
   toolId: string;
@@ -13,6 +15,8 @@ export interface ToolRuntimeContext {
   canvas: HTMLCanvasElement;
   shadowNetwork: ShadowNetwork;
   ghost: GhostHost;
+  surfaceRegistry: SurfaceRegistry;
+  placementSolver: PlacementSolver;
   withinRange(point?: Vector3 | null): boolean;
   requestPointerLock(): void;
   highlight(mesh?: AbstractMesh | null): void;

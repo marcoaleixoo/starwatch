@@ -15,6 +15,10 @@ import {
 } from "babylonjs";
 import { CAMERA_SETTINGS, GRID_SIZE, HULL_DIMENSIONS, INPUT_KEYS, WALL_DIMENSIONS } from "../constants";
 import type { BuilderLamp } from "../types";
+import { createSurfaceRegistry } from "../placement/surfaces/surfaceRegistry";
+import type { SurfaceRegistry } from "../placement/surfaces/surfaceRegistry";
+import { FloorSurface } from "../placement/surfaces/floorSurface";
+import { WallSurface } from "../placement/surfaces/wallSurface";
 
 export interface SceneContext {
   engine: Engine;
@@ -24,6 +28,7 @@ export interface SceneContext {
   floor: Mesh;
   staticMeshes: Mesh[];
   structuralLamps: BuilderLamp[];
+  surfaceRegistry: SurfaceRegistry;
   dispose(): void;
 }
 
@@ -75,6 +80,34 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
   glowLayer.intensity = 0.18;
 
   const { floor, ceiling, walls } = buildHangar(scene);
+  const surfaceRegistry = createSurfaceRegistry();
+  surfaceRegistry.register(
+    new FloorSurface({
+      id: "hangar-floor",
+      mesh: floor,
+      up: Vector3.Up(),
+      forward: new Vector3(0, 0, 1),
+    }),
+  );
+  walls.forEach((wall) => {
+    const inward = new Vector3(-wall.position.x, 0, -wall.position.z);
+    if (inward.lengthSquared() < 1e-4) {
+      const normal = Vector3.TransformNormal(Vector3.Forward(), wall.getWorldMatrix());
+      inward.copyFrom(normal.scale(-1));
+      inward.y = 0;
+    }
+    if (inward.lengthSquared() < 1e-4) {
+      inward.copyFrom(Vector3.Forward());
+    }
+    surfaceRegistry.register(
+      new WallSurface({
+        id: wall.name ?? `wall-${wall.uniqueId}`,
+        mesh: wall,
+        inward,
+        up: Vector3.Up(),
+      }),
+    );
+  });
   const staticMeshes = [...walls, ceiling];
   floor.receiveShadows = true;
   floor.checkCollisions = true;
@@ -106,6 +139,7 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
     floor,
     staticMeshes,
     structuralLamps,
+    surfaceRegistry,
     dispose: () => {
       window.removeEventListener("resize", resize);
       glowLayer.dispose();
@@ -115,6 +149,7 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
         lamp.fillLight?.dispose();
         lamp.mesh.dispose(false, true);
       });
+      surfaceRegistry.dispose();
       scene.dispose();
       engine.dispose();
     },

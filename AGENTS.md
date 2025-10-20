@@ -9,7 +9,12 @@ Welcome aboard the Mad Dash Initiative. We rebuilt the project structure mid-fli
 ## Code Constellation
 - `src/` now hosts the new MVP:
   - `App.tsx`, `main.tsx` — minimal bootstrap for the builder prototype.
-  - `fps/ShipBuilderCanvas.tsx` — Babylon.js scene for first-person movement, grid snapping, wall placement/removal, and ghost previews.
+  - `fps/ShipBuilderCanvas.tsx` — Babylon.js scene for first-person movement, placement tooling, and HUD overlays.
+- Placement runtime highlights:
+  - `fps/core/sceneContext.ts` builds the hangar hull, registers static meshes, and now publishes a `SurfaceRegistry`.
+  - `fps/placement/surfaces/` defines pluggable surface adapters (`WallSurface`, `FloorSurface`, …); every pickable surface registers here with consistent normals, snap grids, and offsets.
+  - `fps/placement/placementSolver.ts` takes a tool profile (modes + constraints) and resolves placement frames from ray picks, so tools no longer manage Babylon math directly.
+  - Tools (e.g., `lampTool`, `wallTool`) receive the shared solver via `ToolRuntimeContext` and only worry about preview meshes and item lifecycles. Adding a new “crate” that lives on the floor (or multi-surface items) is now a matter of declaring allowed modes in the profile and registering the relevant surfaces.
 - `src/legacy/` shelters the previous React panels, HAL wiring, and Babylon scene (`game/`, `ui/`, `hal/`, plus old entry points). Use this when you need to reference assets or revive older features without polluting the new loop.
 - `dist/`, `docs/`, and `releases/` retain their original purposes; respect `.gitignore` for generated assets.
 

@@ -1,19 +1,37 @@
 import { AbstractMesh, Color3, Matrix, MeshBuilder, PointerEventTypes, Quaternion, StandardMaterial } from "babylonjs";
 import type { BuilderLamp, WallLampPlacement } from "../../types";
-import { INPUT_KEYS, LAMP_COLOR_PALETTE, WALL_LAMP_PLACEMENT } from "../../constants";
-import {
-  computeWallLampPlacement,
-  createLamp,
-  lampKey,
-  nextLampColor,
-} from "../lampBuilder";
+import { GRID_SIZE, INPUT_KEYS, LAMP_COLOR_PALETTE, WALL_LAMP_PLACEMENT } from "../../constants";
+import { createLamp, lampKey, nextLampColor } from "../lampBuilder";
 import type {
   PlacementToolDefinition,
   ToolMetadata,
   ToolRuntimeContext,
 } from "../placementTypes";
+import type { PlacementFrame } from "../surfaces/types";
+import type { PlacementProfile } from "../placementSolver";
 
 const TOOL_ID = "lamp";
+const LAMP_PROFILE: PlacementProfile = {
+  modes: [
+    {
+      mode: "wall-mount",
+      constraints: {
+        type: "wall-mount",
+        grid: GRID_SIZE,
+        itemSize: {
+          width: WALL_LAMP_PLACEMENT.width,
+          height: WALL_LAMP_PLACEMENT.height,
+          depth: WALL_LAMP_PLACEMENT.depth,
+        },
+        offset: WALL_LAMP_PLACEMENT.offset,
+        boundsPadding: {
+          horizontal: 0.06,
+          vertical: 0.08,
+        },
+      },
+    },
+  ],
+};
 
 function createPreviewMesh(context: ToolRuntimeContext) {
   const mesh = MeshBuilder.CreateBox(
@@ -53,6 +71,23 @@ const isLampSurface = (mesh?: AbstractMesh | null) => {
     return true;
   }
   return false;
+};
+
+const frameToLampPlacement = (frame: PlacementFrame): WallLampPlacement | null => {
+  if (frame.mode !== "wall-mount") {
+    return null;
+  }
+  return {
+    mesh: frame.mesh,
+    position: frame.position.clone(),
+    forward: frame.forward.clone(),
+    right: frame.right.clone(),
+    up: frame.up.clone(),
+    local: {
+      x: Number(frame.local.x.toFixed(3)),
+      y: Number(frame.local.y.toFixed(3)),
+    },
+  };
 };
 
 export const lampToolDefinition: PlacementToolDefinition = {
@@ -147,7 +182,8 @@ export const lampToolDefinition: PlacementToolDefinition = {
           return;
         }
 
-        const placement = computeWallLampPlacement(pick);
+        const frame = context.placementSolver.solve(LAMP_PROFILE, pick);
+        const placement = frame ? frameToLampPlacement(frame) : null;
         if (!placement) {
           updatePreview(null);
           return;
@@ -171,7 +207,8 @@ export const lampToolDefinition: PlacementToolDefinition = {
             if (!context.withinRange(pick?.pickedPoint)) {
               return null;
             }
-            return pick ? computeWallLampPlacement(pick) : null;
+            const frame = context.placementSolver.solve(LAMP_PROFILE, pick ?? null);
+            return frame ? frameToLampPlacement(frame) : null;
           })();
 
         if (!placement) {

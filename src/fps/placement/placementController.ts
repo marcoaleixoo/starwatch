@@ -12,6 +12,8 @@ import type { BuilderLamp, BuilderWall } from "../types";
 import type { GhostHost } from "./ghosts";
 import type { PlacementState, PlacementToolInstance, ToolMetadata, ToolRuntimeContext } from "./placementTypes";
 import { TOOL_DEFINITION_BY_ID, TOOL_DEFINITIONS } from "./tools";
+import type { SurfaceRegistry } from "./surfaces/surfaceRegistry";
+import { createPlacementSolver } from "./placementSolver";
 
 interface PlacementControllerOptions {
   scene: Scene;
@@ -19,6 +21,7 @@ interface PlacementControllerOptions {
   camera: UniversalCamera;
   ghost: GhostHost;
   shadowNetwork: ShadowNetwork;
+  surfaceRegistry: SurfaceRegistry;
   initialWalls?: BuilderWall[];
   initialLamps?: BuilderLamp[];
 }
@@ -31,9 +34,10 @@ export interface PlacementController {
 }
 
 export function createPlacementController(options: PlacementControllerOptions): PlacementController {
-  const { scene, canvas, camera, ghost, shadowNetwork } = options;
+  const { scene, canvas, camera, ghost, shadowNetwork, surfaceRegistry } = options;
   const initialWalls = options.initialWalls ?? [];
   const initialLamps = options.initialLamps ?? [];
+  const placementSolver = createPlacementSolver(surfaceRegistry);
 
   const defaultToolId = TOOL_DEFINITIONS[0]?.id ?? "wall";
 
@@ -108,6 +112,8 @@ export function createPlacementController(options: PlacementControllerOptions): 
     canvas,
     shadowNetwork,
     ghost,
+    surfaceRegistry,
+    placementSolver,
     withinRange,
     requestPointerLock: () => {
       if (document.pointerLockElement !== canvas) {

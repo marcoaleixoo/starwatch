@@ -14,6 +14,7 @@ import type {
   ToolMetadata,
   ToolRuntimeContext,
 } from "../placementTypes";
+import { WallSurface } from "../surfaces/wallSurface";
 
 const TOOL_ID = "wall";
 
@@ -80,9 +81,32 @@ export const wallToolDefinition: PlacementToolDefinition = {
       }
 
       const wall = createWall(context.scene, snapped, rotation);
-      wall.mesh.metadata = { toolId: TOOL_ID, key };
       walls.set(key, wall);
       context.shadowNetwork.registerDynamic(wall.mesh);
+
+      const surfaceId = `wall-${wall.mesh.uniqueId}`;
+      const inward = Vector3.TransformNormal(
+        Vector3.Forward(),
+        wall.mesh.computeWorldMatrix(true),
+      ).scale(-1);
+      inward.y = 0;
+      if (inward.lengthSquared() < 1e-4) {
+        inward.copyFrom(Vector3.Forward());
+      }
+      context.surfaceRegistry.register(
+        new WallSurface({
+          id: surfaceId,
+          mesh: wall.mesh,
+          inward,
+          up: Vector3.Up(),
+        }),
+      );
+      const metadata = wall.mesh.metadata as Record<string, unknown> | undefined;
+      if (metadata) {
+        metadata.surfaceId = surfaceId;
+      } else {
+        wall.mesh.metadata = { toolId: TOOL_ID, key, surfaceId };
+      }
     };
 
     const pickFloor = () =>
@@ -167,6 +191,7 @@ export const wallToolDefinition: PlacementToolDefinition = {
           return false;
         }
         context.shadowNetwork.unregisterDynamic(entry.mesh);
+        context.surfaceRegistry.unregister(entry.mesh);
         entry.mesh.dispose(false, true);
         walls.delete(metadata.key);
         if (mesh === preview) {
@@ -179,6 +204,7 @@ export const wallToolDefinition: PlacementToolDefinition = {
         preview.dispose(false, true);
         walls.forEach((wall) => {
           context.shadowNetwork.unregisterDynamic(wall.mesh);
+          context.surfaceRegistry.unregister(wall.mesh);
           wall.mesh.dispose(false, true);
         });
         walls.clear();

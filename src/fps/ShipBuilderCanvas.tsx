@@ -60,6 +60,7 @@ export function ShipBuilderCanvas() {
       camera: sceneContext.camera,
       ghost,
       shadowNetwork,
+      surfaceRegistry: sceneContext.surfaceRegistry,
       initialLamps: sceneContext.structuralLamps,
     });
     controllerRef.current = placementController;
