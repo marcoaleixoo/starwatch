@@ -1,4 +1,4 @@
-import { Color3, MeshBuilder, StandardMaterial, Vector3 } from "babylonjs";
+import { Color3, Matrix, MeshBuilder, StandardMaterial, Vector3 } from "babylonjs";
 import type { Scene } from "babylonjs";
 import { GRID_SIZE, HULL_DIMENSIONS, WALL_DIMENSIONS } from "../constants";
 import type { BuilderWall } from "../types";
@@ -49,7 +49,18 @@ export function createWall(scene: Scene, position: Vector3, rotation: number): B
   wallMesh.material = material;
 
   const key = wallKey(position, rotation);
-  wallMesh.metadata = { toolId: "wall", key };
+  const rotationMatrix = Matrix.RotationY(wallMesh.rotation.y);
+  const inward = Vector3.TransformNormal(Vector3.Forward(), rotationMatrix).scale(-1).normalize();
+  const up = Vector3.Up();
+
+  wallMesh.metadata = {
+    toolId: "wall",
+    key,
+    lampOrientation: {
+      forward: inward.asArray(),
+      up: up.asArray(),
+    },
+  };
 
   return {
     mesh: wallMesh,

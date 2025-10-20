@@ -21,7 +21,11 @@ export function computeWallLampPlacement(pick: PickingInfo): WallLampPlacement |
     return null;
   }
 
-  const metadata = mesh.metadata as { type?: string; toolId?: string } | undefined;
+  const metadata = mesh.metadata as {
+    type?: string;
+    toolId?: string;
+    lampOrientation?: { forward?: number[]; up?: number[] };
+  } | undefined;
   const type = metadata?.type;
   const toolId = metadata?.toolId;
   if (toolId !== "wall" && type !== "ship-wall") {
@@ -60,10 +64,48 @@ export function computeWallLampPlacement(pick: PickingInfo): WallLampPlacement |
   const axisY = Vector3.TransformNormal(LOCAL_UP, worldMatrix).normalize();
   const axisZ = Vector3.TransformNormal(Vector3.Forward(), worldMatrix).normalize();
 
-  const faceSign = localPoint.z >= 0 ? 1 : -1;
-  const forward = axisZ.scale(-faceSign).normalize();
-  const right = axisX.normalize();
-  const up = axisY.normalize();
+  const pickNormal = pick.getNormal(true);
+
+  let forward: Vector3 | null = null;
+  if (pickNormal && pickNormal.lengthSquared() > 1e-6) {
+    forward = pickNormal.clone().normalize();
+  } else if (metadata?.lampOrientation?.forward && metadata.lampOrientation.forward.length === 3) {
+    forward = Vector3.FromArray(metadata.lampOrientation.forward).normalize();
+  } else {
+    const faceSign = localPoint.z >= 0 ? 1 : -1;
+    forward = axisZ.scale(-faceSign).normalize();
+  }
+
+  // Ensure forward points toward the player (opposite to ray direction) when possible.
+  if (pick.ray && Vector3.Dot(forward, pick.ray.direction) > 0) {
+    forward = forward.scale(-1);
+  }
+
+  let up: Vector3;
+  if (metadata?.lampOrientation?.up && metadata.lampOrientation.up.length === 3) {
+    up = Vector3.FromArray(metadata.lampOrientation.up).normalize();
+  } else {
+    up = axisY.clone();
+  }
+
+  if (Math.abs(Vector3.Dot(up, forward)) > 0.85) {
+    up = axisX.clone();
+  }
+
+  let right = Vector3.Cross(up, forward);
+  if (right.lengthSquared() < 1e-6) {
+    right = Vector3.Cross(forward, axisZ);
+  }
+  if (right.lengthSquared() < 1e-6) {
+    right = axisX.clone();
+  }
+  right.normalize();
+
+  up = Vector3.Cross(forward, right);
+  if (up.lengthSquared() < 1e-6) {
+    up = axisY.clone();
+  }
+  up.normalize();
 
   const depthOffset = WALL_LAMP_PLACEMENT.depth / 2 + WALL_LAMP_PLACEMENT.offset;
   const position = baseWorld.add(forward.scale(depthOffset));

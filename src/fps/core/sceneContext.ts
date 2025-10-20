@@ -74,7 +74,8 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
   const glowLayer = new GlowLayer("hangar-glow", scene);
   glowLayer.intensity = 0.18;
 
-  const { floor, staticMeshes } = buildHangar(scene);
+  const { floor, ceiling, walls } = buildHangar(scene);
+  const staticMeshes = [...walls, ceiling];
   floor.receiveShadows = true;
   floor.checkCollisions = true;
   staticMeshes.forEach((mesh) => {
@@ -120,17 +121,30 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
   };
 }
 
-function buildHangar(scene: Scene) {
-  const floorSubdivisionsX = Math.max(1, Math.round(HULL_DIMENSIONS.width / GRID_SIZE));
-  const floorSubdivisionsZ = Math.max(1, Math.round(HULL_DIMENSIONS.length / GRID_SIZE));
+interface HangarAssets {
+  floor: Mesh;
+  ceiling: Mesh;
+  walls: Mesh[];
+}
+
+function buildHangar(scene: Scene): HangarAssets {
+  const floor = createHangarFloor(scene);
+  const ceiling = createHangarCeiling(scene);
+  const walls = createHangarWalls(scene);
+  return { floor, ceiling, walls };
+}
+
+function createHangarFloor(scene: Scene): Mesh {
+  const subdivisionsX = Math.max(1, Math.round(HULL_DIMENSIONS.width / GRID_SIZE));
+  const subdivisionsZ = Math.max(1, Math.round(HULL_DIMENSIONS.length / GRID_SIZE));
 
   const floor = MeshBuilder.CreateGround(
     "hangar-floor",
     {
       width: HULL_DIMENSIONS.width,
       height: HULL_DIMENSIONS.length,
-      subdivisionsX: floorSubdivisionsX,
-      subdivisionsY: floorSubdivisionsZ,
+      subdivisionsX,
+      subdivisionsY: subdivisionsZ,
     },
     scene,
   );
@@ -144,46 +158,20 @@ function buildHangar(scene: Scene) {
   floorMaterial.emissiveColor = new Color3(0.015, 0.02, 0.026);
   floor.material = floorMaterial;
 
-  const walls = [
-    createHullWall(scene, {
-      name: "wall-north",
-      width: HULL_DIMENSIONS.width,
-      height: HULL_DIMENSIONS.height,
-      depth: WALL_DIMENSIONS.thickness,
-      position: new Vector3(0, HULL_DIMENSIONS.height / 2, -HULL_DIMENSIONS.length / 2),
-    }),
-    createHullWall(scene, {
-      name: "wall-south",
-      width: HULL_DIMENSIONS.width,
-      height: HULL_DIMENSIONS.height,
-      depth: WALL_DIMENSIONS.thickness,
-      position: new Vector3(0, HULL_DIMENSIONS.height / 2, HULL_DIMENSIONS.length / 2),
-    }),
-    createHullWall(scene, {
-      name: "wall-east",
-      width: HULL_DIMENSIONS.length,
-      height: HULL_DIMENSIONS.height,
-      depth: WALL_DIMENSIONS.thickness,
-      position: new Vector3(HULL_DIMENSIONS.width / 2, HULL_DIMENSIONS.height / 2, 0),
-      rotationY: Math.PI / 2,
-    }),
-    createHullWall(scene, {
-      name: "wall-west",
-      width: HULL_DIMENSIONS.length,
-      height: HULL_DIMENSIONS.height,
-      depth: WALL_DIMENSIONS.thickness,
-      position: new Vector3(-HULL_DIMENSIONS.width / 2, HULL_DIMENSIONS.height / 2, 0),
-      rotationY: Math.PI / 2,
-    }),
-  ];
+  return floor;
+}
+
+function createHangarCeiling(scene: Scene): Mesh {
+  const subdivisionsX = Math.max(1, Math.round(HULL_DIMENSIONS.width / GRID_SIZE));
+  const subdivisionsZ = Math.max(1, Math.round(HULL_DIMENSIONS.length / GRID_SIZE));
 
   const ceiling = MeshBuilder.CreateGround(
     "hangar-ceiling",
     {
       width: HULL_DIMENSIONS.width,
       height: HULL_DIMENSIONS.length,
-      subdivisionsX: floorSubdivisionsX,
-      subdivisionsY: floorSubdivisionsZ,
+      subdivisionsX,
+      subdivisionsY: subdivisionsZ,
     },
     scene,
   );
@@ -197,48 +185,87 @@ function buildHangar(scene: Scene) {
   ceilingMaterial.specularPower = 34;
   ceiling.material = ceilingMaterial;
 
-  return {
-    floor,
-    staticMeshes: [...walls, ceiling],
-  };
+  return ceiling;
 }
 
-function createHullWall(
+function createHangarWalls(scene: Scene): Mesh[] {
+  const halfHeight = HULL_DIMENSIONS.height / 2;
+  const thickness = WALL_DIMENSIONS.thickness;
+
+  return [
+    createHangarWall(scene, {
+      name: "wall-north",
+      size: { width: HULL_DIMENSIONS.width, height: HULL_DIMENSIONS.height, depth: thickness },
+      position: new Vector3(0, halfHeight, -HULL_DIMENSIONS.length / 2),
+      inward: new Vector3(0, 0, 1),
+    }),
+    createHangarWall(scene, {
+      name: "wall-south",
+      size: { width: HULL_DIMENSIONS.width, height: HULL_DIMENSIONS.height, depth: thickness },
+      position: new Vector3(0, halfHeight, HULL_DIMENSIONS.length / 2),
+      inward: new Vector3(0, 0, -1),
+    }),
+    createHangarWall(scene, {
+      name: "wall-east",
+      size: { width: HULL_DIMENSIONS.length, height: HULL_DIMENSIONS.height, depth: thickness },
+      position: new Vector3(HULL_DIMENSIONS.width / 2, halfHeight, 0),
+      rotationY: Math.PI / 2,
+      inward: new Vector3(-1, 0, 0),
+    }),
+    createHangarWall(scene, {
+      name: "wall-west",
+      size: { width: HULL_DIMENSIONS.length, height: HULL_DIMENSIONS.height, depth: thickness },
+      position: new Vector3(-HULL_DIMENSIONS.width / 2, halfHeight, 0),
+      rotationY: Math.PI / 2,
+      inward: new Vector3(1, 0, 0),
+    }),
+  ];
+}
+
+function createHangarWall(
   scene: Scene,
-  options: {
+  config: {
     name: string;
-    width: number;
-    height: number;
-    depth: number;
+    size: { width: number; height: number; depth: number };
     position: Vector3;
+    inward: Vector3;
     rotationY?: number;
   },
-) {
+): Mesh {
   const wall = MeshBuilder.CreateBox(
-    options.name,
+    config.name,
     {
-      width: options.width,
-      height: options.height,
-      depth: options.depth,
+      width: config.size.width,
+      height: config.size.height,
+      depth: config.size.depth,
     },
     scene,
   );
 
-  wall.position = options.position;
-  if (options.rotationY !== undefined) {
-    wall.rotation.y = options.rotationY;
+  wall.position = config.position.clone();
+  if (typeof config.rotationY === "number") {
+    wall.rotation.y = config.rotationY;
   }
+  wall.checkCollisions = true;
+  wall.isPickable = true;
 
-  const material = new StandardMaterial(`${options.name}-mat`, scene);
+  const material = new StandardMaterial(`${config.name}-mat`, scene);
   material.diffuseColor = new Color3(0.09, 0.11, 0.15);
   material.specularColor = new Color3(0.17, 0.21, 0.26);
   material.specularPower = 36;
   material.emissiveColor = new Color3(0.012, 0.018, 0.024);
   material.backFaceCulling = false;
   wall.material = material;
-  wall.metadata = { type: "ship-wall" };
 
-  createWindowCutout(scene, wall, options);
+  const inward = config.inward.clone().normalize();
+  const up = Vector3.Up();
+  wall.metadata = {
+    type: "ship-wall",
+    lampOrientation: {
+      forward: inward.asArray(),
+      up: up.asArray(),
+    },
+  };
 
   return wall;
 }
@@ -372,36 +399,4 @@ function createWallBandLamp(
     shadow,
     key: config.name,
   };
-}
-function createWindowCutout(
-  scene: Scene,
-  wall: Mesh,
-  options: {
-    width: number;
-    height: number;
-  },
-) {
-  if (options.width < 8) {
-    return;
-  }
-
-  const windowWidth = options.width * 0.35;
-  const windowHeight = options.height * 0.3;
-
-  const window = MeshBuilder.CreatePlane(
-    `${wall.name}-window`,
-    {
-      width: windowWidth,
-      height: windowHeight,
-    },
-    scene,
-  );
-
-  window.parent = wall;
-  window.position = new Vector3(0, windowHeight, 0.21);
-
-  const material = new StandardMaterial(`${wall.name}-window-mat`, scene);
-  material.emissiveColor = new Color3(0.2, 0.45, 0.75);
-  material.alpha = 0.55;
-  window.material = material;
 }
