@@ -14,6 +14,7 @@ import { PlayerStore } from "./state/playerStore";
 import { createPlayerPersistence, loadPlayerState } from "./state/playerPersistence";
 import { registerBaselinePlayerModules } from "./state/playerModules";
 import type { BuilderLamp } from "./types";
+import { serializeColor, serializeQuaternion, serializeVector3 } from "./state/shipState";
 
 const defaultToolId = TOOL_DEFINITIONS[0]?.id ?? "wall";
 
@@ -83,15 +84,52 @@ export function ShipBuilderCanvas() {
     };
 
     const sceneContext = createSceneContext(canvas);
-    const structuralLamps = sceneContext.structuralLamps.filter((lamp) => {
-      if (!lamp.key) {
-        return true;
+    const structuralLamps: BuilderLamp[] = [];
+    sceneContext.structuralLamps.forEach((lamp) => {
+      const key = lamp.key;
+      if (!key) {
+        structuralLamps.push(lamp);
+        return;
       }
-      if (!shipStore.isStructuralLampRemoved(lamp.key)) {
-        return true;
+
+      const currentSnapshot = shipStore.getSnapshot();
+      const existing = currentSnapshot.lamps[key];
+      const local = lamp.local ?? { x: 0, y: 0, z: 0 };
+
+      if (!existing) {
+        shipStore.upsertLamp({
+          id: key,
+          anchorSurfaceId: lamp.anchorSurfaceId,
+          position: serializeVector3(lamp.mesh.position.x, lamp.mesh.position.y, lamp.mesh.position.z),
+          rotation: serializeQuaternion(lamp.rotation.x, lamp.rotation.y, lamp.rotation.z, lamp.rotation.w),
+          color: serializeColor(lamp.color.r, lamp.color.g, lamp.color.b),
+          local: { ...local },
+          structural: true,
+          enabled: true,
+        });
+      } else {
+        if (existing.enabled === false) {
+          disposeStructuralLamp(lamp);
+          return;
+        }
+        if (!existing.structural || existing.enabled === undefined) {
+          shipStore.upsertLamp({
+            ...existing,
+            structural: true,
+            enabled: existing.enabled ?? true,
+          });
+        }
       }
-      disposeStructuralLamp(lamp);
-      return false;
+
+      lamp.mesh.metadata = {
+        ...(lamp.mesh.metadata as Record<string, unknown> | undefined),
+        toolId: "lamp",
+        key,
+        structural: true,
+        surfaceId: lamp.anchorSurfaceId,
+        local,
+      };
+      structuralLamps.push(lamp);
     });
     sceneContext.structuralLamps = structuralLamps;
     const ghost = createGhostHost();

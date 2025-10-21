@@ -30,6 +30,12 @@ export function hydrateShipAssets(scene: Scene, shipState: ShipState): HydratedS
     if (!lampState) {
       return;
     }
+    if (lampState.enabled === false) {
+      return;
+    }
+    if (lampState.structural) {
+      return;
+    }
     const anchorMesh =
       wallMeshBySurface.get(lampState.anchorSurfaceId) ??
       (scene.getMeshByName(lampState.anchorSurfaceId) as AbstractMesh | null);
@@ -66,6 +72,12 @@ export function hydrateShipAssets(scene: Scene, shipState: ShipState): HydratedS
 
     const color = new Color3(lampState.color.r, lampState.color.g, lampState.color.b);
     const lamp = createLamp(scene, placement, color);
+    lamp.mesh.metadata = {
+      ...(lamp.mesh.metadata as Record<string, unknown> | undefined),
+      structural: lampState.structural ?? false,
+      surfaceId: lampState.anchorSurfaceId,
+      local: { ...lampState.local },
+    };
     lamps.push(lamp);
   });
 

@@ -10,8 +10,7 @@ export interface ShipStateActions {
   removeWall(wallId: string): void;
   upsertLamp(lamp: ShipLampState): void;
   removeLamp(lampId: string): void;
-   markStructuralLampRemoved(lampId: string): void;
-   clearStructuralLampRemoval(lampId: string): void;
+  setLampEnabled(lampId: string, enabled: boolean): void;
 }
 
 export interface ToolMetadata {

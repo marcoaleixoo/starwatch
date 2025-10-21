@@ -110,7 +110,6 @@ function normalizeShipState(state: ShipState): ShipState {
   const next = createEmptyShipState();
   next.walls = {};
   next.lamps = {};
-  next.removedStructuralLamps = {};
 
   Object.entries(state.walls ?? {}).forEach(([id, wall]) => {
     if (!wall) {
@@ -134,14 +133,9 @@ function normalizeShipState(state: ShipState): ShipState {
       rotation: lamp.rotation,
       color: lamp.color,
       local: lamp.local,
+      structural: lamp.structural ?? false,
+      enabled: lamp.enabled ?? true,
     };
-  });
-
-  Object.entries(state.removedStructuralLamps ?? {}).forEach(([id, removed]) => {
-    if (!removed) {
-      return;
-    }
-    next.removedStructuralLamps[id] = true;
   });
 
   return next;

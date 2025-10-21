@@ -122,7 +122,7 @@ export const lampToolDefinition: PlacementToolDefinition = {
       context.shadowNetwork.registerDynamic(lamp.mesh);
       context.shadowNetwork.attachLamp(lamp);
       if (isStructural) {
-        context.shipState.clearStructuralLampRemoval(lamp.key);
+        context.shipState.setLampEnabled(lamp.key, true);
         return;
       }
       dynamicLampCount += 1;
@@ -146,6 +146,8 @@ export const lampToolDefinition: PlacementToolDefinition = {
           b: Number(lamp.color.b.toFixed(5)),
         },
         local: { ...local },
+        structural: false,
+        enabled: true,
       });
     });
 
@@ -212,6 +214,8 @@ export const lampToolDefinition: PlacementToolDefinition = {
           b: Number(lamp.color.b.toFixed(5)),
         },
         local: { ...lamp.local },
+        structural: false,
+        enabled: true,
       });
     };
 
@@ -311,7 +315,7 @@ export const lampToolDefinition: PlacementToolDefinition = {
         entry.mesh.dispose(false, true);
         lamps.delete(metadata.key);
         if (isStructural) {
-          context.shipState.markStructuralLampRemoved(metadata.key);
+          context.shipState.setLampEnabled(metadata.key, false);
         } else {
           context.shipState.removeLamp(metadata.key);
         }

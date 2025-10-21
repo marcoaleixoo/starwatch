@@ -494,6 +494,8 @@ function createWallBandLamp(
     key: config.name,
     toolId: "lamp",
     structural: true,
+    surfaceId: config.name,
+    local: { ...lamp.local },
   };
   return lamp;
 }

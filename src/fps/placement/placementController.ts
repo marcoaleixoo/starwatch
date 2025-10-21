@@ -51,8 +51,7 @@ export function createPlacementController(options: PlacementControllerOptions): 
     removeWall: (wallId) => shipStore.removeWall(wallId),
     upsertLamp: (lamp) => shipStore.upsertLamp(lamp),
     removeLamp: (lampId) => shipStore.removeLamp(lampId),
-    markStructuralLampRemoved: (lampId) => shipStore.markStructuralLampRemoved(lampId),
-    clearStructuralLampRemoval: (lampId) => shipStore.clearStructuralLampRemoval(lampId),
+    setLampEnabled: (lampId, enabled) => shipStore.setLampEnabled(lampId, enabled),
   };
 
   const defaultToolId = TOOL_DEFINITIONS[0]?.id ?? "wall";

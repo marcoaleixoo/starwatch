@@ -50,10 +50,15 @@ export class ShipStore {
 
   upsertLamp(lamp: ShipLampState) {
     const existing = this.state.lamps[lamp.id];
-    if (existing && lampEquals(existing, lamp)) {
+    const normalized: ShipLampState = {
+      ...lamp,
+      enabled: lamp.enabled ?? true,
+      structural: lamp.structural ?? false,
+    };
+    if (existing && lampEquals(existing, normalized)) {
       return;
     }
-    const lamps = { ...this.state.lamps, [lamp.id]: { ...lamp } };
+    const lamps = { ...this.state.lamps, [lamp.id]: { ...normalized } };
     this.state = { ...this.state, lamps };
     this.notify();
   }
@@ -68,27 +73,23 @@ export class ShipStore {
     this.notify();
   }
 
-  markStructuralLampRemoved(lampId: string) {
-    if (this.state.removedStructuralLamps[lampId]) {
+  setLampEnabled(lampId: string, enabled: boolean) {
+    const existing = this.state.lamps[lampId];
+    if (!existing) {
       return;
     }
-    const removedStructuralLamps = { ...this.state.removedStructuralLamps, [lampId]: true as const };
-    this.state = { ...this.state, removedStructuralLamps };
-    this.notify();
-  }
-
-  clearStructuralLampRemoval(lampId: string) {
-    if (!this.state.removedStructuralLamps[lampId]) {
+    if ((existing.enabled ?? true) === enabled) {
       return;
     }
-    const removedStructuralLamps = { ...this.state.removedStructuralLamps };
-    delete removedStructuralLamps[lampId];
-    this.state = { ...this.state, removedStructuralLamps };
+    const lamps = {
+      ...this.state.lamps,
+      [lampId]: {
+        ...existing,
+        enabled,
+      },
+    };
+    this.state = { ...this.state, lamps };
     this.notify();
-  }
-
-  isStructuralLampRemoved(lampId: string): boolean {
-    return Boolean(this.state.removedStructuralLamps[lampId]);
   }
 
   reset() {
@@ -107,7 +108,6 @@ function cloneState(state: ShipState): ShipState {
     version: state.version,
     walls: cloneRecord(state.walls),
     lamps: cloneRecord(state.lamps),
-    removedStructuralLamps: { ...state.removedStructuralLamps },
   };
 }
 
@@ -143,7 +143,9 @@ function lampEquals(a: ShipLampState, b: ShipLampState) {
     almostEqual(a.color.b, b.color.b) &&
     almostEqual(a.local.x, b.local.x) &&
     almostEqual(a.local.y, b.local.y) &&
-    almostEqual(a.local.z, b.local.z)
+    almostEqual(a.local.z, b.local.z) &&
+    (a.structural ?? false) === (b.structural ?? false) &&
+    (a.enabled ?? true) === (b.enabled ?? true)
   );
 }
 
