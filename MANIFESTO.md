@@ -226,7 +226,16 @@ Para instigar um senso de conquista e competição amigável, mesmo em um contex
     *   **Tempo de Jogo Ativo:** Total de horas jogadas.
 *   **Visão Futura:** Em um futuro MMO, este leaderboard seria global e persistente, mostrando o progresso de outros jogadores sem a necessidade de interação direta.
 
-## 11. Notas de Segurança e Implementação (Contexto do Protótipo)
+## 11. Player Runtime Interface (FPS Builder)
+
+*   **PlayerStore:** Vive em `src/fps/state/playerStore.ts` e replica o padrão imutável do ShipStore. Use `store.getActions()` para HUD/IA (`setTransform`, `patchMovementIntent`, `patchInput`, registro/remoção de módulos, `emit`) e `store.getActionContext()` quando precisar ler/alterar estado sem acoplar no Babylon.
+*   **Estado Serializado:** `src/fps/state/playerState.ts` guarda `transform` (posição, orientação, velocidade), `movementIntent`, `input` (locks) e o registro modular. `serializeVector3` e `serializeQuaternion` suportam persistência determinística.
+*   **Persistência:** `createPlayerPersistence` (`src/fps/state/playerPersistence.ts`) roda na mesma cadência do ShipPersistence, salvando com debounce em `localStorage` (`starwatch.player-state`) e expondo `flush()` para desligues controlados.
+*   **Controller:** `createPlayerController` (`src/fps/core/playerController.ts`) cria a câmera FPS, sincroniza pointer lock, monitora WASD/sprint/crouch/jump e aceita comandos externos (`teleport`, `setCutsceneLock`) antes de repassar a Babylon.
+*   **Módulos Baseline:** `registerBaselinePlayerModules` (`src/fps/state/playerModules.ts`) registra placeholders de saúde, energia, fome e inventário emitindo `player.module.ready`, preparando a malha de eventos para futuros sistemas de fome/fadiga/skills.
+*   **Integração:** `ShipBuilderCanvas` instancia o PlayerStore na montagem, hidrata com `loadPlayerState()`, cria controller e persistence e passa a `playerController.camera` para o placement solver.
+
+## 12. Notas de Segurança e Implementação (Contexto do Protótipo)
 
 *   **Web Workers para Scripts:** A execução de scripts JavaScript em Web Workers continua sendo crucial para a segurança e estabilidade, isolando o código do jogador do jogo principal. A `Task API` é a única interface permitida para o worker interagir com o jogo.
 *   **HAL e LLM no Cliente:** Para a V0.1, a integração com um LLM externo (como OpenAI) é via API Key digitada e armazenada no `localStorage` do cliente. Isso é aceitável para prototipagem e desenvolvimento local. Para um futuro MMO ou uma versão pública, um backend robusto seria necessário para proxyar as requisições à LLM, gerenciar custos e garantir a segurança das chaves API.

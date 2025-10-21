@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createSceneContext } from "./core/sceneContext";
+import { createPlayerController } from "./core/playerController";
 import { createPlacementController } from "./placement/placementController";
 import type { PlacementController } from "./placement/placementController";
 import { createGhostHost } from "./placement/ghosts";
@@ -9,6 +10,9 @@ import { createShadowNetwork } from "./lighting/shadowNetwork";
 import { ShipStore } from "./state/shipStore";
 import { createShipPersistence, loadShipState } from "./state/shipPersistence";
 import { hydrateShipAssets } from "./state/shipHydrator";
+import { PlayerStore } from "./state/playerStore";
+import { createPlayerPersistence, loadPlayerState } from "./state/playerPersistence";
+import { registerBaselinePlayerModules } from "./state/playerModules";
 
 const defaultToolId = TOOL_DEFINITIONS[0]?.id ?? "wall";
 
@@ -36,6 +40,7 @@ export function ShipBuilderCanvas() {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<PlacementController | null>(null);
   const shipStoreRef = useRef<ShipStore | null>(null);
+  const playerStoreRef = useRef<PlayerStore | null>(null);
   const [placementState, setPlacementState] = useState<PlacementState>({
     activeToolId: defaultToolId,
   });
@@ -55,6 +60,16 @@ export function ShipBuilderCanvas() {
       shipStore.replace(persistedShipState);
     }
 
+    if (!playerStoreRef.current) {
+      const persistedPlayer = loadPlayerState();
+      playerStoreRef.current = new PlayerStore(persistedPlayer ?? undefined);
+      registerBaselinePlayerModules(playerStoreRef.current);
+    }
+    const playerStore = playerStoreRef.current;
+    if (!playerStore) {
+      return;
+    }
+
     const sceneContext = createSceneContext(canvas);
     const ghost = createGhostHost();
     const shadowNetwork = createShadowNetwork(
@@ -67,12 +82,18 @@ export function ShipBuilderCanvas() {
     });
     shadowNetwork.registerStatic(staticMeshes);
 
+    const playerController = createPlayerController({
+      scene: sceneContext.scene,
+      canvas,
+      store: playerStore,
+    });
+
     const hydratedAssets = hydrateShipAssets(sceneContext.scene, shipStore.getSnapshot());
 
     const placementController = createPlacementController({
       scene: sceneContext.scene,
       canvas,
-      camera: sceneContext.camera,
+      camera: playerController.camera,
       ghost,
       shadowNetwork,
       surfaceRegistry: sceneContext.surfaceRegistry,
@@ -83,6 +104,7 @@ export function ShipBuilderCanvas() {
     controllerRef.current = placementController;
     const unsubscribePlacement = placementController.subscribe(setPlacementState);
     const persistence = createShipPersistence(shipStore);
+    const playerPersistence = createPlayerPersistence(playerStore);
 
     let statsHandle = 0;
     let lastSample = 0;
@@ -100,7 +122,7 @@ export function ShipBuilderCanvas() {
       const meshCount = sceneContext.scene.meshes.length;
       const lightCount = sceneContext.scene.lights.length;
       const shadowedLights = sceneContext.scene.lights.filter((light) => light.shadowEnabled).length;
-      const camera = sceneContext.camera.position;
+      const camera = playerController.camera.position;
 
       overlayRef.current.textContent = [
         `FPS: ${fps.toFixed(1)}`,
@@ -114,11 +136,14 @@ export function ShipBuilderCanvas() {
     return () => {
       persistence.flush();
       persistence.dispose();
+      playerPersistence.flush();
+      playerPersistence.dispose();
       unsubscribePlacement();
       placementController.dispose();
       controllerRef.current = null;
       ghost.dispose();
       shadowNetwork.dispose();
+      playerController.dispose();
       sceneContext.dispose();
       cancelAnimationFrame(statsHandle);
     };

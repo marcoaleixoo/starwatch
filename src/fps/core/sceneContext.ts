@@ -1,21 +1,7 @@
+import { Color3, Color4, Engine, GlowLayer, Mesh, MeshBuilder, Scene, Vector3, PBRMaterial, StandardMaterial } from "babylonjs";
 import {
-  Color3,
-  Color4,
-  Engine,
-  GlowLayer,
-  Mesh,
-  MeshBuilder,
-  Scene,
-  UniversalCamera,
-  Vector3,
-  PBRMaterial,
-  StandardMaterial,
-} from "babylonjs";
-import {
-  CAMERA_SETTINGS,
   GRID_SIZE,
   HULL_DIMENSIONS,
-  INPUT_KEYS,
   WALL_DIMENSIONS,
   LIGHTING_LIMITS,
 } from "../constants";
@@ -36,7 +22,6 @@ import {
 export interface SceneContext {
   engine: Engine;
   scene: Scene;
-  camera: UniversalCamera;
   glowLayer: GlowLayer;
   floor: Mesh;
   staticMeshes: Mesh[];
@@ -61,34 +46,6 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
   scene.imageProcessingConfiguration.toneMappingEnabled = true;
   scene.imageProcessingConfiguration.exposure = 1.08;
   scene.imageProcessingConfiguration.contrast = 1.04;
-
-  const camera = new UniversalCamera(
-    "fpCam",
-    new Vector3(0, CAMERA_SETTINGS.eyeLevel, -HULL_DIMENSIONS.length / 2 + 4),
-    scene,
-  );
-  camera.minZ = CAMERA_SETTINGS.minZ;
-  camera.maxZ = CAMERA_SETTINGS.maxZ;
-  camera.speed = CAMERA_SETTINGS.speed;
-  camera.angularSensibility = CAMERA_SETTINGS.angularSensibility;
-  camera.inertia = CAMERA_SETTINGS.inertia;
-  camera.applyGravity = true;
-  camera.checkCollisions = true;
-  camera.ellipsoid = new Vector3(
-    CAMERA_SETTINGS.ellipsoid.x,
-    CAMERA_SETTINGS.ellipsoid.y,
-    CAMERA_SETTINGS.ellipsoid.z,
-  );
-  camera.ellipsoidOffset = new Vector3(
-    CAMERA_SETTINGS.ellipsoidOffset.x,
-    CAMERA_SETTINGS.ellipsoidOffset.y,
-    CAMERA_SETTINGS.ellipsoidOffset.z,
-  );
-  camera.keysUp.push(INPUT_KEYS.move.forward);
-  camera.keysLeft.push(INPUT_KEYS.move.left);
-  camera.keysDown.push(INPUT_KEYS.move.backward);
-  camera.keysRight.push(INPUT_KEYS.move.right);
-  camera.attachControl(canvas, true);
 
   const glowLayer = new GlowLayer("hangar-glow", scene);
   glowLayer.intensity = 0.18;
@@ -154,7 +111,6 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
   const sceneContext: SceneContext = {
     engine,
     scene,
-    camera,
     glowLayer,
     floor,
     staticMeshes,
