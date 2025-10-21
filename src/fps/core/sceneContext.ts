@@ -120,6 +120,9 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
       window.removeEventListener("resize", resize);
       glowLayer.dispose();
       structuralLamps.forEach((lamp) => {
+        if (lamp.mesh.isDisposed()) {
+          return;
+        }
         lamp.shadow.dispose();
         lamp.light.dispose();
         lamp.areaLight?.dispose();
@@ -427,7 +430,12 @@ function createWallBandLamp(
   }
   fixture.isPickable = true;
   fixture.checkCollisions = false;
-  fixture.metadata = { type: "builder-lamp", key: config.name };
+  fixture.metadata = {
+    type: "builder-lamp",
+    key: config.name,
+    toolId: "lamp",
+    structural: true,
+  };
 
   const fixtureMaterial = new StandardMaterial(`${config.name}-mat`, scene);
   fixtureMaterial.diffuseColor = config.color.scale(0.18);
@@ -479,5 +487,13 @@ function createWallBandLamp(
     rsmNoiseFactor: 90,
   });
   lamp.key = config.name;
+  lamp.anchorSurfaceId = config.name;
+  lamp.mesh.metadata = {
+    ...(lamp.mesh.metadata as Record<string, unknown> | undefined),
+    type: "builder-lamp",
+    key: config.name,
+    toolId: "lamp",
+    structural: true,
+  };
   return lamp;
 }

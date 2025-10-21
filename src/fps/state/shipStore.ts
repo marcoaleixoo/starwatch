@@ -68,6 +68,29 @@ export class ShipStore {
     this.notify();
   }
 
+  markStructuralLampRemoved(lampId: string) {
+    if (this.state.removedStructuralLamps[lampId]) {
+      return;
+    }
+    const removedStructuralLamps = { ...this.state.removedStructuralLamps, [lampId]: true as const };
+    this.state = { ...this.state, removedStructuralLamps };
+    this.notify();
+  }
+
+  clearStructuralLampRemoval(lampId: string) {
+    if (!this.state.removedStructuralLamps[lampId]) {
+      return;
+    }
+    const removedStructuralLamps = { ...this.state.removedStructuralLamps };
+    delete removedStructuralLamps[lampId];
+    this.state = { ...this.state, removedStructuralLamps };
+    this.notify();
+  }
+
+  isStructuralLampRemoved(lampId: string): boolean {
+    return Boolean(this.state.removedStructuralLamps[lampId]);
+  }
+
   reset() {
     this.state = createEmptyShipState();
     this.notify();
@@ -84,6 +107,7 @@ function cloneState(state: ShipState): ShipState {
     version: state.version,
     walls: cloneRecord(state.walls),
     lamps: cloneRecord(state.lamps),
+    removedStructuralLamps: { ...state.removedStructuralLamps },
   };
 }
 

@@ -40,6 +40,7 @@ export interface ShipState {
   version: number;
   walls: Record<string, ShipWallState>;
   lamps: Record<string, ShipLampState>;
+  removedStructuralLamps: Record<string, true>;
 }
 
 export const SHIP_STATE_VERSION = 1;
@@ -49,6 +50,7 @@ export function createEmptyShipState(): ShipState {
     version: SHIP_STATE_VERSION,
     walls: {},
     lamps: {},
+    removedStructuralLamps: {},
   };
 }
 

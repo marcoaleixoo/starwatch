@@ -13,6 +13,7 @@ import { hydrateShipAssets } from "./state/shipHydrator";
 import { PlayerStore } from "./state/playerStore";
 import { createPlayerPersistence, loadPlayerState } from "./state/playerPersistence";
 import { registerBaselinePlayerModules } from "./state/playerModules";
+import type { BuilderLamp } from "./types";
 
 const defaultToolId = TOOL_DEFINITIONS[0]?.id ?? "wall";
 
@@ -70,13 +71,35 @@ export function ShipBuilderCanvas() {
       return;
     }
 
+    const disposeStructuralLamp = (lamp: BuilderLamp) => {
+      lamp.shadow.dispose();
+      lamp.light.dispose();
+      lamp.areaLight?.dispose();
+      lamp.fillLight?.dispose();
+      lamp.auxiliaryLights?.forEach((aux) => aux.dispose());
+      lamp.gi?.solution.dispose();
+      lamp.gi?.rsm.dispose();
+      lamp.mesh.dispose(false, true);
+    };
+
     const sceneContext = createSceneContext(canvas);
+    const structuralLamps = sceneContext.structuralLamps.filter((lamp) => {
+      if (!lamp.key) {
+        return true;
+      }
+      if (!shipStore.isStructuralLampRemoved(lamp.key)) {
+        return true;
+      }
+      disposeStructuralLamp(lamp);
+      return false;
+    });
+    sceneContext.structuralLamps = structuralLamps;
     const ghost = createGhostHost();
     const shadowNetwork = createShadowNetwork(
-      sceneContext.structuralLamps.map((lamp) => lamp.shadow),
+      structuralLamps.map((lamp) => lamp.shadow),
     );
     const staticMeshes = [sceneContext.floor, ...sceneContext.staticMeshes];
-    sceneContext.structuralLamps.forEach((lamp) => {
+    structuralLamps.forEach((lamp) => {
       shadowNetwork.registerDynamic(lamp.mesh);
       shadowNetwork.attachLamp(lamp);
     });
@@ -98,7 +121,7 @@ export function ShipBuilderCanvas() {
       shadowNetwork,
       surfaceRegistry: sceneContext.surfaceRegistry,
       initialWalls: hydratedAssets.walls,
-      initialLamps: hydratedAssets.lamps,
+      initialLamps: [...structuralLamps, ...hydratedAssets.lamps],
       shipStore,
     });
     controllerRef.current = placementController;
