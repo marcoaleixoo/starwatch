@@ -3,6 +3,14 @@ import type { ShadowNetwork } from "../lighting/shadowNetwork";
 import type { GhostHost } from "./ghosts";
 import type { SurfaceRegistry } from "./surfaces/surfaceRegistry";
 import type { PlacementSolver } from "./placementSolver";
+import type { ShipLampState, ShipWallState } from "../state/shipState";
+
+export interface ShipStateActions {
+  upsertWall(wall: ShipWallState): void;
+  removeWall(wallId: string): void;
+  upsertLamp(lamp: ShipLampState): void;
+  removeLamp(lampId: string): void;
+}
 
 export interface ToolMetadata {
   toolId: string;
@@ -21,6 +29,7 @@ export interface ToolRuntimeContext {
   requestPointerLock(): void;
   highlight(mesh?: AbstractMesh | null): void;
   removeMesh(mesh?: AbstractMesh | null): boolean;
+  shipState: ShipStateActions;
 }
 
 export interface PlacementToolInstance {

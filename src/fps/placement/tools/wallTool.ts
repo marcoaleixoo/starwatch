@@ -51,7 +51,38 @@ export const wallToolDefinition: PlacementToolDefinition = {
     const initialWalls = Array.isArray(bootstrap) ? (bootstrap as BuilderWall[]) : [];
     initialWalls.forEach((wall) => {
       walls.set(wall.key, wall);
-      wall.mesh.metadata = { toolId: TOOL_ID, key: wall.key };
+      const metadata = (wall.mesh.metadata as Record<string, unknown>) ?? {};
+      const surfaceId =
+        typeof metadata.surfaceId === "string" && metadata.surfaceId.length > 0
+          ? metadata.surfaceId
+          : wall.key;
+      wall.mesh.metadata = { ...metadata, toolId: TOOL_ID, key: wall.key, surfaceId };
+      context.shadowNetwork.registerDynamic(wall.mesh);
+      const inward = Vector3.TransformNormal(
+        Vector3.Forward(),
+        wall.mesh.computeWorldMatrix(true),
+      ).scale(-1);
+      inward.y = 0;
+      if (inward.lengthSquared() < 1e-4) {
+        inward.copyFrom(Vector3.Forward());
+      }
+      context.surfaceRegistry.register(
+        new WallSurface({
+          id: surfaceId,
+          mesh: wall.mesh,
+          inward,
+          up: Vector3.Up(),
+        }),
+      );
+      context.shipState.upsertWall({
+        id: wall.key,
+        position: {
+          x: Number(wall.mesh.position.x.toFixed(5)),
+          y: Number(wall.mesh.position.y.toFixed(5)),
+          z: Number(wall.mesh.position.z.toFixed(5)),
+        },
+        rotation: wall.rotation,
+      });
     });
 
     let rotation = 0;
@@ -84,7 +115,7 @@ export const wallToolDefinition: PlacementToolDefinition = {
       walls.set(key, wall);
       context.shadowNetwork.registerDynamic(wall.mesh);
 
-      const surfaceId = `wall-${wall.mesh.uniqueId}`;
+      const surfaceId = key;
       const inward = Vector3.TransformNormal(
         Vector3.Forward(),
         wall.mesh.computeWorldMatrix(true),
@@ -107,6 +138,15 @@ export const wallToolDefinition: PlacementToolDefinition = {
       } else {
         wall.mesh.metadata = { toolId: TOOL_ID, key, surfaceId };
       }
+      context.shipState.upsertWall({
+        id: key,
+        position: {
+          x: Number(snapped.x.toFixed(5)),
+          y: Number(snapped.y.toFixed(5)),
+          z: Number(snapped.z.toFixed(5)),
+        },
+        rotation,
+      });
     };
 
     const pickFloor = () =>
@@ -194,6 +234,7 @@ export const wallToolDefinition: PlacementToolDefinition = {
         context.surfaceRegistry.unregister(entry.mesh);
         entry.mesh.dispose(false, true);
         walls.delete(metadata.key);
+        context.shipState.removeWall(metadata.key);
         if (mesh === preview) {
           hidePreview();
         }

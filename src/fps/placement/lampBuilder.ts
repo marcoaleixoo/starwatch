@@ -9,7 +9,7 @@ export function nextLampColor(index: number) {
 
 export function lampKey(placement: WallLampPlacement) {
   // Local coordinates are already snapped, so we can use them for deterministic keys.
-  return `${placement.mesh.uniqueId}:${placement.local.x}:${placement.local.y}`;
+  return `${placement.surfaceId}:${placement.local.x}:${placement.local.y}`;
 }
 
 export function createLamp(scene: Scene, placement: WallLampPlacement, color: Color3): BuilderLamp {
@@ -83,5 +83,9 @@ export function createLamp(scene: Scene, placement: WallLampPlacement, color: Co
   });
   lamp.key = lampKeyValue;
   lamp.mesh.metadata = { toolId: "lamp", key: lampKeyValue };
+  lamp.color = color.clone();
+  lamp.anchorSurfaceId = placement.surfaceId;
+  lamp.local = { x: placement.local.x, y: placement.local.y, z: placement.local.z };
+  lamp.rotation = rotation.clone();
   return lamp;
 }

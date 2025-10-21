@@ -71,6 +71,7 @@ export function createWall(scene: Scene, position: Vector3, rotation: number): B
   wallMesh.metadata = {
     toolId: "wall",
     key,
+    surfaceId: key,
     lampOrientation: {
       forward: inward.asArray(),
       up: up.asArray(),
@@ -85,5 +86,6 @@ export function createWall(scene: Scene, position: Vector3, rotation: number): B
   return {
     mesh: wallMesh,
     key,
+    rotation,
   };
 }

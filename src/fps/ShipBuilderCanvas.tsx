@@ -6,6 +6,9 @@ import { createGhostHost } from "./placement/ghosts";
 import type { PlacementState } from "./placement/placementTypes";
 import { TOOL_DEFINITIONS } from "./placement/tools";
 import { createShadowNetwork } from "./lighting/shadowNetwork";
+import { ShipStore } from "./state/shipStore";
+import { createShipPersistence, loadShipState } from "./state/shipPersistence";
+import { hydrateShipAssets } from "./state/shipHydrator";
 
 const defaultToolId = TOOL_DEFINITIONS[0]?.id ?? "wall";
 
@@ -32,6 +35,7 @@ export function ShipBuilderCanvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<PlacementController | null>(null);
+  const shipStoreRef = useRef<ShipStore | null>(null);
   const [placementState, setPlacementState] = useState<PlacementState>({
     activeToolId: defaultToolId,
   });
@@ -40,6 +44,15 @@ export function ShipBuilderCanvas() {
     const canvas = canvasRef.current;
     if (!canvas) {
       return;
+    }
+
+    if (!shipStoreRef.current) {
+      shipStoreRef.current = new ShipStore();
+    }
+    const shipStore = shipStoreRef.current;
+    const persistedShipState = loadShipState();
+    if (persistedShipState) {
+      shipStore.replace(persistedShipState);
     }
 
     const sceneContext = createSceneContext(canvas);
@@ -54,6 +67,8 @@ export function ShipBuilderCanvas() {
     });
     shadowNetwork.registerStatic(staticMeshes);
 
+    const hydratedAssets = hydrateShipAssets(sceneContext.scene, shipStore.getSnapshot());
+
     const placementController = createPlacementController({
       scene: sceneContext.scene,
       canvas,
@@ -61,10 +76,13 @@ export function ShipBuilderCanvas() {
       ghost,
       shadowNetwork,
       surfaceRegistry: sceneContext.surfaceRegistry,
-      initialLamps: sceneContext.structuralLamps,
+      initialWalls: hydratedAssets.walls,
+      initialLamps: hydratedAssets.lamps,
+      shipStore,
     });
     controllerRef.current = placementController;
     const unsubscribePlacement = placementController.subscribe(setPlacementState);
+    const persistence = createShipPersistence(shipStore);
 
     let statsHandle = 0;
     let lastSample = 0;
@@ -94,6 +112,8 @@ export function ShipBuilderCanvas() {
     statsHandle = requestAnimationFrame(updateOverlay);
 
     return () => {
+      persistence.flush();
+      persistence.dispose();
       unsubscribePlacement();
       placementController.dispose();
       controllerRef.current = null;

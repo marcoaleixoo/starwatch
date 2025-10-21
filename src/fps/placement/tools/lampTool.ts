@@ -83,9 +83,11 @@ const frameToLampPlacement = (frame: PlacementFrame): WallLampPlacement | null =
     forward: frame.forward.clone(),
     right: frame.right.clone(),
     up: frame.up.clone(),
+    surfaceId: frame.surfaceId,
     local: {
       x: Number(frame.local.x.toFixed(3)),
       y: Number(frame.local.y.toFixed(3)),
+      z: Number(frame.local.z.toFixed(3)),
     },
   };
 };
@@ -98,16 +100,43 @@ export const lampToolDefinition: PlacementToolDefinition = {
   create: (context: ToolRuntimeContext, bootstrap?: unknown) => {
     const preview = createPreviewMesh(context);
     const lamps = new Map<string, BuilderLamp>();
-    const persistentKeys = new Set<string>();
     const initialLamps = Array.isArray(bootstrap) ? (bootstrap as BuilderLamp[]) : [];
     initialLamps.forEach((lamp) => {
       lamps.set(lamp.key, lamp);
-      persistentKeys.add(lamp.key);
-      lamp.mesh.metadata = { toolId: TOOL_ID, key: lamp.key };
+      const metadata = (lamp.mesh.metadata as Record<string, unknown>) ?? {};
+      const surfaceId =
+        typeof metadata.surfaceId === "string" && metadata.surfaceId.length > 0
+          ? metadata.surfaceId
+          : lamp.anchorSurfaceId;
+      const local = (metadata.local as WallLampPlacement["local"] | undefined) ?? lamp.local;
+      lamp.mesh.metadata = { ...metadata, toolId: TOOL_ID, key: lamp.key, surfaceId, local };
+      context.shadowNetwork.registerDynamic(lamp.mesh);
+      context.shadowNetwork.attachLamp(lamp);
+      context.shipState.upsertLamp({
+        id: lamp.key,
+        anchorSurfaceId: surfaceId,
+        position: {
+          x: Number(lamp.mesh.position.x.toFixed(5)),
+          y: Number(lamp.mesh.position.y.toFixed(5)),
+          z: Number(lamp.mesh.position.z.toFixed(5)),
+        },
+        rotation: {
+          x: Number(lamp.rotation.x.toFixed(5)),
+          y: Number(lamp.rotation.y.toFixed(5)),
+          z: Number(lamp.rotation.z.toFixed(5)),
+          w: Number(lamp.rotation.w.toFixed(5)),
+        },
+        color: {
+          r: Number(lamp.color.r.toFixed(5)),
+          g: Number(lamp.color.g.toFixed(5)),
+          b: Number(lamp.color.b.toFixed(5)),
+        },
+        local: { ...local },
+      });
     });
 
     let pendingPlacement: WallLampPlacement | null = null;
-    let colorIndex = 0;
+    let colorIndex = initialLamps.length % Math.max(LAMP_COLOR_PALETTE.length, 1);
 
     const hidePreview = () => {
       pendingPlacement = null;
@@ -139,10 +168,36 @@ export const lampToolDefinition: PlacementToolDefinition = {
       colorIndex = (colorIndex + 1) % LAMP_COLOR_PALETTE.length;
 
       const lamp = createLamp(context.scene, placement, color);
-      lamp.mesh.metadata = { toolId: TOOL_ID, key };
+      lamp.mesh.metadata = {
+        toolId: TOOL_ID,
+        key,
+        surfaceId: placement.surfaceId,
+        local: placement.local,
+      };
       lamps.set(key, lamp);
       context.shadowNetwork.registerDynamic(lamp.mesh);
       context.shadowNetwork.attachLamp(lamp);
+      context.shipState.upsertLamp({
+        id: key,
+        anchorSurfaceId: placement.surfaceId,
+        position: {
+          x: Number(placement.position.x.toFixed(5)),
+          y: Number(placement.position.y.toFixed(5)),
+          z: Number(placement.position.z.toFixed(5)),
+        },
+        rotation: {
+          x: Number(lamp.rotation.x.toFixed(5)),
+          y: Number(lamp.rotation.y.toFixed(5)),
+          z: Number(lamp.rotation.z.toFixed(5)),
+          w: Number(lamp.rotation.w.toFixed(5)),
+        },
+        color: {
+          r: Number(lamp.color.r.toFixed(5)),
+          g: Number(lamp.color.g.toFixed(5)),
+          b: Number(lamp.color.b.toFixed(5)),
+        },
+        local: { ...lamp.local },
+      });
     };
 
     const pickSurface = () =>
@@ -226,7 +281,6 @@ export const lampToolDefinition: PlacementToolDefinition = {
         if (!entry) {
           return false;
         }
-        persistentKeys.delete(metadata.key);
         context.shadowNetwork.detachLamp(entry);
         context.shadowNetwork.unregisterDynamic(entry.mesh);
         entry.shadow.dispose();
@@ -240,15 +294,13 @@ export const lampToolDefinition: PlacementToolDefinition = {
         }
         entry.mesh.dispose(false, true);
         lamps.delete(metadata.key);
+        context.shipState.removeLamp(metadata.key);
         return true;
       },
       dispose: () => {
         context.ghost.hide();
         preview.dispose(false, true);
-        lamps.forEach((lamp, key) => {
-          if (persistentKeys.has(key)) {
-            return;
-          }
+        lamps.forEach((lamp) => {
           context.shadowNetwork.detachLamp(lamp);
           context.shadowNetwork.unregisterDynamic(lamp.mesh);
           lamp.shadow.dispose();

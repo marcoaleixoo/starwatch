@@ -10,10 +10,17 @@ import { CAMERA_SETTINGS, INPUT_KEYS, INTERACTION_RANGE, SELECTION_OUTLINE_COLOR
 import type { ShadowNetwork } from "../lighting/shadowNetwork";
 import type { BuilderLamp, BuilderWall } from "../types";
 import type { GhostHost } from "./ghosts";
-import type { PlacementState, PlacementToolInstance, ToolMetadata, ToolRuntimeContext } from "./placementTypes";
+import type {
+  PlacementState,
+  PlacementToolInstance,
+  ShipStateActions,
+  ToolMetadata,
+  ToolRuntimeContext,
+} from "./placementTypes";
 import { TOOL_DEFINITION_BY_ID, TOOL_DEFINITIONS } from "./tools";
 import type { SurfaceRegistry } from "./surfaces/surfaceRegistry";
 import { createPlacementSolver } from "./placementSolver";
+import type { ShipStore } from "../state/shipStore";
 
 interface PlacementControllerOptions {
   scene: Scene;
@@ -24,6 +31,7 @@ interface PlacementControllerOptions {
   surfaceRegistry: SurfaceRegistry;
   initialWalls?: BuilderWall[];
   initialLamps?: BuilderLamp[];
+  shipStore: ShipStore;
 }
 
 export interface PlacementController {
@@ -34,10 +42,16 @@ export interface PlacementController {
 }
 
 export function createPlacementController(options: PlacementControllerOptions): PlacementController {
-  const { scene, canvas, camera, ghost, shadowNetwork, surfaceRegistry } = options;
+  const { scene, canvas, camera, ghost, shadowNetwork, surfaceRegistry, shipStore } = options;
   const initialWalls = options.initialWalls ?? [];
   const initialLamps = options.initialLamps ?? [];
   const placementSolver = createPlacementSolver(surfaceRegistry);
+  const shipActions: ShipStateActions = {
+    upsertWall: (wall) => shipStore.upsertWall(wall),
+    removeWall: (wallId) => shipStore.removeWall(wallId),
+    upsertLamp: (lamp) => shipStore.upsertLamp(lamp),
+    removeLamp: (lampId) => shipStore.removeLamp(lampId),
+  };
 
   const defaultToolId = TOOL_DEFINITIONS[0]?.id ?? "wall";
 
@@ -114,6 +128,7 @@ export function createPlacementController(options: PlacementControllerOptions): 
     ghost,
     surfaceRegistry,
     placementSolver,
+    shipState: shipActions,
     withinRange,
     requestPointerLock: () => {
       if (document.pointerLockElement !== canvas) {
@@ -152,6 +167,12 @@ export function createPlacementController(options: PlacementControllerOptions): 
     toolInstances.set(toolId, instance);
     return instance;
   };
+
+  toolBootstrap.forEach((_, toolId) => {
+    if (toolId !== state.activeToolId) {
+      getToolInstance(toolId);
+    }
+  });
 
   const removeMesh = (mesh?: AbstractMesh | null): boolean => {
     if (!mesh) {

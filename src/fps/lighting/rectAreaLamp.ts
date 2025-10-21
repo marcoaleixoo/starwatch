@@ -220,5 +220,9 @@ export function createRectAreaLamp(options: RectAreaLampOptions): BuilderLamp {
     auxiliaryLights: [ambientLight],
     gi: giState,
     key: "",
+    color: color.clone(),
+    anchorSurfaceId: "",
+    local: { x: 0, y: 0, z: 0 },
+    rotation: Quaternion.Identity(),
   };
 }

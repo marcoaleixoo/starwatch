@@ -1,5 +1,6 @@
 import type {
   AbstractMesh,
+  Color3,
   GIRSM,
   Light,
   Mesh,
@@ -7,12 +8,14 @@ import type {
   ReflectiveShadowMap,
   ShadowGenerator,
   ShadowLight,
+  Quaternion,
   Vector3,
 } from "babylonjs";
 
 export interface BuilderWall {
   mesh: Mesh;
   key: string;
+  rotation: number; // degrees around Y
 }
 
 export interface BuilderLamp {
@@ -27,6 +30,10 @@ export interface BuilderLamp {
     solution: GIRSM;
   };
   key: string;
+  color: Color3;
+  anchorSurfaceId: string;
+  local: { x: number; y: number; z: number };
+  rotation: Quaternion;
 }
 
 export interface WallLampPlacement {
@@ -35,5 +42,6 @@ export interface WallLampPlacement {
   forward: Vector3;
   right: Vector3;
   up: Vector3;
-  local: { x: number; y: number };
+  surfaceId: string;
+  local: { x: number; y: number; z: number };
 }
