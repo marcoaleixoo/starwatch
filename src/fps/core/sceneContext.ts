@@ -277,31 +277,34 @@ function createHangarCeiling(scene: Scene, textures: HangarTextureSet): Mesh {
 function createHangarWalls(scene: Scene, textures: HangarTextureSet): Mesh[] {
   const halfHeight = HULL_DIMENSIONS.height / 2;
   const thickness = WALL_DIMENSIONS.thickness;
+  const footingDepth = WALL_DIMENSIONS.footingDepth ?? 0;
+  const wallHeight = HULL_DIMENSIONS.height + footingDepth;
+  const centerY = halfHeight - footingDepth / 2;
 
   return [
     createHangarWall(scene, textures, {
       name: "wall-north",
-      size: { width: HULL_DIMENSIONS.width, height: HULL_DIMENSIONS.height, depth: thickness },
-      position: new Vector3(0, halfHeight, -HULL_DIMENSIONS.length / 2),
+      size: { width: HULL_DIMENSIONS.width, height: wallHeight, depth: thickness },
+      position: new Vector3(0, centerY, -HULL_DIMENSIONS.length / 2),
       inward: new Vector3(0, 0, 1),
     }),
     createHangarWall(scene, textures, {
       name: "wall-south",
-      size: { width: HULL_DIMENSIONS.width, height: HULL_DIMENSIONS.height, depth: thickness },
-      position: new Vector3(0, halfHeight, HULL_DIMENSIONS.length / 2),
+      size: { width: HULL_DIMENSIONS.width, height: wallHeight, depth: thickness },
+      position: new Vector3(0, centerY, HULL_DIMENSIONS.length / 2),
       inward: new Vector3(0, 0, -1),
     }),
     createHangarWall(scene, textures, {
       name: "wall-east",
-      size: { width: HULL_DIMENSIONS.length, height: HULL_DIMENSIONS.height, depth: thickness },
-      position: new Vector3(HULL_DIMENSIONS.width / 2, halfHeight, 0),
+      size: { width: HULL_DIMENSIONS.length, height: wallHeight, depth: thickness },
+      position: new Vector3(HULL_DIMENSIONS.width / 2, centerY, 0),
       rotationY: Math.PI / 2,
       inward: new Vector3(-1, 0, 0),
     }),
     createHangarWall(scene, textures, {
       name: "wall-west",
-      size: { width: HULL_DIMENSIONS.length, height: HULL_DIMENSIONS.height, depth: thickness },
-      position: new Vector3(-HULL_DIMENSIONS.width / 2, halfHeight, 0),
+      size: { width: HULL_DIMENSIONS.length, height: wallHeight, depth: thickness },
+      position: new Vector3(-HULL_DIMENSIONS.width / 2, centerY, 0),
       rotationY: Math.PI / 2,
       inward: new Vector3(1, 0, 0),
     }),
@@ -337,8 +340,10 @@ function createHangarWall(
   wall.isPickable = true;
 
   const wallMaterial = new PBRMaterial(`${config.name}-pbr`, scene);
-  const tileU = Math.max(config.size.width, config.size.height) * 0.9;
-  const tileV = config.size.height * 0.95;
+  const footingDepth = WALL_DIMENSIONS.footingDepth ?? 0;
+  const visibleHeight = config.size.height - footingDepth;
+  const tileU = Math.max(config.size.width, visibleHeight) * 0.9;
+  const tileV = visibleHeight * 0.95;
   applyHangarTextures(wallMaterial, textures, { u: tileU, v: tileV });
   wallMaterial.ambientTextureStrength = 0.94;
   wallMaterial.useAmbientInGrayScale = true;
@@ -503,9 +508,10 @@ function createWallBandLamp(
     ambientAttenuation: 0.58,
     shadowAngle: config.angle ?? Math.PI / 2.3,
     shadowMapSize: config.shadowMapSize ?? 1024,
-    shadowBias: 0.0005,
-    shadowNormalBias: 0.02,
+    shadowBias: 0.00022,
+    shadowNormalBias: 0.0035,
     forceBackFacesOnly: false,
+    shadowMinZ: 0.008,
     areaOffset: config.depth * 0.45,
     enableRsm: true,
     rsmTextureSize: 256,

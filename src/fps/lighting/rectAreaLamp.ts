@@ -41,6 +41,8 @@ export interface RectAreaLampOptions {
   shadowBias?: number;
   shadowNormalBias?: number;
   forceBackFacesOnly?: boolean;
+  shadowMinZ?: number;
+  shadowMaxZ?: number;
   areaOffset?: number;
   enableRsm?: boolean;
   rsmTextureSize?: number;
@@ -54,9 +56,11 @@ export interface RectAreaLampOptions {
 }
 
 const DEFAULT_AREA_OFFSET = 0.015;
-const DEFAULT_SHADOW_BIAS = 0.0005;
-const DEFAULT_SHADOW_NORMAL_BIAS = 0.02;
+const DEFAULT_SHADOW_BIAS = 0.00022;
+const DEFAULT_SHADOW_NORMAL_BIAS = 0.0035;
 const DEFAULT_FORCE_BACK_FACES_ONLY = false;
+const DEFAULT_SHADOW_MIN_Z = 0.01;
+const SHADOW_MAX_Z_MULTIPLIER = 1.35;
 
 function safeOrthonormalBasis(forward: Vector3, upHint: Vector3, rightHint: Vector3) {
   const forwardNorm = forward.clone();
@@ -102,6 +106,8 @@ export function createRectAreaLamp(options: RectAreaLampOptions): BuilderLamp {
     shadowBias = DEFAULT_SHADOW_BIAS,
     shadowNormalBias = DEFAULT_SHADOW_NORMAL_BIAS,
     forceBackFacesOnly = DEFAULT_FORCE_BACK_FACES_ONLY,
+    shadowMinZ = DEFAULT_SHADOW_MIN_Z,
+    shadowMaxZ,
     areaOffset = DEFAULT_AREA_OFFSET,
     enableRsm = false,
     rsmTextureSize = 256,
@@ -119,22 +125,27 @@ export function createRectAreaLamp(options: RectAreaLampOptions): BuilderLamp {
   const rightDir = right.clone().normalize();
 
   const emissionForward = forwardDir.add(upDir.scale(-tilt)).normalize();
-  const { forward: basisForward, up: basisUp, right: basisRight } = safeOrthonormalBasis(
-    emissionForward,
-    upDir,
-    rightDir,
-  );
+  const emissionDir = emissionForward.clone();
+  const { up: basisUp, right: basisRight } = safeOrthonormalBasis(emissionForward, upDir, rightDir);
 
-  const areaBasis = new Matrix();
-  Matrix.FromXYZAxesToRef(basisRight, basisUp, basisForward.scale(-1), areaBasis);
-  const areaRotation = Quaternion.FromRotationMatrix(areaBasis);
+  const pivotForwardWorld = emissionDir.clone().scale(-1);
+  const areaBasisWorld = new Matrix();
+  Matrix.FromXYZAxesToRef(basisRight, basisUp, pivotForwardWorld, areaBasisWorld);
 
-  const areaPosition = position.add(basisForward.scale(areaOffset));
+  const areaPositionWorld = position.add(emissionDir.clone().scale(areaOffset));
+
+  const fixtureWorld = fixture.computeWorldMatrix(true);
+  const fixtureWorldInverse = fixtureWorld.clone();
+  fixtureWorldInverse.invert();
+
+  const areaPositionLocal = Vector3.TransformCoordinates(areaPositionWorld, fixtureWorldInverse);
+  const areaBasisLocal = areaBasisWorld.multiply(fixtureWorldInverse);
+  const areaRotationLocal = Quaternion.FromRotationMatrix(areaBasisLocal);
 
   const areaPivot = new TransformNode(`${name}-area-pivot`, scene);
   areaPivot.parent = fixture;
-  areaPivot.position = areaPosition.subtract(position);
-  areaPivot.rotationQuaternion = areaRotation;
+  areaPivot.position.copyFrom(areaPositionLocal);
+  areaPivot.rotationQuaternion = areaRotationLocal;
 
   const areaLight = new RectAreaLight(`${name}-area`, Vector3.Zero(), areaSize.width, areaSize.height, scene);
   areaLight.diffuse = color.clone();
@@ -150,8 +161,8 @@ export function createRectAreaLamp(options: RectAreaLampOptions): BuilderLamp {
 
   const shadowLight = new SpotLight(
     `${name}-shadow`,
-    areaPosition.clone(),
-    basisForward,
+    Vector3.Zero(),
+    Vector3.Backward(),
     shadowAngle,
     1.0,
     scene,
@@ -162,9 +173,9 @@ export function createRectAreaLamp(options: RectAreaLampOptions): BuilderLamp {
   shadowLight.falloffType = Light.FALLOFF_PHYSICAL;
   shadowLight.range = range * 1.08;
   shadowLight.shadowEnabled = true;
-  shadowLight.shadowMinZ = 0.08;
-  shadowLight.shadowMaxZ = range * 1.2;
-  shadowLight.parent = fixture;
+  shadowLight.shadowMinZ = shadowMinZ;
+  shadowLight.shadowMaxZ = shadowMaxZ ?? range * SHADOW_MAX_Z_MULTIPLIER;
+  shadowLight.parent = areaPivot;
 
   const shadow = new ShadowGenerator(shadowMapSize, shadowLight);
   shadow.usePercentageCloserFiltering = true;

@@ -17,6 +17,7 @@ export const WALL_DIMENSIONS = {
   width: 1,
   height: SHIP_INTERIOR_DIMENSIONS.deckClearance,
   thickness: 0.18,
+  footingDepth: 0.04,
 } as const;
 
 export const HULL_DIMENSIONS = {

@@ -28,17 +28,20 @@ export function wallKey(position: Vector3, rotation: number) {
 }
 
 export function createWall(scene: Scene, position: Vector3, rotation: number): BuilderWall {
+  const footingDepth = WALL_DIMENSIONS.footingDepth ?? 0;
+  const boxHeight = WALL_DIMENSIONS.height + footingDepth;
   const wallMesh = MeshBuilder.CreateBox(
     `builder-wall-${Date.now()}`,
     {
       width: WALL_DIMENSIONS.width,
-      height: WALL_DIMENSIONS.height,
+      height: boxHeight,
       depth: WALL_DIMENSIONS.thickness,
     },
     scene,
   );
 
   wallMesh.position = position.clone();
+  wallMesh.position.y -= footingDepth / 2;
   wallMesh.rotation.y = degreesToRadians(rotation);
   wallMesh.checkCollisions = true;
   wallMesh.receiveShadows = true;
