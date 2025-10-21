@@ -43,16 +43,45 @@ The content is organized as follows:
 releases/
   v0.1.0.md
 src/
+  assets/
+    metalgrid3-bl/
+      About these PBR files.txt
+      desktop.ini
   fps/
     core/
+      hangarTextures.ts
+      playerController.ts
       sceneContext.ts
     lighting/
+      rectAreaLamp.ts
       shadowNetwork.ts
     placement/
+      surfaces/
+        floorSurface.ts
+        placementSurface.ts
+        surfaceRegistry.ts
+        types.ts
+        wallSurface.ts
+      tools/
+        deleteTool.ts
+        index.ts
+        lampTool.ts
+        wallTool.ts
       ghosts.ts
       lampBuilder.ts
       placementController.ts
+      placementSolver.ts
+      placementTypes.ts
       wallBuilder.ts
+    state/
+      playerModules.ts
+      playerPersistence.ts
+      playerState.ts
+      playerStore.ts
+      shipHydrator.ts
+      shipPersistence.ts
+      shipState.ts
+      shipStore.ts
     utils/
       math.ts
     constants.ts
@@ -85,112 +114,1756 @@ vite.config.ts
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/fps/placement/ghosts.ts">
-import {
-  Color3,
-  Mesh,
-  MeshBuilder,
-  Scene,
-  StandardMaterial,
-  Vector3,
-} from "babylonjs";
-import { LAMP_DIMENSIONS, WALL_DIMENSIONS } from "../constants";
-import type { PlacementMode } from "../types";
-import { degreesToRadians } from "../utils/math";
+<file path="src/assets/metalgrid3-bl/About these PBR files.txt">
+These texture files were created by FreePBR.com and may be used freely in your video games and 3d work at no cost. They may not however be redistributed on other websites or anywhere else other than FreePBR.com. We think that is more than fair. :) We also would greatly appreciate it if some sorrt of credit was given if you do indeed use these textures in a published game. Other than that, keep on creating and have fun. :)
+</file>
 
-export interface GhostSet {
-  showWall(position: Vector3, rotation: number): void;
-  showLamp(position: Vector3): void;
-  hide(): void;
-  setMode(mode: PlacementMode): void;
-  dispose(): void;
+<file path="src/assets/metalgrid3-bl/desktop.ini">
+[.ShellClassInfo]
+InfoTip=This folder is shared online.
+IconFile=C:\Program Files\Google\Drive\googledrivesync.exe
+IconIndex=16
+</file>
+
+<file path="src/fps/core/hangarTextures.ts">
+import { PBRMaterial, Scene, Texture } from "babylonjs";
+import armorAlbedoUrl from "../../assets/armor-plating1-bl/armor-plating1_albedo.png?url";
+import armorNormalUrl from "../../assets/armor-plating1-bl/armor-plating1_normal-ogl.png?url";
+import armorRoughnessUrl from "../../assets/armor-plating1-bl/armor-plating1_roughness.png?url";
+import armorMetallicUrl from "../../assets/armor-plating1-bl/armor-plating1_metallic.png?url";
+import armorAoUrl from "../../assets/armor-plating1-bl/armor-plating1_ao.png?url";
+import metalgridAlbedoUrl from "../../assets/metalgrid3-bl/metalgrid3_basecolor.png?url";
+import metalgridNormalUrl from "../../assets/metalgrid3-bl/metalgrid3_normal-ogl.png?url";
+import metalgridRoughnessUrl from "../../assets/metalgrid3-bl/metalgrid3_roughness.png?url";
+import metalgridMetallicUrl from "../../assets/metalgrid3-bl/metalgrid3_metallic.png?url";
+import metalgridAoUrl from "../../assets/metalgrid3-bl/metalgrid3_AO.png?url";
+
+export interface HangarTextureSet {
+  albedo: Texture;
+  normal: Texture;
+  roughness: Texture;
+  metallic: Texture;
+  ao: Texture;
 }
 
-export function createGhostSet(scene: Scene): GhostSet {
-  const ghostWall = MeshBuilder.CreateBox(
-    "ghost-wall",
-    {
-      width: WALL_DIMENSIONS.width,
-      height: WALL_DIMENSIONS.height,
-      depth: WALL_DIMENSIONS.thickness,
-    },
+type HangarTextureKey = "armor" | "metal";
+
+interface TextureDefinition {
+  albedo: string;
+  normal: string;
+  roughness: string;
+  metallic: string;
+  ao: string;
+}
+
+const TEXTURE_DEFINITIONS: Record<HangarTextureKey, TextureDefinition> = {
+  armor: {
+    albedo: armorAlbedoUrl,
+    normal: armorNormalUrl,
+    roughness: armorRoughnessUrl,
+    metallic: armorMetallicUrl,
+    ao: armorAoUrl,
+  },
+  metal: {
+    albedo: metalgridAlbedoUrl,
+    normal: metalgridNormalUrl,
+    roughness: metalgridRoughnessUrl,
+    metallic: metalgridMetallicUrl,
+    ao: metalgridAoUrl,
+  },
+};
+
+const textureCache = new WeakMap<Scene, Map<HangarTextureKey, HangarTextureSet>>();
+
+function createTexture(scene: Scene, url: string): Texture {
+  return new Texture(url, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
+}
+
+function createTextureSet(scene: Scene, key: HangarTextureKey): HangarTextureSet {
+  const definition = TEXTURE_DEFINITIONS[key];
+  const albedo = createTexture(scene, definition.albedo);
+  const normal = createTexture(scene, definition.normal);
+  const roughness = createTexture(scene, definition.roughness);
+  const metallic = createTexture(scene, definition.metallic);
+  const ao = createTexture(scene, definition.ao);
+
+  [albedo, normal, roughness, metallic, ao].forEach((texture) => {
+    texture.wrapU = Texture.WRAP_ADDRESSMODE;
+    texture.wrapV = Texture.WRAP_ADDRESSMODE;
+  });
+  normal.invertZ = true;
+  normal.gammaSpace = false;
+
+  return { albedo, normal, roughness, metallic, ao };
+}
+
+export function getHangarTextureSet(scene: Scene, key: HangarTextureKey): HangarTextureSet {
+  let map = textureCache.get(scene);
+  if (!map) {
+    map = new Map<HangarTextureKey, HangarTextureSet>();
+    textureCache.set(scene, map);
+  }
+  let set = map.get(key);
+  if (!set) {
+    set = createTextureSet(scene, key);
+    map.set(key, set);
+  }
+  return set;
+}
+
+export function applyHangarTextures(
+  material: PBRMaterial,
+  textures: HangarTextureSet,
+  tiling: { u: number; v: number },
+) {
+  disposeHangarMaterial(material);
+
+  const albedo = textures.albedo.clone();
+  const normal = textures.normal.clone();
+  const metallic = textures.metallic.clone();
+  const ao = textures.ao.clone();
+
+  [albedo, normal, metallic, ao].forEach((texture) => {
+    texture.uScale = tiling.u;
+    texture.vScale = tiling.v;
+    texture.wrapU = Texture.WRAP_ADDRESSMODE;
+    texture.wrapV = Texture.WRAP_ADDRESSMODE;
+  });
+
+  material.albedoTexture = albedo;
+  material.bumpTexture = normal;
+  material.metallicTexture = metallic;
+  material.ambientTexture = ao;
+
+  const metadata = (material.metadata as { hangarTextureClones?: Texture[] } | undefined) ?? {};
+  metadata.hangarTextureClones = [albedo, normal, metallic, ao];
+  material.metadata = metadata;
+}
+
+export function disposeHangarMaterial(material: PBRMaterial) {
+  const metadata = (material.metadata as { hangarTextureClones?: Texture[] } | undefined) ?? {};
+  metadata.hangarTextureClones?.forEach((texture) => {
+    texture.dispose();
+  });
+  if (metadata.hangarTextureClones) {
+    metadata.hangarTextureClones = [];
+  }
+  material.metadata = metadata;
+}
+
+export function disposeHangarTextureCache(scene: Scene) {
+  const map = textureCache.get(scene);
+  if (!map) {
+    return;
+  }
+  map.forEach((set) => {
+    set.albedo.dispose();
+    set.normal.dispose();
+    set.roughness.dispose();
+    set.metallic.dispose();
+    set.ao.dispose();
+  });
+  map.clear();
+  textureCache.delete(scene);
+}
+</file>
+
+<file path="src/fps/core/playerController.ts">
+import { KeyboardEventTypes, Quaternion, UniversalCamera, Vector3, type Scene } from "babylonjs";
+import { CAMERA_SETTINGS, INPUT_KEYS } from "../constants";
+import type { PlayerStore } from "../state/playerStore";
+import type {
+  PlayerState,
+  PlayerTransformState,
+  QuaternionSerialized,
+  Vector3Serialized,
+} from "../state/playerState";
+import { serializeQuaternion, serializeVector3 } from "../state/playerState";
+
+const KEYBOARD_MOVE_MAP: Record<string, { axis: "x" | "z"; direction: number }> = {
+  KeyW: { axis: "z", direction: 1 },
+  ArrowUp: { axis: "z", direction: 1 },
+  KeyS: { axis: "z", direction: -1 },
+  ArrowDown: { axis: "z", direction: -1 },
+  KeyA: { axis: "x", direction: -1 },
+  ArrowLeft: { axis: "x", direction: -1 },
+  KeyD: { axis: "x", direction: 1 },
+  ArrowRight: { axis: "x", direction: 1 },
+};
+
+const CROUCH_KEYS = new Set(["ControlLeft", "ControlRight"]);
+const JUMP_KEYS = new Set(["Space"]);
+
+interface PlayerControllerOptions {
+  scene: Scene;
+  canvas: HTMLCanvasElement;
+  store: PlayerStore;
+}
+
+export interface PlayerController {
+  camera: UniversalCamera;
+  dispose(): void;
+  teleport(position: Vector3Serialized, orientation?: QuaternionSerialized): void;
+  setCutsceneLock(locked: boolean): void;
+}
+
+export function createPlayerController(options: PlayerControllerOptions): PlayerController {
+  const { scene, canvas, store } = options;
+  const engine = scene.getEngine();
+  const initialState = store.getSnapshot();
+
+  const camera = new UniversalCamera(
+    "fpCam",
+    new Vector3(
+      initialState.transform.position.x,
+      initialState.transform.position.y || CAMERA_SETTINGS.eyeLevel,
+      initialState.transform.position.z,
+    ),
     scene,
   );
-  const ghostWallMaterial = new StandardMaterial("ghost-wall-mat", scene);
-  ghostWallMaterial.diffuseColor = new Color3(0.35, 0.77, 0.93);
-  ghostWallMaterial.alpha = 0.32;
-  ghostWallMaterial.specularColor = Color3.Black();
-  ghostWallMaterial.emissiveColor = new Color3(0.1, 0.25, 0.36);
-  ghostWall.material = ghostWallMaterial;
-  ghostWall.isPickable = false;
-
-  const ghostLamp = MeshBuilder.CreateCylinder(
-    "ghost-lamp",
-    {
-      height: LAMP_DIMENSIONS.height,
-      diameter: LAMP_DIMENSIONS.radius * 2,
-      tessellation: 16,
-    },
-    scene,
+  camera.minZ = CAMERA_SETTINGS.minZ;
+  camera.maxZ = CAMERA_SETTINGS.maxZ;
+  camera.speed = CAMERA_SETTINGS.speed;
+  camera.angularSensibility = CAMERA_SETTINGS.angularSensibility;
+  camera.inertia = CAMERA_SETTINGS.inertia;
+  camera.applyGravity = true;
+  camera.checkCollisions = true;
+  camera.ellipsoid = new Vector3(
+    CAMERA_SETTINGS.ellipsoid.x,
+    CAMERA_SETTINGS.ellipsoid.y,
+    CAMERA_SETTINGS.ellipsoid.z,
   );
+  camera.ellipsoidOffset = new Vector3(
+    CAMERA_SETTINGS.ellipsoidOffset.x,
+    CAMERA_SETTINGS.ellipsoidOffset.y,
+    CAMERA_SETTINGS.ellipsoidOffset.z,
+  );
+  camera.keysUp.push(INPUT_KEYS.move.forward);
+  camera.keysLeft.push(INPUT_KEYS.move.left);
+  camera.keysDown.push(INPUT_KEYS.move.backward);
+  camera.keysRight.push(INPUT_KEYS.move.right);
 
-  const ghostLampMaterial = new StandardMaterial("ghost-lamp-mat", scene);
-  ghostLampMaterial.diffuseColor = new Color3(0.98, 0.85, 0.5);
-  ghostLampMaterial.alpha = 0.45;
-  ghostLampMaterial.specularColor = new Color3(0.2, 0.2, 0.2);
-  ghostLampMaterial.emissiveColor = new Color3(0.75, 0.62, 0.3);
-  ghostLamp.material = ghostLampMaterial;
-  ghostLamp.isPickable = false;
+  const initialQuaternion = new Quaternion(
+    initialState.transform.orientation.x,
+    initialState.transform.orientation.y,
+    initialState.transform.orientation.z,
+    initialState.transform.orientation.w,
+  );
+  applyQuaternionToCamera(camera, initialQuaternion);
 
-  let mode: PlacementMode = "wall";
-
-  const syncVisibility = () => {
-    if (mode === "wall") {
-      ghostWall.setEnabled(true);
-      ghostWallMaterial.alpha = 0.32;
-      ghostLamp.setEnabled(false);
-      ghostLampMaterial.alpha = 0;
-    } else {
-      ghostWall.setEnabled(false);
-      ghostWallMaterial.alpha = 0;
-      ghostLamp.setEnabled(true);
-      ghostLampMaterial.alpha = 0.45;
+  let controlsAttached = false;
+  const attachControls = () => {
+    if (controlsAttached) {
+      return;
+    }
+    camera.attachControl(canvas, true);
+    controlsAttached = true;
+  };
+  const detachControls = () => {
+    if (!controlsAttached) {
+      return;
+    }
+    camera.detachControl();
+    controlsAttached = false;
+    if (document.pointerLockElement === canvas) {
+      try {
+        document.exitPointerLock();
+      } catch {
+        // ignore pointer lock failures
+      }
     }
   };
 
-  const hide = () => {
-    ghostWall.setEnabled(false);
-    ghostLamp.setEnabled(false);
-    ghostWallMaterial.alpha = 0;
-    ghostLampMaterial.alpha = 0;
+  if (!initialState.input.cameraLocked && !initialState.input.movementLocked) {
+    attachControls();
+  }
+
+  const actions = store.getActions();
+  let isPushingFromCamera = false;
+  let lastTransformSignature = transformSignature(initialState.transform);
+  let lastFramePosition = camera.position.clone();
+
+  const pointerLockListener = () => {
+    const pointerLocked = document.pointerLockElement === canvas;
+    actions.patchInput({ pointerLocked });
+  };
+  document.addEventListener("pointerlockchange", pointerLockListener);
+
+  const pressedKeys = new Set<string>();
+  let lastMovementIntent = initialState.movementIntent;
+
+  const updateMovementIntent = () => {
+    const move = { x: 0, z: 0 };
+    pressedKeys.forEach((code) => {
+      const mapping = KEYBOARD_MOVE_MAP[code];
+      if (!mapping) {
+        return;
+      }
+      move[mapping.axis] += mapping.direction;
+    });
+
+    const length = Math.hypot(move.x, move.z);
+    if (length > 1e-3) {
+      move.x /= Math.max(1, length);
+      move.z /= Math.max(1, length);
+    } else {
+      move.x = 0;
+      move.z = 0;
+    }
+
+    const sprint = INPUT_KEYS.sprint.some((code) => pressedKeys.has(code));
+    const jump = Array.from(JUMP_KEYS).some((code) => pressedKeys.has(code));
+    const crouch = Array.from(CROUCH_KEYS).some((code) => pressedKeys.has(code));
+
+    if (
+      almostEqual(move.x, lastMovementIntent.move.x) &&
+      almostEqual(move.z, lastMovementIntent.move.z) &&
+      sprint === lastMovementIntent.sprint &&
+      jump === lastMovementIntent.jump &&
+      crouch === lastMovementIntent.crouch
+    ) {
+      return;
+    }
+
+    const next = {
+      move,
+      sprint,
+      jump,
+      crouch,
+    };
+    actions.setMovementIntent({
+      move,
+      sprint,
+      jump,
+      crouch,
+    });
+    lastMovementIntent = next;
   };
 
-  hide();
+  const keyboardObserver = scene.onKeyboardObservable.add((info) => {
+    const event = info.event;
+    if (info.type === KeyboardEventTypes.KEYDOWN) {
+      pressedKeys.add(event.code);
+    } else if (info.type === KeyboardEventTypes.KEYUP) {
+      pressedKeys.delete(event.code);
+    }
+    updateMovementIntent();
+  });
+
+  const applyInputState = (state: PlayerState) => {
+    const { cameraLocked, movementLocked } = state.input;
+    if (cameraLocked || movementLocked) {
+      detachControls();
+    } else {
+      attachControls();
+    }
+  };
+
+  const subscription = store.subscribe((state) => {
+    applyInputState(state);
+    lastMovementIntent = state.movementIntent;
+
+    const signature = transformSignature(state.transform);
+    if (isPushingFromCamera) {
+      lastTransformSignature = signature;
+      return;
+    }
+    if (signature === lastTransformSignature) {
+      return;
+    }
+    lastTransformSignature = signature;
+    applyTransformToCamera(camera, state.transform);
+    lastFramePosition = camera.position.clone();
+  });
+
+  const transformObserver = scene.onBeforeRenderObservable.add(() => {
+    const deltaSeconds = engine.getDeltaTime() / 1000;
+    const currentPosition = camera.position;
+    const velocity = deltaSeconds > 1e-4 ? currentPosition.subtract(lastFramePosition).scale(1 / deltaSeconds) : Vector3.Zero();
+    lastFramePosition = currentPosition.clone();
+
+    if (Math.abs(camera.rotation.z) > 1e-4) {
+      camera.rotation.z = 0;
+    }
+    const quaternion = Quaternion.RotationYawPitchRoll(
+      camera.rotation.y,
+      camera.rotation.x,
+      0,
+    );
+
+    const nextTransform: PlayerTransformState = {
+      position: serializeVector3(currentPosition.x, currentPosition.y, currentPosition.z),
+      orientation: serializeQuaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w),
+      velocity: serializeVector3(velocity.x, velocity.y, velocity.z),
+    };
+
+    const signature = transformSignature(nextTransform);
+    if (signature === lastTransformSignature) {
+      return;
+    }
+    isPushingFromCamera = true;
+    actions.setTransform(nextTransform);
+    isPushingFromCamera = false;
+    lastTransformSignature = signature;
+  });
+
+  const teleport = (position: Vector3Serialized, orientation?: QuaternionSerialized) => {
+    const quaternion = orientation
+      ? new Quaternion(orientation.x, orientation.y, orientation.z, orientation.w)
+      : Quaternion.RotationYawPitchRoll(camera.rotation.y, camera.rotation.x, camera.rotation.z);
+
+    applyTransformToCamera(camera, {
+      position,
+      orientation: orientation
+        ? orientation
+        : {
+            x: quaternion.x,
+            y: quaternion.y,
+            z: quaternion.z,
+            w: quaternion.w,
+          },
+      velocity: serializeVector3(0, 0, 0),
+    });
+    lastFramePosition = camera.position.clone();
+    const sanitized = Quaternion.RotationYawPitchRoll(camera.rotation.y, camera.rotation.x, 0);
+    const transform: PlayerTransformState = {
+      position: serializeVector3(position.x, position.y, position.z),
+      orientation: serializeQuaternion(sanitized.x, sanitized.y, sanitized.z, sanitized.w),
+      velocity: serializeVector3(0, 0, 0),
+    };
+    isPushingFromCamera = true;
+    actions.setTransform(transform);
+    isPushingFromCamera = false;
+    lastTransformSignature = transformSignature(transform);
+  };
+
+  const setCutsceneLock = (locked: boolean) => {
+    actions.patchInput({
+      movementLocked: locked,
+      cameraLocked: locked,
+    });
+    if (locked) {
+      detachControls();
+    } else {
+      attachControls();
+    }
+  };
+
+  const dispose = () => {
+    document.removeEventListener("pointerlockchange", pointerLockListener);
+    scene.onBeforeRenderObservable.remove(transformObserver);
+    scene.onKeyboardObservable.remove(keyboardObserver);
+    subscription();
+    if (controlsAttached) {
+      detachControls();
+    }
+    camera.dispose();
+  };
 
   return {
-    showWall: (position: Vector3, rotation: number) => {
-      mode = "wall";
-      ghostWall.position.copyFrom(position);
-      ghostWall.rotation.y = degreesToRadians(rotation);
-      syncVisibility();
+    camera,
+    dispose,
+    teleport,
+    setCutsceneLock,
+  };
+}
+
+function transformSignature(transform: PlayerTransformState): string {
+  return [
+    transform.position.x,
+    transform.position.y,
+    transform.position.z,
+    transform.orientation.x,
+    transform.orientation.y,
+    transform.orientation.z,
+    transform.orientation.w,
+    transform.velocity.x,
+    transform.velocity.y,
+    transform.velocity.z,
+  ].join("|");
+}
+
+function applyTransformToCamera(camera: UniversalCamera, transform: PlayerTransformState) {
+  camera.position.set(transform.position.x, transform.position.y, transform.position.z);
+  const quaternion = new Quaternion(
+    transform.orientation.x,
+    transform.orientation.y,
+    transform.orientation.z,
+    transform.orientation.w,
+  );
+  applyQuaternionToCamera(camera, quaternion);
+}
+
+function applyQuaternionToCamera(camera: UniversalCamera, quaternion: Quaternion) {
+  const euler = quaternion.toEulerAngles();
+  camera.rotation.set(euler.x, euler.y, 0);
+}
+
+function almostEqual(a: number, b: number) {
+  return Math.abs(a - b) <= 1e-5;
+}
+</file>
+
+<file path="src/fps/placement/surfaces/floorSurface.ts">
+import { Matrix, Vector3 } from "babylonjs";
+import type { AbstractMesh, PickingInfo } from "babylonjs";
+import type { PlacementSurface } from "./placementSurface";
+import type {
+  FloorMountConstraints,
+  PlacementFrame,
+  PlacementMode,
+  SurfaceSampleRequest,
+} from "./types";
+import { clamp } from "../../utils/math";
+
+export interface FloorSurfaceOptions {
+  id: string;
+  mesh: AbstractMesh;
+  up?: Vector3;
+  forward?: Vector3;
+}
+
+export class FloorSurface implements PlacementSurface {
+  public readonly id: string;
+  public readonly mesh: AbstractMesh;
+  private readonly up: Vector3;
+  private readonly forward: Vector3;
+
+  constructor(options: FloorSurfaceOptions) {
+    this.id = options.id;
+    this.mesh = options.mesh;
+    this.up = (options.up ?? Vector3.Up()).normalize();
+    const forward = options.forward ?? new Vector3(0, 0, 1);
+    this.forward = forward.normalize();
+  }
+
+  supports(mode: PlacementMode) {
+    return mode === "floor-mount";
+  }
+
+  sample(request: SurfaceSampleRequest): PlacementFrame | null {
+    if (request.mode !== "floor-mount") {
+      return null;
+    }
+
+    const constraints = request.constraints as FloorMountConstraints;
+    if (constraints.type !== "floor-mount") {
+      return null;
+    }
+
+    return this.sampleFloorMount(request.pick, constraints);
+  }
+
+  dispose() {
+    // Nothing to release for now.
+  }
+
+  private sampleFloorMount(pick: PickingInfo, constraints: FloorMountConstraints): PlacementFrame | null {
+    if (!pick.hit || pick.pickedMesh?.uniqueId !== this.mesh.uniqueId || !pick.pickedPoint) {
+      return null;
+    }
+
+    const mesh = this.mesh;
+    const worldMatrix = mesh.getWorldMatrix();
+    const inverse = Matrix.Identity();
+    worldMatrix.invertToRef(inverse);
+
+    const localPoint = Vector3.TransformCoordinates(pick.pickedPoint, inverse);
+    const bounds = mesh.getBoundingInfo().boundingBox.extendSize;
+
+    const halfWidth = bounds.x;
+    const halfDepth = bounds.z;
+
+    const snap = constraints.grid > 0 ? constraints.grid : 0;
+    const maxX = Math.max(halfWidth - constraints.itemSize.width / 2, 0);
+    const maxZ = Math.max(halfDepth - constraints.itemSize.depth / 2, 0);
+
+    const snappedX = snap
+      ? clamp(Math.round(localPoint.x / snap) * snap, -maxX, maxX)
+      : clamp(localPoint.x, -maxX, maxX);
+    const snappedZ = snap
+      ? clamp(Math.round(localPoint.z / snap) * snap, -maxZ, maxZ)
+      : clamp(localPoint.z, -maxZ, maxZ);
+
+    const baseLocal = new Vector3(snappedX, 0, snappedZ);
+    const baseWorld = Vector3.TransformCoordinates(baseLocal, worldMatrix);
+
+    const up = this.up.clone();
+    const forward = this.forward.clone();
+    const right = Vector3.Cross(up, forward).normalize();
+    const heightOffset = constraints.heightOffset + constraints.itemSize.height / 2;
+    const position = baseWorld.add(up.scale(heightOffset));
+
+    return {
+      surfaceId: this.id,
+      mesh,
+      mode: "floor-mount",
+      position,
+      forward,
+      up,
+      right,
+      local: {
+        x: Number(snappedX.toFixed(3)),
+        y: 0,
+        z: Number(snappedZ.toFixed(3)),
+      },
+    };
+  }
+}
+</file>
+
+<file path="src/fps/placement/surfaces/placementSurface.ts">
+import type { AbstractMesh } from "babylonjs";
+import type { PlacementFrame, PlacementMode, SurfaceSampleRequest } from "./types";
+
+export interface PlacementSurface {
+  readonly id: string;
+  readonly mesh: AbstractMesh;
+  supports(mode: PlacementMode): boolean;
+  sample(request: SurfaceSampleRequest): PlacementFrame | null;
+  dispose(): void;
+}
+</file>
+
+<file path="src/fps/placement/surfaces/surfaceRegistry.ts">
+import type { AbstractMesh, PickingInfo } from "babylonjs";
+import type { PlacementSurface } from "./placementSurface";
+
+export interface SurfaceRegistry {
+  register(surface: PlacementSurface): void;
+  unregister(mesh: AbstractMesh): void;
+  resolveFromMesh(mesh?: AbstractMesh | null): PlacementSurface | null;
+  resolveFromPick(pick?: PickingInfo | null): PlacementSurface | null;
+  list(): PlacementSurface[];
+  dispose(): void;
+}
+
+export function createSurfaceRegistry(): SurfaceRegistry {
+  const surfacesById = new Map<string, PlacementSurface>();
+  const surfacesByMesh = new Map<number, PlacementSurface>();
+
+  const register = (surface: PlacementSurface) => {
+    surfacesById.set(surface.id, surface);
+    surfacesByMesh.set(surface.mesh.uniqueId, surface);
+  };
+
+  const unregister = (mesh: AbstractMesh) => {
+    const surface = surfacesByMesh.get(mesh.uniqueId);
+    if (!surface) {
+      return;
+    }
+    surfacesByMesh.delete(mesh.uniqueId);
+    surfacesById.delete(surface.id);
+    surface.dispose();
+  };
+
+  return {
+    register,
+    unregister,
+    resolveFromMesh: (mesh?: AbstractMesh | null) => {
+      if (!mesh) {
+        return null;
+      }
+      return surfacesByMesh.get(mesh.uniqueId) ?? null;
     },
-    showLamp: (position: Vector3) => {
-      mode = "lamp";
-      ghostLamp.position.copyFrom(position);
-      syncVisibility();
+    resolveFromPick: (pick?: PickingInfo | null) => {
+      if (!pick) {
+        return null;
+      }
+      return surfacesByMesh.get(pick.pickedMesh?.uniqueId ?? -1) ?? null;
     },
-    hide: () => {
-      hide();
-    },
-    setMode: (nextMode: PlacementMode) => {
-      mode = nextMode;
-      hide();
-    },
+    list: () => Array.from(surfacesById.values()),
     dispose: () => {
-      ghostWall.dispose(false, true);
-      ghostLamp.dispose(false, true);
+      surfacesByMesh.forEach((surface) => {
+        surface.dispose();
+      });
+      surfacesByMesh.clear();
+      surfacesById.clear();
     },
   };
+}
+</file>
+
+<file path="src/fps/placement/surfaces/types.ts">
+import type { AbstractMesh, PickingInfo, Vector3 } from "babylonjs";
+
+export type PlacementMode = "wall-mount" | "floor-mount" | "ceiling-mount";
+
+export interface PlacementFrame {
+  surfaceId: string;
+  mesh: AbstractMesh;
+  mode: PlacementMode;
+  position: Vector3;
+  forward: Vector3;
+  up: Vector3;
+  right: Vector3;
+  local: {
+    x: number;
+    y: number;
+    z: number;
+  };
+}
+
+export interface WallMountConstraints {
+  type: "wall-mount";
+  grid: number;
+  itemSize: {
+    width: number;
+    height: number;
+    depth: number;
+  };
+  offset: number;
+  boundsPadding: {
+    horizontal: number;
+    vertical: number;
+  };
+}
+
+export interface FloorMountConstraints {
+  type: "floor-mount";
+  grid: number;
+  itemSize: {
+    width: number;
+    depth: number;
+    height: number;
+  };
+  heightOffset: number;
+}
+
+export type PlacementConstraints = WallMountConstraints | FloorMountConstraints;
+
+export interface SurfaceSampleRequest {
+  mode: PlacementMode;
+  constraints: PlacementConstraints;
+  pick: PickingInfo;
+}
+</file>
+
+<file path="src/fps/placement/surfaces/wallSurface.ts">
+import { Matrix, Vector3 } from "babylonjs";
+import type { AbstractMesh, PickingInfo } from "babylonjs";
+import type { PlacementSurface } from "./placementSurface";
+import type {
+  PlacementFrame,
+  PlacementMode,
+  SurfaceSampleRequest,
+  WallMountConstraints,
+} from "./types";
+import { clamp } from "../../utils/math";
+
+export interface WallSurfaceOptions {
+  id: string;
+  mesh: AbstractMesh;
+  inward: Vector3;
+  up?: Vector3;
+}
+
+export class WallSurface implements PlacementSurface {
+  public readonly id: string;
+  public readonly mesh: AbstractMesh;
+  private readonly inward: Vector3;
+  private readonly up: Vector3;
+
+  constructor(options: WallSurfaceOptions) {
+    this.id = options.id;
+    this.mesh = options.mesh;
+    this.inward = options.inward.normalize();
+    this.up = (options.up ?? Vector3.Up()).normalize();
+  }
+
+  supports(mode: PlacementMode) {
+    return mode === "wall-mount";
+  }
+
+  sample(request: SurfaceSampleRequest): PlacementFrame | null {
+    if (request.mode !== "wall-mount") {
+      return null;
+    }
+
+    const constraints = request.constraints as WallMountConstraints;
+    if (constraints.type !== "wall-mount") {
+      return null;
+    }
+
+    return this.sampleWallMount(request.pick, constraints);
+  }
+
+  dispose() {
+    // Nothing to release for now.
+  }
+
+  private sampleWallMount(pick: PickingInfo, constraints: WallMountConstraints): PlacementFrame | null {
+    const { mesh } = this;
+    if (!pick.hit || pick.pickedMesh?.uniqueId !== mesh.uniqueId || !pick.pickedPoint) {
+      return null;
+    }
+
+    const worldMatrix = mesh.getWorldMatrix();
+    const inverse = Matrix.Identity();
+    worldMatrix.invertToRef(inverse);
+
+    const localPoint = Vector3.TransformCoordinates(pick.pickedPoint, inverse);
+    const bounds = mesh.getBoundingInfo().boundingBox.extendSize;
+
+    const halfWidth = bounds.x;
+    const halfHeight = bounds.y;
+    const paddingX = constraints.boundsPadding.horizontal;
+    const paddingY = constraints.boundsPadding.vertical;
+
+    const allowedHalfWidth = Math.max(halfWidth - (constraints.itemSize.width / 2 + paddingX), 0);
+    const allowedHalfHeight = Math.max(halfHeight - (constraints.itemSize.height / 2 + paddingY), 0);
+
+    const snap = constraints.grid > 0 ? constraints.grid : 0;
+    const snappedX = snap
+      ? clamp(Math.round(localPoint.x / snap) * snap, -allowedHalfWidth, allowedHalfWidth)
+      : clamp(localPoint.x, -allowedHalfWidth, allowedHalfWidth);
+    const snappedY = snap
+      ? clamp(Math.round(localPoint.y / snap) * snap, -allowedHalfHeight, allowedHalfHeight)
+      : clamp(localPoint.y, -allowedHalfHeight, allowedHalfHeight);
+
+    const baseLocal = new Vector3(snappedX, snappedY, 0);
+    const baseWorld = Vector3.TransformCoordinates(baseLocal, worldMatrix);
+
+    const forward = this.inward.clone();
+    if (pick.ray && Vector3.Dot(forward, pick.ray.direction) > 0) {
+      forward.scaleInPlace(-1);
+    }
+
+    const right = Vector3.Cross(this.up, forward).normalize();
+    const up = Vector3.Cross(forward, right).normalize();
+
+    const depthOffset = constraints.itemSize.depth / 2 + constraints.offset;
+    const position = baseWorld.add(forward.scale(depthOffset));
+
+    return {
+      surfaceId: this.id,
+      mesh,
+      mode: "wall-mount",
+      position,
+      forward,
+      up,
+      right,
+      local: {
+        x: Number(snappedX.toFixed(3)),
+        y: Number(snappedY.toFixed(3)),
+        z: 0,
+      },
+    };
+  }
+}
+</file>
+
+<file path="src/fps/placement/tools/deleteTool.ts">
+import { PointerEventTypes } from "babylonjs";
+import { INPUT_KEYS } from "../../constants";
+import type { PlacementToolDefinition, ToolRuntimeContext } from "../placementTypes";
+
+const TOOL_ID = "delete";
+
+const pickRemovable = (context: ToolRuntimeContext) =>
+  context.scene.pick(
+    context.scene.pointerX,
+    context.scene.pointerY,
+    (mesh) => {
+      const metadata = mesh?.metadata as { toolId?: unknown } | undefined;
+      return typeof metadata?.toolId === "string";
+    },
+  );
+
+export const deleteToolDefinition: PlacementToolDefinition = {
+  id: TOOL_ID,
+  label: "Remover",
+  icon: "✖",
+  hotkey: INPUT_KEYS.deleteMode,
+  create: (context: ToolRuntimeContext) => {
+    const clear = () => {
+      context.highlight(null);
+      context.ghost.hide();
+    };
+
+    return {
+      id: TOOL_ID,
+      onActivate: () => {
+        clear();
+      },
+      onDeactivate: () => {
+        clear();
+      },
+      onPointerLockChange: (isLocked: boolean) => {
+        if (!isLocked) {
+          clear();
+        }
+      },
+      onPointerMove: (pointerInfo) => {
+        if (pointerInfo.type !== PointerEventTypes.POINTERMOVE) {
+          return;
+        }
+
+        const pick = pickRemovable(context);
+        if (!context.withinRange(pick?.pickedPoint)) {
+          clear();
+          return;
+        }
+
+        const mesh = pick?.pickedMesh;
+        if (!mesh) {
+          context.highlight(null);
+          return;
+        }
+
+        context.highlight(mesh);
+        context.ghost.hide();
+      },
+      onPointerDown: (pointerInfo) => {
+        if (pointerInfo.type !== PointerEventTypes.POINTERDOWN) {
+          return;
+        }
+        if (pointerInfo.event.button !== 0) {
+          return;
+        }
+
+        const pick = pickRemovable(context);
+        if (!context.withinRange(pick?.pickedPoint)) {
+          return;
+        }
+
+        if (context.removeMesh(pick?.pickedMesh ?? null)) {
+          context.highlight(null);
+        }
+      },
+      dispose: () => {
+        clear();
+      },
+    };
+  },
+};
+</file>
+
+<file path="src/fps/placement/tools/index.ts">
+import type { PlacementToolDefinition } from "../placementTypes";
+import { deleteToolDefinition } from "./deleteTool";
+import { lampToolDefinition } from "./lampTool";
+import { wallToolDefinition } from "./wallTool";
+
+export const TOOL_DEFINITIONS: PlacementToolDefinition[] = [
+  wallToolDefinition,
+  lampToolDefinition,
+  deleteToolDefinition,
+];
+
+export const TOOL_DEFINITION_BY_ID = new Map<string, PlacementToolDefinition>(
+  TOOL_DEFINITIONS.map((definition) => [definition.id, definition]),
+);
+</file>
+
+<file path="src/fps/placement/placementSolver.ts">
+import type { PickingInfo } from "babylonjs";
+import type { SurfaceRegistry } from "./surfaces/surfaceRegistry";
+import type {
+  PlacementConstraints,
+  PlacementFrame,
+  PlacementMode,
+} from "./surfaces/types";
+
+export interface PlacementModeEntry<C extends PlacementConstraints = PlacementConstraints> {
+  mode: PlacementMode;
+  constraints: C;
+}
+
+export interface PlacementProfile {
+  modes: PlacementModeEntry[];
+}
+
+export interface PlacementSolver {
+  solve(profile: PlacementProfile, pick: PickingInfo | null): PlacementFrame | null;
+}
+
+export function createPlacementSolver(surfaceRegistry: SurfaceRegistry): PlacementSolver {
+  return {
+    solve: (profile: PlacementProfile, pick: PickingInfo | null) => {
+      if (!pick) {
+        return null;
+      }
+      const surface = surfaceRegistry.resolveFromPick(pick);
+      if (!surface) {
+        return null;
+      }
+
+      for (const entry of profile.modes) {
+        if (!surface.supports(entry.mode)) {
+          continue;
+        }
+        const frame = surface.sample({
+          mode: entry.mode,
+          constraints: entry.constraints,
+          pick,
+        });
+        if (frame) {
+          return frame;
+        }
+      }
+
+      return null;
+    },
+  };
+}
+</file>
+
+<file path="src/fps/state/playerModules.ts">
+import type { PlayerStore } from "./playerStore";
+import type { PlayerModuleDefinition } from "./playerStore";
+
+interface HealthModuleState {
+  current: number;
+  max: number;
+  [key: string]: unknown;
+}
+
+interface EnergyModuleState {
+  current: number;
+  max: number;
+  regenPerSecond: number;
+  [key: string]: unknown;
+}
+
+interface HungerModuleState {
+  value: number;
+  threshold: number;
+  [key: string]: unknown;
+}
+
+interface InventorySlot {
+  id: string;
+  quantity: number;
+  [key: string]: unknown;
+}
+
+interface InventoryModuleState {
+  capacity: number;
+  slots: InventorySlot[];
+  [key: string]: unknown;
+}
+
+const healthModule: PlayerModuleDefinition<HealthModuleState> = {
+  id: "vitals.health",
+  version: 1,
+  createInitialState: () => ({
+    current: 100,
+    max: 100,
+  }),
+  onRegister: (context) => {
+    context.emit({ type: "player.module.ready", payload: { moduleId: "vitals.health" } });
+  },
+};
+
+const energyModule: PlayerModuleDefinition<EnergyModuleState> = {
+  id: "vitals.energy",
+  version: 1,
+  createInitialState: () => ({
+    current: 100,
+    max: 100,
+    regenPerSecond: 2,
+  }),
+  onRegister: (context) => {
+    context.emit({ type: "player.module.ready", payload: { moduleId: "vitals.energy" } });
+  },
+};
+
+const hungerModule: PlayerModuleDefinition<HungerModuleState> = {
+  id: "vitals.hunger",
+  version: 1,
+  createInitialState: () => ({
+    value: 0,
+    threshold: 100,
+  }),
+  onRegister: (context) => {
+    context.emit({ type: "player.module.ready", payload: { moduleId: "vitals.hunger" } });
+  },
+};
+
+const inventoryModule: PlayerModuleDefinition<InventoryModuleState> = {
+  id: "inventory.core",
+  version: 1,
+  createInitialState: () => ({
+    capacity: 24,
+    slots: [],
+  }),
+  onRegister: (context) => {
+    context.emit({ type: "player.module.ready", payload: { moduleId: "inventory.core" } });
+  },
+};
+
+export function registerBaselinePlayerModules(store: PlayerStore) {
+  const actions = store.getActions();
+  actions.registerModule(healthModule);
+  actions.registerModule(energyModule);
+  actions.registerModule(hungerModule);
+  actions.registerModule(inventoryModule);
+}
+</file>
+
+<file path="src/fps/state/playerPersistence.ts">
+import type { PlayerStore } from "./playerStore";
+import type { PlayerState } from "./playerState";
+import { PLAYER_STATE_VERSION } from "./playerState";
+import { createEmptyPlayerState } from "./playerState";
+
+const DEFAULT_STORAGE_KEY = "starwatch.player-state";
+const DEFAULT_DEBOUNCE_MS = 250;
+
+export function loadPlayerState(storageKey = DEFAULT_STORAGE_KEY): PlayerState | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as PlayerState | undefined;
+    if (!parsed || typeof parsed.version !== "number") {
+      return null;
+    }
+    if (parsed.version !== PLAYER_STATE_VERSION) {
+      return null;
+    }
+    return normalizePlayerState(parsed);
+  } catch (error) {
+    console.warn("[PlayerPersistence] Failed to load player state:", error);
+    return null;
+  }
+}
+
+export function savePlayerState(state: PlayerState, storageKey = DEFAULT_STORAGE_KEY) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(state));
+  } catch (error) {
+    console.warn("[PlayerPersistence] Failed to save player state:", error);
+  }
+}
+
+export interface PlayerPersistenceController {
+  dispose(): void;
+  flush(): void;
+}
+
+export function createPlayerPersistence(
+  store: PlayerStore,
+  options?: {
+    storageKey?: string;
+    debounceMs?: number;
+  },
+): PlayerPersistenceController {
+  const storageKey = options?.storageKey ?? DEFAULT_STORAGE_KEY;
+  const debounceMs = options?.debounceMs ?? DEFAULT_DEBOUNCE_MS;
+
+  let latestState: PlayerState | null = null;
+  let timeoutHandle: number | null = null;
+  let disposed = false;
+  let skipNext = true;
+
+  const scheduleSave = () => {
+    if (timeoutHandle !== null) {
+      window.clearTimeout(timeoutHandle);
+    }
+    timeoutHandle = window.setTimeout(() => {
+      timeoutHandle = null;
+      if (!latestState) {
+        return;
+      }
+      savePlayerState(latestState, storageKey);
+    }, debounceMs);
+  };
+
+  const unsubscribe = store.subscribe((state) => {
+    latestState = state;
+    if (skipNext) {
+      skipNext = false;
+      return;
+    }
+    if (!disposed) {
+      scheduleSave();
+    }
+  });
+
+  return {
+    dispose: () => {
+      disposed = true;
+      unsubscribe();
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle);
+        timeoutHandle = null;
+      }
+    },
+    flush: () => {
+      if (!latestState) {
+        return;
+      }
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle);
+        timeoutHandle = null;
+      }
+      savePlayerState(latestState, storageKey);
+    },
+  };
+}
+
+function normalizePlayerState(state: PlayerState): PlayerState {
+  const snapshot = createEmptyPlayerState();
+  snapshot.transform = {
+    position: { ...state.transform.position },
+    orientation: { ...state.transform.orientation },
+    velocity: { ...state.transform.velocity },
+  };
+  snapshot.movementIntent = {
+    move: { ...state.movementIntent.move },
+    sprint: state.movementIntent.sprint,
+    jump: state.movementIntent.jump,
+    crouch: state.movementIntent.crouch,
+  };
+  snapshot.input = {
+    pointerLocked: state.input.pointerLocked,
+    movementLocked: state.input.movementLocked,
+    cameraLocked: state.input.cameraLocked,
+  };
+  snapshot.modules = {};
+  Object.values(state.modules ?? {}).forEach((module) => {
+    if (!module) {
+      return;
+    }
+    snapshot.modules[module.id] = {
+      id: module.id,
+      version: module.version,
+      state: { ...module.state },
+    };
+  });
+  return snapshot;
+}
+</file>
+
+<file path="src/fps/state/playerState.ts">
+export interface Vector3Serialized {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface QuaternionSerialized {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+}
+
+export interface PlayerTransformState {
+  position: Vector3Serialized;
+  orientation: QuaternionSerialized;
+  velocity: Vector3Serialized;
+}
+
+export interface PlayerMovementIntent {
+  move: {
+    x: number;
+    z: number;
+  };
+  sprint: boolean;
+  jump: boolean;
+  crouch: boolean;
+}
+
+export interface PlayerInputState {
+  pointerLocked: boolean;
+  movementLocked: boolean;
+  cameraLocked: boolean;
+}
+
+export interface PlayerModuleSnapshot<TState = Record<string, unknown>> {
+  id: string;
+  version: number;
+  state: TState;
+}
+
+export interface PlayerState {
+  version: number;
+  transform: PlayerTransformState;
+  movementIntent: PlayerMovementIntent;
+  input: PlayerInputState;
+  modules: Record<string, PlayerModuleSnapshot>;
+}
+
+export const PLAYER_STATE_VERSION = 1;
+
+export function createEmptyPlayerState(): PlayerState {
+  return {
+    version: PLAYER_STATE_VERSION,
+    transform: {
+      position: serializeVector3(0, 0, 0),
+      orientation: serializeQuaternion(0, 0, 0, 1),
+      velocity: serializeVector3(0, 0, 0),
+    },
+    movementIntent: {
+      move: { x: 0, z: 0 },
+      sprint: false,
+      jump: false,
+      crouch: false,
+    },
+    input: {
+      pointerLocked: false,
+      movementLocked: false,
+      cameraLocked: false,
+    },
+    modules: {},
+  };
+}
+
+export function serializeVector3(x: number, y: number, z: number): Vector3Serialized {
+  return {
+    x: round(x),
+    y: round(y),
+    z: round(z),
+  };
+}
+
+export function serializeQuaternion(
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+): QuaternionSerialized {
+  return {
+    x: round(x),
+    y: round(y),
+    z: round(z),
+    w: round(w),
+  };
+}
+
+function round(value: number) {
+  return Number(value.toFixed(5));
+}
+</file>
+
+<file path="src/fps/state/playerStore.ts">
+import {
+  createEmptyPlayerState,
+  PLAYER_STATE_VERSION,
+  type PlayerInputState,
+  type PlayerMovementIntent,
+  type PlayerModuleSnapshot,
+  type PlayerState,
+  type PlayerTransformState,
+} from "./playerState";
+
+type PlayerStateListener = (state: PlayerState) => void;
+
+export interface PlayerEvent<TPayload = unknown> {
+  type: string;
+  payload?: TPayload;
+}
+
+type PlayerEventListener = (event: PlayerEvent) => void;
+
+export interface PlayerModuleDefinition<TState extends Record<string, unknown>> {
+  id: string;
+  version: number;
+  createInitialState(): TState;
+  onRegister?(context: PlayerModuleContext<TState>): void;
+  onDispose?(context: PlayerModuleContext<TState>): void;
+}
+
+export interface PlayerModuleContext<TState extends Record<string, unknown>> {
+  read(): TState;
+  set(next: TState): void;
+  patch(patch: Partial<TState>): void;
+  emit(event: PlayerEvent): void;
+  actions(): PlayerActionContext;
+}
+
+export interface PlayerStoreActions {
+  setTransform(transform: PlayerTransformState): void;
+  patchMovementIntent(intent: Partial<PlayerMovementIntent>): void;
+  setMovementIntent(intent: PlayerMovementIntent): void;
+  patchInput(input: Partial<PlayerInputState>): void;
+  registerModule<TState extends Record<string, unknown>>(
+    definition: PlayerModuleDefinition<TState>,
+  ): void;
+  unregisterModule(moduleId: string): void;
+  emit(event: PlayerEvent): void;
+}
+
+export interface PlayerActionContext {
+  readState(): PlayerState;
+  readTransform(): PlayerTransformState;
+  setTransform(transform: PlayerTransformState): void;
+  patchMovementIntent(intent: Partial<PlayerMovementIntent>): void;
+  updateModule<TState extends Record<string, unknown>>(
+    moduleId: string,
+    updater: (current: TState) => TState,
+  ): void;
+  emit(event: PlayerEvent): void;
+}
+
+interface PlayerModuleRegistration<TState extends Record<string, unknown>> {
+  definition: PlayerModuleDefinition<TState>;
+  context: PlayerModuleContext<TState>;
+}
+
+export class PlayerStore {
+  private state: PlayerState;
+  private listeners: Set<PlayerStateListener>;
+  private eventListeners: Set<PlayerEventListener>;
+  private modules: Map<string, PlayerModuleRegistration<Record<string, unknown>>>;
+
+  constructor(initialState?: PlayerState) {
+    this.state = normalizePlayerState(initialState);
+    this.listeners = new Set();
+    this.eventListeners = new Set();
+    this.modules = new Map();
+  }
+
+  getSnapshot(): PlayerState {
+    return clonePlayerState(this.state);
+  }
+
+  getActions(): PlayerStoreActions {
+    return {
+      setTransform: (transform) => {
+        this.setTransform(transform);
+      },
+      patchMovementIntent: (intent) => {
+        this.patchMovementIntent(intent);
+      },
+      setMovementIntent: (intent) => {
+        this.setMovementIntent(intent);
+      },
+      patchInput: (input) => {
+        this.patchInput(input);
+      },
+      registerModule: (definition) => {
+        this.registerModule(definition);
+      },
+      unregisterModule: (moduleId) => {
+        this.unregisterModule(moduleId);
+      },
+      emit: (event) => {
+        this.emit(event);
+      },
+    };
+  }
+
+  getActionContext(): PlayerActionContext {
+    return {
+      readState: () => this.getSnapshot(),
+      readTransform: () => cloneTransform(this.state.transform),
+      setTransform: (transform) => this.setTransform(transform),
+      patchMovementIntent: (intent) => this.patchMovementIntent(intent),
+      updateModule: (moduleId, updater) => {
+        this.updateModule(moduleId, updater as (current: Record<string, unknown>) => Record<string, unknown>);
+      },
+      emit: (event) => this.emit(event),
+    };
+  }
+
+  subscribe(listener: PlayerStateListener): () => void {
+    this.listeners.add(listener);
+    listener(this.getSnapshot());
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  subscribeEvents(listener: PlayerEventListener): () => void {
+    this.eventListeners.add(listener);
+    return () => {
+      this.eventListeners.delete(listener);
+    };
+  }
+
+  replace(nextState: PlayerState) {
+    this.state = normalizePlayerState(nextState);
+    this.notify();
+  }
+
+  setTransform(transform: PlayerTransformState) {
+    if (transformsEqual(this.state.transform, transform)) {
+      return;
+    }
+    this.state = {
+      ...this.state,
+      transform: cloneTransform(transform),
+    };
+    this.notify();
+  }
+
+  setMovementIntent(intent: PlayerMovementIntent) {
+    if (movementIntentEqual(this.state.movementIntent, intent)) {
+      return;
+    }
+    this.state = {
+      ...this.state,
+      movementIntent: cloneMovementIntent(intent),
+    };
+    this.notify();
+  }
+
+  patchMovementIntent(intent: Partial<PlayerMovementIntent>) {
+    const next = { ...this.state.movementIntent, ...intent };
+    this.setMovementIntent(next);
+  }
+
+  patchInput(input: Partial<PlayerInputState>) {
+    const next = { ...this.state.input, ...input };
+    if (inputStateEqual(this.state.input, next)) {
+      return;
+    }
+    this.state = {
+      ...this.state,
+      input: next,
+    };
+    this.notify();
+  }
+
+  registerModule<TState extends Record<string, unknown>>(
+    definition: PlayerModuleDefinition<TState>,
+  ) {
+    if (this.modules.has(definition.id)) {
+      return;
+    }
+
+    const persisted = this.state.modules[definition.id];
+    const moduleState =
+      persisted && persisted.version === definition.version
+        ? (persisted.state as TState)
+        : definition.createInitialState();
+
+    this.state = {
+      ...this.state,
+      modules: {
+        ...this.state.modules,
+        [definition.id]: {
+          id: definition.id,
+          version: definition.version,
+          state: cloneRecord(moduleState),
+        },
+      },
+    };
+
+    const context: PlayerModuleContext<TState> = {
+      read: () => cloneRecord(this.state.modules[definition.id].state as TState),
+      set: (next) => {
+        this.state = {
+          ...this.state,
+          modules: {
+            ...this.state.modules,
+            [definition.id]: {
+              id: definition.id,
+              version: definition.version,
+              state: cloneRecord(next),
+            },
+          },
+        };
+        this.notify();
+        this.emit({ type: "player.module.updated", payload: { moduleId: definition.id } });
+      },
+      patch: (patch) => {
+        const previous = this.state.modules[definition.id].state as TState;
+        const next = { ...previous, ...patch };
+        context.set(next);
+      },
+      emit: (event) => {
+        this.emit(event);
+      },
+      actions: () => this.getActionContext(),
+    };
+
+    this.modules.set(definition.id, {
+      definition,
+      context,
+    });
+
+    definition.onRegister?.(context);
+    this.emit({ type: "player.module.registered", payload: { moduleId: definition.id } });
+    this.notify();
+  }
+
+  unregisterModule(moduleId: string) {
+    const registration = this.modules.get(moduleId);
+    if (!registration) {
+      return;
+    }
+
+    registration.definition.onDispose?.(registration.context);
+    this.modules.delete(moduleId);
+    const nextModules = { ...this.state.modules };
+    delete nextModules[moduleId];
+    this.state = {
+      ...this.state,
+      modules: nextModules,
+    };
+    this.emit({ type: "player.module.unregistered", payload: { moduleId } });
+    this.notify();
+  }
+
+  emit(event: PlayerEvent) {
+    this.eventListeners.forEach((listener) => {
+      listener(event);
+    });
+  }
+
+  private updateModule(
+    moduleId: string,
+    updater: (current: Record<string, unknown>) => Record<string, unknown>,
+  ) {
+    const moduleSnapshot = this.state.modules[moduleId];
+    if (!moduleSnapshot) {
+      return;
+    }
+    const current = moduleSnapshot.state;
+    const next = updater(current);
+    if (shallowEqual(current, next)) {
+      return;
+    }
+    this.state = {
+      ...this.state,
+      modules: {
+        ...this.state.modules,
+        [moduleId]: {
+          id: moduleSnapshot.id,
+          version: moduleSnapshot.version,
+          state: cloneRecord(next),
+        },
+      },
+    };
+    this.notify();
+    this.emit({ type: "player.module.updated", payload: { moduleId } });
+  }
+
+  private notify() {
+    const snapshot = this.getSnapshot();
+    this.listeners.forEach((listener) => {
+      listener(snapshot);
+    });
+  }
+}
+
+function normalizePlayerState(state?: PlayerState): PlayerState {
+  if (!state || state.version !== PLAYER_STATE_VERSION) {
+    return createEmptyPlayerState();
+  }
+  const snapshot = createEmptyPlayerState();
+  snapshot.transform = cloneTransform(state.transform);
+  snapshot.movementIntent = cloneMovementIntent(state.movementIntent);
+  snapshot.input = { ...state.input };
+  snapshot.modules = {};
+  Object.values(state.modules ?? {}).forEach((module) => {
+    if (!module) {
+      return;
+    }
+    snapshot.modules[module.id] = {
+      id: module.id,
+      version: module.version,
+      state: cloneRecord(module.state),
+    };
+  });
+  return snapshot;
+}
+
+function clonePlayerState(state: PlayerState): PlayerState {
+  return {
+    version: state.version,
+    transform: cloneTransform(state.transform),
+    movementIntent: cloneMovementIntent(state.movementIntent),
+    input: { ...state.input },
+    modules: cloneModules(state.modules),
+  };
+}
+
+function cloneTransform(transform: PlayerTransformState): PlayerTransformState {
+  return {
+    position: { ...transform.position },
+    orientation: { ...transform.orientation },
+    velocity: { ...transform.velocity },
+  };
+}
+
+function cloneMovementIntent(intent: PlayerMovementIntent): PlayerMovementIntent {
+  return {
+    move: { ...intent.move },
+    sprint: intent.sprint,
+    jump: intent.jump,
+    crouch: intent.crouch,
+  };
+}
+
+function cloneModules(
+  modules: Record<string, PlayerModuleSnapshot<Record<string, unknown>>>,
+): Record<string, PlayerModuleSnapshot<Record<string, unknown>>> {
+  const copy: Record<string, PlayerModuleSnapshot<Record<string, unknown>>> = {};
+  Object.values(modules).forEach((module) => {
+    if (!module) {
+      return;
+    }
+    copy[module.id] = {
+      id: module.id,
+      version: module.version,
+      state: cloneRecord(module.state),
+    };
+  });
+  return copy;
+}
+
+function cloneRecord<T extends Record<string, unknown>>(record: T): T {
+  return { ...record };
+}
+
+function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>) {
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) {
+    return false;
+  }
+  return keysA.every((key) => Object.is(a[key], b[key]));
+}
+
+function transformsEqual(a: PlayerTransformState, b: PlayerTransformState) {
+  return (
+    almostEqual(a.position.x, b.position.x) &&
+    almostEqual(a.position.y, b.position.y) &&
+    almostEqual(a.position.z, b.position.z) &&
+    almostEqual(a.velocity.x, b.velocity.x) &&
+    almostEqual(a.velocity.y, b.velocity.y) &&
+    almostEqual(a.velocity.z, b.velocity.z) &&
+    almostEqual(a.orientation.x, b.orientation.x) &&
+    almostEqual(a.orientation.y, b.orientation.y) &&
+    almostEqual(a.orientation.z, b.orientation.z) &&
+    almostEqual(a.orientation.w, b.orientation.w)
+  );
+}
+
+function movementIntentEqual(a: PlayerMovementIntent, b: PlayerMovementIntent) {
+  return (
+    almostEqual(a.move.x, b.move.x) &&
+    almostEqual(a.move.z, b.move.z) &&
+    a.sprint === b.sprint &&
+    a.jump === b.jump &&
+    a.crouch === b.crouch
+  );
+}
+
+function inputStateEqual(a: PlayerInputState, b: PlayerInputState) {
+  return (
+    a.pointerLocked === b.pointerLocked &&
+    a.movementLocked === b.movementLocked &&
+    a.cameraLocked === b.cameraLocked
+  );
+}
+
+function almostEqual(a: number, b: number) {
+  return Math.abs(a - b) <= 1e-5;
 }
 </file>
 
@@ -3110,63 +4783,91 @@ export function createShadowNetwork(initialGenerators: ShadowGenerator[] = []): 
 }
 </file>
 
-<file path="src/fps/placement/wallBuilder.ts">
-import { Color3, MeshBuilder, StandardMaterial, Vector3 } from "babylonjs";
-import type { Scene } from "babylonjs";
-import { GRID_SIZE, HULL_DIMENSIONS, WALL_DIMENSIONS } from "../constants";
-import type { BuilderWall } from "../types";
-import { clamp, degreesToRadians } from "../utils/math";
+<file path="src/fps/state/shipHydrator.ts">
+import { Color3, Matrix, Quaternion, Vector3 } from "babylonjs";
+import type { Scene, AbstractMesh } from "babylonjs";
+import { createWall } from "../placement/wallBuilder";
+import { createLamp } from "../placement/lampBuilder";
+import type { BuilderLamp, BuilderWall, WallLampPlacement } from "../types";
+import type { ShipState } from "./shipState";
 
-export function snapWallPosition(point: Vector3) {
-  const halfWidth = HULL_DIMENSIONS.width / 2 - WALL_DIMENSIONS.width / 2;
-  const halfLength = HULL_DIMENSIONS.length / 2 - WALL_DIMENSIONS.width / 2;
-
-  const snappedX = clamp(
-    Math.round(point.x / GRID_SIZE) * GRID_SIZE,
-    -halfWidth,
-    halfWidth,
-  );
-  const snappedZ = clamp(
-    Math.round(point.z / GRID_SIZE) * GRID_SIZE,
-    -halfLength,
-    halfLength,
-  );
-
-  return new Vector3(snappedX, WALL_DIMENSIONS.height / 2, snappedZ);
+export interface HydratedShipAssets {
+  walls: BuilderWall[];
+  lamps: BuilderLamp[];
 }
 
-export function wallKey(position: Vector3, rotation: number) {
-  return `${position.x}:${position.y}:${position.z}:${rotation}`;
-}
+export function hydrateShipAssets(scene: Scene, shipState: ShipState): HydratedShipAssets {
+  const walls: BuilderWall[] = [];
+  const lamps: BuilderLamp[] = [];
 
-export function createWall(scene: Scene, position: Vector3, rotation: number): BuilderWall {
-  const wallMesh = MeshBuilder.CreateBox(
-    `builder-wall-${Date.now()}`,
-    {
-      width: WALL_DIMENSIONS.width,
-      height: WALL_DIMENSIONS.height,
-      depth: WALL_DIMENSIONS.thickness,
-    },
-    scene,
-  );
+  const wallMeshBySurface = new Map<string, AbstractMesh>();
 
-  wallMesh.position = position.clone();
-  wallMesh.rotation.y = degreesToRadians(rotation);
-  wallMesh.checkCollisions = true;
+  Object.values(shipState.walls).forEach((wallState) => {
+    if (!wallState) {
+      return;
+    }
+    const position = new Vector3(wallState.position.x, wallState.position.y, wallState.position.z);
+    const wall = createWall(scene, position, wallState.rotation);
+    walls.push(wall);
+    wallMeshBySurface.set(wallState.id, wall.mesh);
+  });
 
-  const material = new StandardMaterial(`builder-wall-mat-${Date.now()}`, scene);
-  material.diffuseColor = new Color3(0.72, 0.74, 0.78);
-  material.specularColor = new Color3(0.24, 0.26, 0.28);
-  material.emissiveColor = new Color3(0.08, 0.1, 0.12);
-  wallMesh.material = material;
+  Object.values(shipState.lamps).forEach((lampState) => {
+    if (!lampState) {
+      return;
+    }
+    if (lampState.enabled === false) {
+      return;
+    }
+    if (lampState.structural) {
+      return;
+    }
+    const anchorMesh =
+      wallMeshBySurface.get(lampState.anchorSurfaceId) ??
+      (scene.getMeshByName(lampState.anchorSurfaceId) as AbstractMesh | null);
+    if (!anchorMesh) {
+      return;
+    }
 
-  const key = wallKey(position, rotation);
-  wallMesh.metadata = { type: "builder-wall", key };
+    const rotation = new Quaternion(
+      lampState.rotation.x,
+      lampState.rotation.y,
+      lampState.rotation.z,
+      lampState.rotation.w,
+    );
+    const rotationMatrix = Matrix.Identity();
+    rotation.toRotationMatrix(rotationMatrix);
 
-  return {
-    mesh: wallMesh,
-    key,
-  };
+    const forward = Vector3.TransformNormal(Vector3.Forward(), rotationMatrix).normalize();
+    const up = Vector3.TransformNormal(Vector3.Up(), rotationMatrix).normalize();
+    const right = Vector3.TransformNormal(Vector3.Right(), rotationMatrix).normalize();
+
+    const placement: WallLampPlacement = {
+      mesh: anchorMesh,
+      position: new Vector3(lampState.position.x, lampState.position.y, lampState.position.z),
+      forward,
+      up,
+      right,
+      surfaceId: lampState.anchorSurfaceId,
+      local: {
+        x: lampState.local.x,
+        y: lampState.local.y,
+        z: lampState.local.z,
+      },
+    };
+
+    const color = new Color3(lampState.color.r, lampState.color.g, lampState.color.b);
+    const lamp = createLamp(scene, placement, color);
+    lamp.mesh.metadata = {
+      ...(lamp.mesh.metadata as Record<string, unknown> | undefined),
+      structural: lampState.structural ?? false,
+      surfaceId: lampState.anchorSurfaceId,
+      local: { ...lampState.local },
+    };
+    lamps.push(lamp);
+  });
+
+  return { walls, lamps };
 }
 </file>
 
@@ -3211,6 +4912,709 @@ docs/
     <script type="module" src="/src/main.tsx"></script>
   </body>
   </html>
+</file>
+
+<file path="releases/v0.1.0.md">
+# StarWatch v0.1.0 — ??
+</file>
+
+<file path="src/fps/placement/tools/wallTool.ts">
+import {
+  Color3,
+  MeshBuilder,
+  PointerEventTypes,
+  StandardMaterial,
+  Vector3,
+} from "babylonjs";
+import { INPUT_KEYS, WALL_DIMENSIONS } from "../../constants";
+import type { BuilderWall } from "../../types";
+import { degreesToRadians } from "../../utils/math";
+import { createWall, snapWallPosition, wallKey } from "../wallBuilder";
+import type {
+  PlacementToolDefinition,
+  ToolMetadata,
+  ToolRuntimeContext,
+} from "../placementTypes";
+import { WallSurface } from "../surfaces/wallSurface";
+
+const TOOL_ID = "wall";
+
+function createPreviewMesh(context: ToolRuntimeContext) {
+  const mesh = MeshBuilder.CreateBox(
+    "wall-tool-preview",
+    {
+      width: WALL_DIMENSIONS.width,
+      height: WALL_DIMENSIONS.height,
+      depth: WALL_DIMENSIONS.thickness,
+    },
+    context.scene,
+  );
+  const material = new StandardMaterial("wall-tool-preview-mat", context.scene);
+  material.diffuseColor = new Color3(0.35, 0.77, 0.93);
+  material.alpha = 0.32;
+  material.specularColor = Color3.Black();
+  material.emissiveColor = new Color3(0.1, 0.25, 0.36);
+  material.backFaceCulling = false;
+  mesh.material = material;
+  mesh.isPickable = false;
+  mesh.setEnabled(false);
+  return mesh;
+}
+
+export const wallToolDefinition: PlacementToolDefinition = {
+  id: TOOL_ID,
+  label: "Parede",
+  icon: "▭",
+  hotkey: INPUT_KEYS.wallMode,
+  create: (context: ToolRuntimeContext, bootstrap?: unknown) => {
+    const preview = createPreviewMesh(context);
+    const walls = new Map<string, BuilderWall>();
+    const initialWalls = Array.isArray(bootstrap) ? (bootstrap as BuilderWall[]) : [];
+    initialWalls.forEach((wall) => {
+      walls.set(wall.key, wall);
+      const metadata = (wall.mesh.metadata as Record<string, unknown>) ?? {};
+      const surfaceId =
+        typeof metadata.surfaceId === "string" && metadata.surfaceId.length > 0
+          ? metadata.surfaceId
+          : wall.key;
+      wall.mesh.metadata = { ...metadata, toolId: TOOL_ID, key: wall.key, surfaceId };
+      context.shadowNetwork.registerDynamic(wall.mesh);
+      const inward = Vector3.TransformNormal(
+        Vector3.Forward(),
+        wall.mesh.computeWorldMatrix(true),
+      ).scale(-1);
+      inward.y = 0;
+      if (inward.lengthSquared() < 1e-4) {
+        inward.copyFrom(Vector3.Forward());
+      }
+      context.surfaceRegistry.register(
+        new WallSurface({
+          id: surfaceId,
+          mesh: wall.mesh,
+          inward,
+          up: Vector3.Up(),
+        }),
+      );
+      context.shipState.upsertWall({
+        id: wall.key,
+        position: {
+          x: Number(wall.mesh.position.x.toFixed(5)),
+          y: Number(wall.mesh.position.y.toFixed(5)),
+          z: Number(wall.mesh.position.z.toFixed(5)),
+        },
+        rotation: wall.rotation,
+      });
+    });
+
+    let rotation = 0;
+    let lastPreviewPosition: Vector3 | null = null;
+
+    const hidePreview = () => {
+      context.ghost.hide();
+      lastPreviewPosition = null;
+    };
+
+    const updatePreview = (snapped: Vector3 | null) => {
+      if (!snapped) {
+        hidePreview();
+        return;
+      }
+      lastPreviewPosition = snapped.clone();
+      preview.position.copyFrom(snapped);
+      preview.rotation.y = degreesToRadians(rotation);
+      context.ghost.show(preview);
+    };
+
+    const placeWall = (point: Vector3) => {
+      const snapped = snapWallPosition(point);
+      const key = wallKey(snapped, rotation);
+      if (walls.has(key)) {
+        return;
+      }
+
+      const wall = createWall(context.scene, snapped, rotation);
+      walls.set(key, wall);
+      context.shadowNetwork.registerDynamic(wall.mesh);
+
+      const surfaceId = key;
+      const inward = Vector3.TransformNormal(
+        Vector3.Forward(),
+        wall.mesh.computeWorldMatrix(true),
+      ).scale(-1);
+      inward.y = 0;
+      if (inward.lengthSquared() < 1e-4) {
+        inward.copyFrom(Vector3.Forward());
+      }
+      context.surfaceRegistry.register(
+        new WallSurface({
+          id: surfaceId,
+          mesh: wall.mesh,
+          inward,
+          up: Vector3.Up(),
+        }),
+      );
+      const metadata = wall.mesh.metadata as Record<string, unknown> | undefined;
+      if (metadata) {
+        metadata.surfaceId = surfaceId;
+      } else {
+        wall.mesh.metadata = { toolId: TOOL_ID, key, surfaceId };
+      }
+      context.shipState.upsertWall({
+        id: key,
+        position: {
+          x: Number(snapped.x.toFixed(5)),
+          y: Number(snapped.y.toFixed(5)),
+          z: Number(snapped.z.toFixed(5)),
+        },
+        rotation,
+      });
+    };
+
+    const pickFloor = () =>
+      context.scene.pick(
+        context.scene.pointerX,
+        context.scene.pointerY,
+        (mesh) => mesh?.name === "hangar-floor",
+      );
+
+    return {
+      id: TOOL_ID,
+      onActivate: () => {
+        hidePreview();
+      },
+      onDeactivate: () => {
+        hidePreview();
+      },
+      onPointerLockChange: (isLocked: boolean) => {
+        if (!isLocked) {
+          hidePreview();
+        }
+      },
+      onPointerMove: (pointerInfo) => {
+        if (pointerInfo.type !== PointerEventTypes.POINTERMOVE) {
+          return;
+        }
+
+        const pick = pickFloor();
+        if (!context.withinRange(pick?.pickedPoint)) {
+          hidePreview();
+          return;
+        }
+
+        const point = pick?.pickedPoint;
+        if (!point) {
+          hidePreview();
+          return;
+        }
+
+        const snapped = snapWallPosition(point);
+        updatePreview(snapped);
+      },
+      onPointerDown: (pointerInfo) => {
+        if (pointerInfo.type !== PointerEventTypes.POINTERDOWN) {
+          return;
+        }
+
+        const event = pointerInfo.event;
+        if (event.button !== 0) {
+          return;
+        }
+
+        const pick = pickFloor();
+        if (!context.withinRange(pick?.pickedPoint)) {
+          return;
+        }
+
+        const point = pick?.pickedPoint;
+        if (!point) {
+          return;
+        }
+
+        placeWall(point);
+        const snapped = snapWallPosition(point);
+        updatePreview(snapped);
+      },
+      onKeyDown: (event: KeyboardEvent) => {
+        if (event.code === INPUT_KEYS.rotate) {
+          rotation = (rotation + 90) % 360;
+          if (lastPreviewPosition) {
+            preview.rotation.y = degreesToRadians(rotation);
+            context.ghost.show(preview);
+          }
+        }
+      },
+      remove: (metadata: ToolMetadata, mesh) => {
+        if (metadata.toolId !== TOOL_ID) {
+          return false;
+        }
+        const entry = walls.get(metadata.key);
+        if (!entry) {
+          return false;
+        }
+        context.shadowNetwork.unregisterDynamic(entry.mesh);
+        context.surfaceRegistry.unregister(entry.mesh);
+        entry.mesh.dispose(false, true);
+        walls.delete(metadata.key);
+        context.shipState.removeWall(metadata.key);
+        if (mesh === preview) {
+          hidePreview();
+        }
+        return true;
+      },
+      dispose: () => {
+        context.ghost.hide();
+        preview.dispose(false, true);
+        walls.forEach((wall) => {
+          context.shadowNetwork.unregisterDynamic(wall.mesh);
+          context.surfaceRegistry.unregister(wall.mesh);
+          wall.mesh.dispose(false, true);
+        });
+        walls.clear();
+      },
+    };
+  },
+};
+</file>
+
+<file path="src/fps/placement/ghosts.ts">
+import type { AbstractMesh } from "babylonjs";
+
+export interface GhostHost {
+  show(mesh: AbstractMesh): void;
+  hide(): void;
+  clear(): void;
+  dispose(): void;
+}
+
+export function createGhostHost(): GhostHost {
+  let active: AbstractMesh | null = null;
+
+  const disable = (mesh: AbstractMesh | null) => {
+    if (!mesh || mesh.isDisposed()) {
+      return;
+    }
+    mesh.setEnabled(false);
+  };
+
+  return {
+    show: (mesh: AbstractMesh) => {
+      if (active === mesh) {
+        if (!mesh.isDisposed()) {
+          mesh.setEnabled(true);
+        }
+        return;
+      }
+
+      disable(active);
+      active = mesh;
+      if (!active.isDisposed()) {
+        active.isPickable = false;
+        active.setEnabled(true);
+      }
+    },
+    hide: () => {
+      disable(active);
+    },
+    clear: () => {
+      disable(active);
+      active = null;
+    },
+    dispose: () => {
+      active = null;
+    },
+  };
+}
+</file>
+
+<file path="src/fps/state/shipPersistence.ts">
+import { createEmptyShipState, SHIP_STATE_VERSION, type ShipState } from "./shipState";
+import type { ShipStore } from "./shipStore";
+
+const DEFAULT_STORAGE_KEY = "starwatch.ship-state";
+const DEFAULT_DEBOUNCE_MS = 250;
+
+export function loadShipState(storageKey = DEFAULT_STORAGE_KEY): ShipState | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as ShipState | undefined;
+    if (!parsed || typeof parsed.version !== "number") {
+      return null;
+    }
+    if (parsed.version !== SHIP_STATE_VERSION) {
+      return null;
+    }
+    return normalizeShipState(parsed);
+  } catch (error) {
+    console.warn("[ShipPersistence] Failed to load ship state:", error);
+    return null;
+  }
+}
+
+export function saveShipState(state: ShipState, storageKey = DEFAULT_STORAGE_KEY) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    const payload = JSON.stringify(state);
+    window.localStorage.setItem(storageKey, payload);
+  } catch (error) {
+    console.warn("[ShipPersistence] Failed to save ship state:", error);
+  }
+}
+
+export interface ShipPersistenceController {
+  dispose(): void;
+  flush(): void;
+}
+
+export function createShipPersistence(
+  store: ShipStore,
+  options?: {
+    storageKey?: string;
+    debounceMs?: number;
+  },
+): ShipPersistenceController {
+  const storageKey = options?.storageKey ?? DEFAULT_STORAGE_KEY;
+  const debounceMs = options?.debounceMs ?? DEFAULT_DEBOUNCE_MS;
+
+  let latestState: ShipState | null = null;
+  let timeoutHandle: number | null = null;
+  let disposed = false;
+  let skipNext = true;
+
+  const scheduleSave = () => {
+    if (timeoutHandle !== null) {
+      window.clearTimeout(timeoutHandle);
+    }
+    timeoutHandle = window.setTimeout(() => {
+      timeoutHandle = null;
+      if (!latestState) {
+        return;
+      }
+      saveShipState(latestState, storageKey);
+    }, debounceMs);
+  };
+
+  const unsubscribe = store.subscribe((state) => {
+    latestState = state;
+    if (skipNext) {
+      skipNext = false;
+      return;
+    }
+    if (!disposed) {
+      scheduleSave();
+    }
+  });
+
+  return {
+    dispose: () => {
+      disposed = true;
+      unsubscribe();
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle);
+        timeoutHandle = null;
+      }
+    },
+    flush: () => {
+      if (!latestState) {
+        return;
+      }
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle);
+        timeoutHandle = null;
+      }
+      saveShipState(latestState, storageKey);
+    },
+  };
+}
+
+function normalizeShipState(state: ShipState): ShipState {
+  const next = createEmptyShipState();
+  next.walls = {};
+  next.lamps = {};
+
+  Object.entries(state.walls ?? {}).forEach(([id, wall]) => {
+    if (!wall) {
+      return;
+    }
+    next.walls[id] = {
+      id,
+      position: wall.position,
+      rotation: wall.rotation,
+    };
+  });
+
+  Object.entries(state.lamps ?? {}).forEach(([id, lamp]) => {
+    if (!lamp) {
+      return;
+    }
+    next.lamps[id] = {
+      id,
+      anchorSurfaceId: lamp.anchorSurfaceId,
+      position: lamp.position,
+      rotation: lamp.rotation,
+      color: lamp.color,
+      local: lamp.local,
+      structural: lamp.structural ?? false,
+      enabled: lamp.enabled ?? true,
+    };
+  });
+
+  return next;
+}
+</file>
+
+<file path="src/fps/state/shipState.ts">
+export interface Vector3Serialized {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface QuaternionSerialized {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+}
+
+export interface ColorSerialized {
+  r: number;
+  g: number;
+  b: number;
+}
+
+export interface ShipWallState {
+  id: string;
+  position: Vector3Serialized;
+  rotation: number; // degrees around Y
+}
+
+export interface ShipLampState {
+  id: string;
+  anchorSurfaceId: string;
+  position: Vector3Serialized;
+  rotation: QuaternionSerialized;
+  color: ColorSerialized;
+  local: {
+    x: number;
+    y: number;
+    z: number;
+  };
+  structural?: boolean;
+  enabled?: boolean;
+}
+
+export interface ShipState {
+  version: number;
+  walls: Record<string, ShipWallState>;
+  lamps: Record<string, ShipLampState>;
+}
+
+export const SHIP_STATE_VERSION = 1;
+
+export function createEmptyShipState(): ShipState {
+  return {
+    version: SHIP_STATE_VERSION,
+    walls: {},
+    lamps: {},
+  };
+}
+
+export function serializeVector3(x: number, y: number, z: number): Vector3Serialized {
+  return { x: round(x), y: round(y), z: round(z) };
+}
+
+export function serializeQuaternion(
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+): QuaternionSerialized {
+  return { x: round(x), y: round(y), z: round(z), w: round(w) };
+}
+
+export function serializeColor(r: number, g: number, b: number): ColorSerialized {
+  return { r: clamp01(r), g: clamp01(g), b: clamp01(b) };
+}
+
+function round(value: number) {
+  return Number(value.toFixed(5));
+}
+
+function clamp01(value: number) {
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 1) {
+    return 1;
+  }
+  return round(value);
+}
+</file>
+
+<file path="src/fps/state/shipStore.ts">
+import { createEmptyShipState, type ShipLampState, type ShipState, type ShipWallState } from "./shipState";
+
+type ShipStateListener = (state: ShipState) => void;
+
+export class ShipStore {
+  private state: ShipState;
+  private listeners: Set<ShipStateListener>;
+
+  constructor(initialState?: ShipState) {
+    this.state = initialState ? { ...initialState } : createEmptyShipState();
+    this.listeners = new Set();
+  }
+
+  getSnapshot(): ShipState {
+    return cloneState(this.state);
+  }
+
+  subscribe(listener: ShipStateListener): () => void {
+    this.listeners.add(listener);
+    listener(this.getSnapshot());
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  replace(state: ShipState) {
+    this.state = cloneState(state);
+    this.notify();
+  }
+
+  upsertWall(wall: ShipWallState) {
+    const existing = this.state.walls[wall.id];
+    if (existing && wallEquals(existing, wall)) {
+      return;
+    }
+    const walls = { ...this.state.walls, [wall.id]: { ...wall } };
+    this.state = { ...this.state, walls };
+    this.notify();
+  }
+
+  removeWall(wallId: string) {
+    if (!(wallId in this.state.walls)) {
+      return;
+    }
+    const walls = { ...this.state.walls };
+    delete walls[wallId];
+    this.state = { ...this.state, walls };
+    this.notify();
+  }
+
+  upsertLamp(lamp: ShipLampState) {
+    const existing = this.state.lamps[lamp.id];
+    const normalized: ShipLampState = {
+      ...lamp,
+      enabled: lamp.enabled ?? true,
+      structural: lamp.structural ?? false,
+    };
+    if (existing && lampEquals(existing, normalized)) {
+      return;
+    }
+    const lamps = { ...this.state.lamps, [lamp.id]: { ...normalized } };
+    this.state = { ...this.state, lamps };
+    this.notify();
+  }
+
+  removeLamp(lampId: string) {
+    if (!(lampId in this.state.lamps)) {
+      return;
+    }
+    const lamps = { ...this.state.lamps };
+    delete lamps[lampId];
+    this.state = { ...this.state, lamps };
+    this.notify();
+  }
+
+  setLampEnabled(lampId: string, enabled: boolean) {
+    const existing = this.state.lamps[lampId];
+    if (!existing) {
+      return;
+    }
+    if ((existing.enabled ?? true) === enabled) {
+      return;
+    }
+    const lamps = {
+      ...this.state.lamps,
+      [lampId]: {
+        ...existing,
+        enabled,
+      },
+    };
+    this.state = { ...this.state, lamps };
+    this.notify();
+  }
+
+  reset() {
+    this.state = createEmptyShipState();
+    this.notify();
+  }
+
+  private notify() {
+    const snapshot = this.getSnapshot();
+    this.listeners.forEach((listener) => listener(snapshot));
+  }
+}
+
+function cloneState(state: ShipState): ShipState {
+  return {
+    version: state.version,
+    walls: cloneRecord(state.walls),
+    lamps: cloneRecord(state.lamps),
+  };
+}
+
+function cloneRecord<T extends { id: string }>(record: Record<string, T>) {
+  const copy: Record<string, T> = {};
+  Object.keys(record).forEach((key) => {
+    copy[key] = { ...record[key] };
+  });
+  return copy;
+}
+
+function wallEquals(a: ShipWallState, b: ShipWallState) {
+  return (
+    a.rotation === b.rotation &&
+    almostEqual(a.position.x, b.position.x) &&
+    almostEqual(a.position.y, b.position.y) &&
+    almostEqual(a.position.z, b.position.z)
+  );
+}
+
+function lampEquals(a: ShipLampState, b: ShipLampState) {
+  return (
+    a.anchorSurfaceId === b.anchorSurfaceId &&
+    almostEqual(a.position.x, b.position.x) &&
+    almostEqual(a.position.y, b.position.y) &&
+    almostEqual(a.position.z, b.position.z) &&
+    almostEqual(a.rotation.x, b.rotation.x) &&
+    almostEqual(a.rotation.y, b.rotation.y) &&
+    almostEqual(a.rotation.z, b.rotation.z) &&
+    almostEqual(a.rotation.w, b.rotation.w) &&
+    almostEqual(a.color.r, b.color.r) &&
+    almostEqual(a.color.g, b.color.g) &&
+    almostEqual(a.color.b, b.color.b) &&
+    almostEqual(a.local.x, b.local.x) &&
+    almostEqual(a.local.y, b.local.y) &&
+    almostEqual(a.local.z, b.local.z) &&
+    (a.structural ?? false) === (b.structural ?? false) &&
+    (a.enabled ?? true) === (b.enabled ?? true)
+  );
+}
+
+function almostEqual(a: number, b: number) {
+  return Math.abs(a - b) <= 1e-5;
+}
 </file>
 
 <file path="MANIFESTO.md">
@@ -3442,7 +5846,16 @@ Para instigar um senso de conquista e competição amigável, mesmo em um contex
     *   **Tempo de Jogo Ativo:** Total de horas jogadas.
 *   **Visão Futura:** Em um futuro MMO, este leaderboard seria global e persistente, mostrando o progresso de outros jogadores sem a necessidade de interação direta.
 
-## 11. Notas de Segurança e Implementação (Contexto do Protótipo)
+## 11. Player Runtime Interface (FPS Builder)
+
+*   **PlayerStore:** Vive em `src/fps/state/playerStore.ts` e replica o padrão imutável do ShipStore. Use `store.getActions()` para HUD/IA (`setTransform`, `patchMovementIntent`, `patchInput`, registro/remoção de módulos, `emit`) e `store.getActionContext()` quando precisar ler/alterar estado sem acoplar no Babylon.
+*   **Estado Serializado:** `src/fps/state/playerState.ts` guarda `transform` (posição, orientação, velocidade), `movementIntent`, `input` (locks) e o registro modular. `serializeVector3` e `serializeQuaternion` suportam persistência determinística.
+*   **Persistência:** `createPlayerPersistence` (`src/fps/state/playerPersistence.ts`) roda na mesma cadência do ShipPersistence, salvando com debounce em `localStorage` (`starwatch.player-state`) e expondo `flush()` para desligues controlados.
+*   **Controller:** `createPlayerController` (`src/fps/core/playerController.ts`) cria a câmera FPS, sincroniza pointer lock, monitora WASD/sprint/crouch/jump e aceita comandos externos (`teleport`, `setCutsceneLock`) antes de repassar a Babylon.
+*   **Módulos Baseline:** `registerBaselinePlayerModules` (`src/fps/state/playerModules.ts`) registra placeholders de saúde, energia, fome e inventário emitindo `player.module.ready`, preparando a malha de eventos para futuros sistemas de fome/fadiga/skills.
+*   **Integração:** `ShipBuilderCanvas` instancia o PlayerStore na montagem, hidrata com `loadPlayerState()`, cria controller e persistence e passa a `playerController.camera` para o placement solver.
+
+## 12. Notas de Segurança e Implementação (Contexto do Protótipo)
 
 *   **Web Workers para Scripts:** A execução de scripts JavaScript em Web Workers continua sendo crucial para a segurança e estabilidade, isolando o código do jogador do jogo principal. A `Task API` é a única interface permitida para o worker interagir com o jogo.
 *   **HAL e LLM no Cliente:** Para a V0.1, a integração com um LLM externo (como OpenAI) é via API Key digitada e armazenada no `localStorage` do cliente. Isso é aceitável para prototipagem e desenvolvimento local. Para um futuro MMO ou uma versão pública, um backend robusto seria necessário para proxyar as requisições à LLM, gerenciar custos e garantir a segurança das chaves API.
@@ -3463,7 +5876,7 @@ Para instigar um senso de conquista e competição amigável, mesmo em um contex
     "preview": "vite preview"
   },
   "dependencies": {
-    "babylonjs": "^7.17.0",
+    "babylonjs": "^8.0.0",
     "monaco-editor": "^0.49.0",
     "zod": "^3.23.8",
     "ai": "^3.2.25",
@@ -3482,545 +5895,648 @@ Para instigar um senso de conquista e competição amigável, mesmo em um contex
 }
 </file>
 
-<file path="releases/v0.1.0.md">
-# StarWatch v0.1.0 — ??
-</file>
-
-<file path="src/fps/placement/lampBuilder.ts">
+<file path="src/fps/lighting/rectAreaLamp.ts">
 import {
   Color3,
   Light,
-  Mesh,
-  MeshBuilder,
+  Matrix,
   PointLight,
+  Quaternion,
+  RectAreaLight,
+  ReflectiveShadowMap,
   Scene,
   ShadowGenerator,
+  ShadowLight,
   SpotLight,
-  StandardMaterial,
+  TransformNode,
   Vector3,
+  GIRSM,
 } from "babylonjs";
-import { GRID_SIZE, HULL_DIMENSIONS, LAMP_COLOR_PALETTE, LAMP_DIMENSIONS } from "../constants";
+import type { Mesh } from "babylonjs";
 import type { BuilderLamp } from "../types";
-import { clamp } from "../utils/math";
 
-interface LampOptions {
+export interface RectAreaLampOptions {
+  name: string;
+  scene: Scene;
+  fixture: Mesh;
+  position: Vector3;
+  right: Vector3;
+  up: Vector3;
+  forward: Vector3;
+  areaSize: { width: number; height: number };
+  color: Color3;
+  range: number;
+  tilt?: number;
+  twoSided?: boolean;
+  areaIntensity?: number;
+  shadowIntensity?: number;
+  ambientIntensity?: number;
+  ambientRangeMultiplier?: number;
+  ambientAttenuation?: number;
+  shadowAngle?: number;
+  shadowExponent?: number;
   shadowMapSize?: number;
-  contactHardening?: boolean;
-  spotAngle?: number;
-  spotInnerRatio?: number;
-  spotExponent?: number;
-  spotIntensity?: number;
-  spotRange?: number;
-  fillIntensity?: number;
-  fillRange?: number;
+  shadowBias?: number;
+  shadowNormalBias?: number;
+  forceBackFacesOnly?: boolean;
+  shadowMinZ?: number;
+  shadowMaxZ?: number;
+  areaOffset?: number;
+  enableRsm?: boolean;
+  rsmTextureSize?: number;
+  rsmNumSamples?: number;
+  rsmRadius?: number;
+  rsmIntensity?: number;
+  rsmEdgeCorrection?: number;
+  rsmRotateSample?: boolean;
+  rsmNoiseFactor?: number;
+  rsmUseFullTexture?: boolean;
 }
 
-export function snapLampPosition(point: Vector3) {
-  const halfWidth = HULL_DIMENSIONS.width / 2 - LAMP_DIMENSIONS.radius;
-  const halfLength = HULL_DIMENSIONS.length / 2 - LAMP_DIMENSIONS.radius;
+const DEFAULT_AREA_OFFSET = 0.015;
+const DEFAULT_SHADOW_BIAS = 0.00022;
+const DEFAULT_SHADOW_NORMAL_BIAS = 0.0035;
+const DEFAULT_FORCE_BACK_FACES_ONLY = false;
+const DEFAULT_SHADOW_MIN_Z = 0.01;
+const SHADOW_MAX_Z_MULTIPLIER = 1.35;
 
-  const snappedX = clamp(
-    Math.round(point.x / GRID_SIZE) * GRID_SIZE,
-    -halfWidth,
-    halfWidth,
-  );
-  const snappedZ = clamp(
-    Math.round(point.z / GRID_SIZE) * GRID_SIZE,
-    -halfLength,
-    halfLength,
-  );
+function safeOrthonormalBasis(forward: Vector3, upHint: Vector3, rightHint: Vector3) {
+  const forwardNorm = forward.clone();
+  forwardNorm.normalize();
 
-  return new Vector3(snappedX, LAMP_DIMENSIONS.height / 2, snappedZ);
+  const upCandidate = upHint.clone().normalize();
+  let right = Vector3.Cross(upCandidate, forwardNorm);
+  if (right.lengthSquared() < 1e-4) {
+    right = rightHint.clone();
+  }
+  right.normalize();
+
+  let up = Vector3.Cross(forwardNorm, right);
+  if (up.lengthSquared() < 1e-4) {
+    up = upCandidate;
+  }
+  up.normalize();
+
+  return { forward: forwardNorm, up, right };
 }
 
-export function lampKey(position: Vector3) {
-  return `${position.x}:${position.y}:${position.z}`;
-}
-
-export function nextLampColor(index: number) {
-  return LAMP_COLOR_PALETTE[index % LAMP_COLOR_PALETTE.length];
-}
-
-export function createLamp(
-  scene: Scene,
-  position: Vector3,
-  color: Color3,
-  options: LampOptions = {},
-): BuilderLamp {
+export function createRectAreaLamp(options: RectAreaLampOptions): BuilderLamp {
   const {
-    shadowMapSize = 512,
-    contactHardening = false,
-    spotAngle = Math.PI / 1.4,
-    spotInnerRatio = 0.62,
-    spotExponent = 0.95,
-    spotIntensity = 2.25,
-    spotRange = 16,
-    fillIntensity = 0.58,
-    fillRange = 8.5,
+    name,
+    scene,
+    fixture,
+    position,
+    right,
+    up,
+    forward,
+    areaSize,
+    color,
+    range,
+    tilt = 0,
+    twoSided = false,
+    areaIntensity = 12.5,
+    shadowIntensity = 1.35,
+    ambientIntensity = 0.32,
+    ambientRangeMultiplier = 0.85,
+    ambientAttenuation = 0.6,
+    shadowAngle = Math.PI / 2.15,
+    shadowMapSize = 1024,
+    shadowBias = DEFAULT_SHADOW_BIAS,
+    shadowNormalBias = DEFAULT_SHADOW_NORMAL_BIAS,
+    forceBackFacesOnly = DEFAULT_FORCE_BACK_FACES_ONLY,
+    shadowMinZ = DEFAULT_SHADOW_MIN_Z,
+    shadowMaxZ,
+    areaOffset = DEFAULT_AREA_OFFSET,
+    enableRsm = false,
+    rsmTextureSize = 256,
+    rsmNumSamples = 240,
+    rsmRadius = 0.22,
+    rsmIntensity = 0.22,
+    rsmEdgeCorrection = 0.08,
+    rsmRotateSample = true,
+    rsmNoiseFactor = 80,
+    rsmUseFullTexture = false,
   } = options;
 
-  const stemHeight = LAMP_DIMENSIONS.height - LAMP_DIMENSIONS.radius * 2;
+  const forwardDir = forward.clone().normalize();
+  const upDir = up.clone().normalize();
+  const rightDir = right.clone().normalize();
 
-  const stand = MeshBuilder.CreateCylinder(
-    `lamp-stand-${Date.now()}`,
-    {
-      height: stemHeight,
-      diameter: LAMP_DIMENSIONS.stemRadius * 2,
-      tessellation: 18,
-    },
-    scene,
-  );
-  stand.position = new Vector3(0, stemHeight / 2, 0);
+  const emissionForward = forwardDir.add(upDir.scale(-tilt)).normalize();
+  const emissionDir = emissionForward.clone();
+  const { up: basisUp, right: basisRight } = safeOrthonormalBasis(emissionForward, upDir, rightDir);
 
-  const standMaterial = new StandardMaterial(`lamp-stand-mat-${Date.now()}`, scene);
-  standMaterial.diffuseColor = new Color3(0.28, 0.31, 0.35);
-  standMaterial.specularColor = new Color3(0.46, 0.48, 0.52);
-  stand.material = standMaterial;
+  const pivotForwardWorld = emissionDir.clone().scale(-1);
+  const areaBasisWorld = new Matrix();
+  Matrix.FromXYZAxesToRef(basisRight, basisUp, pivotForwardWorld, areaBasisWorld);
 
-  const bulb = MeshBuilder.CreateSphere(
-    `lamp-bulb-${Date.now()}`,
-    {
-      diameter: LAMP_DIMENSIONS.radius * 2,
-      segments: 24,
-    },
-    scene,
-  );
-  bulb.position = new Vector3(0, stemHeight + LAMP_DIMENSIONS.radius, 0);
+  const areaPositionWorld = position.add(emissionDir.clone().scale(areaOffset));
 
-  const bulbMaterial = new StandardMaterial(`lamp-bulb-mat-${Date.now()}`, scene);
-  bulbMaterial.diffuseColor = color.scale(0.85);
-  bulbMaterial.emissiveColor = color.scale(1.4);
-  bulbMaterial.specularColor = color;
-  bulbMaterial.alpha = 0.92;
-  bulbMaterial.backFaceCulling = false;
-  bulb.material = bulbMaterial;
+  const fixtureWorld = fixture.computeWorldMatrix(true);
+  const fixtureWorldInverse = fixtureWorld.clone();
+  fixtureWorldInverse.invert();
 
-  const merged = Mesh.MergeMeshes([stand, bulb], true, true, undefined, false, true);
-  if (!merged) {
-    throw new Error("Failed to create lamp mesh");
+  const areaPositionLocal = Vector3.TransformCoordinates(areaPositionWorld, fixtureWorldInverse);
+  const areaBasisLocal = areaBasisWorld.multiply(fixtureWorldInverse);
+  const areaRotationLocal = Quaternion.FromRotationMatrix(areaBasisLocal);
+
+  const areaPivot = new TransformNode(`${name}-area-pivot`, scene);
+  areaPivot.parent = fixture;
+  areaPivot.position.copyFrom(areaPositionLocal);
+  areaPivot.rotationQuaternion = areaRotationLocal;
+
+  const areaLight = new RectAreaLight(`${name}-area`, Vector3.Zero(), areaSize.width, areaSize.height, scene);
+  areaLight.diffuse = color.clone();
+  areaLight.specular = color.scale(0.25);
+  areaLight.intensity = areaIntensity;
+  areaLight.range = range;
+  areaLight.falloffType = Light.FALLOFF_PHYSICAL;
+  areaLight.intensityMode = Light.INTENSITYMODE_LUMINANCE;
+  if (twoSided) {
+    areaLight.radius = Math.max(areaSize.width, areaSize.height) * 0.5;
   }
+  areaLight.parent = areaPivot;
 
-  const lampName = `builder-lamp-${Date.now()}`;
-  merged.name = lampName;
-  merged.position = position.clone();
-  merged.checkCollisions = true;
-
-  const key = lampKey(position);
-  merged.metadata = { type: "builder-lamp", key };
-
-  const light = new SpotLight(
-    `${lampName}-light`,
-    merged.position.clone(),
-    new Vector3(0, -1, 0),
-    spotAngle,
-    spotExponent,
+  const shadowLight = new SpotLight(
+    `${name}-shadow`,
+    Vector3.Zero(),
+    Vector3.Backward(),
+    shadowAngle,
+    1.0,
     scene,
   );
-  light.diffuse = color;
-  light.specular = color.scale(0.9);
-  light.intensity = spotIntensity;
-  light.innerAngle = light.angle * spotInnerRatio;
-  light.exponent = spotExponent;
-  light.falloffType = Light.FALLOFF_PHYSICAL;
-  light.range = spotRange;
-  light.shadowEnabled = true;
-  light.shadowMinZ = 0.1;
-  light.shadowMaxZ = spotRange * 1.05;
-  light.parent = merged;
-  light.position = new Vector3(0, LAMP_DIMENSIONS.height / 2 - LAMP_DIMENSIONS.radius * 0.6, 0);
-  light.setDirectionToTarget(new Vector3(0, -1, 0));
+  shadowLight.diffuse = color;
+  shadowLight.specular = color.scale(0.34);
+  shadowLight.intensity = shadowIntensity;
+  shadowLight.falloffType = Light.FALLOFF_PHYSICAL;
+  shadowLight.range = range * 1.08;
+  shadowLight.shadowEnabled = true;
+  shadowLight.shadowMinZ = shadowMinZ;
+  shadowLight.shadowMaxZ = shadowMaxZ ?? range * SHADOW_MAX_Z_MULTIPLIER;
+  shadowLight.parent = areaPivot;
 
-  const fillLight = new PointLight(
-    `${lampName}-fill`,
-    merged.position.clone(),
-    scene,
-  );
-  fillLight.diffuse = color.scale(0.55);
-  fillLight.specular = color.scale(0.18);
-  fillLight.intensity = fillIntensity;
-  fillLight.range = fillRange;
-  fillLight.parent = merged;
-  fillLight.position = new Vector3(0, LAMP_DIMENSIONS.height * 0.15, 0);
-  fillLight.falloffType = Light.FALLOFF_PHYSICAL;
-  fillLight.shadowEnabled = false;
-
-  const shadow = new ShadowGenerator(shadowMapSize, light);
-  shadow.bias = 0.0006;
-  shadow.darkness = 0.2;
-  shadow.normalBias = 0.22;
-  shadow.frustumEdgeFalloff = 0.18;
+  const shadow = new ShadowGenerator(shadowMapSize, shadowLight);
+  shadow.usePercentageCloserFiltering = true;
   shadow.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+  shadow.bias = shadowBias;
+  shadow.normalBias = Math.min(Math.max(shadowNormalBias, 0), 0.1);
+  shadow.forceBackFacesOnly = forceBackFacesOnly;
+  shadow.contactHardeningLightSizeUVRatio = 0.28;
+  shadow.darkness = 0.18;
+  shadow.frustumEdgeFalloff = 0.18;
 
-  if (contactHardening) {
-    shadow.useContactHardeningShadow = true;
-    shadow.contactHardeningLightSizeUVRatio = 0.4;
-  } else {
-    shadow.usePercentageCloserFiltering = true;
+  const ambientLight = new PointLight(`${name}-ambient`, Vector3.Zero(), scene);
+  ambientLight.diffuse = color.scale(ambientAttenuation);
+  ambientLight.specular = color.scale(0.06);
+  ambientLight.intensity = ambientIntensity;
+  ambientLight.range = range * ambientRangeMultiplier;
+  ambientLight.falloffType = Light.FALLOFF_PHYSICAL;
+  ambientLight.shadowEnabled = false;
+  ambientLight.parent = areaPivot;
+
+  let giState: BuilderLamp["gi"];
+  if (enableRsm) {
+    const rsm = new ReflectiveShadowMap(scene, shadowLight, { width: rsmTextureSize, height: rsmTextureSize });
+    rsm.enable = true;
+    rsm.addMesh();
+    const solution = new GIRSM(rsm);
+    solution.numSamples = rsmNumSamples;
+    solution.radius = rsmRadius;
+    solution.intensity = rsmIntensity;
+    solution.edgeArtifactCorrection = rsmEdgeCorrection;
+    solution.rotateSample = rsmRotateSample;
+    solution.noiseFactor = rsmNoiseFactor;
+    solution.useFullTexture = rsmUseFullTexture;
+    giState = { rsm, solution };
   }
 
   return {
-    mesh: merged,
-    light,
+    mesh: fixture,
+    light: shadowLight,
     shadow,
-    fillLight,
-    key,
+    areaLight,
+    auxiliaryLights: [ambientLight],
+    gi: giState,
+    key: "",
+    color: color.clone(),
+    anchorSurfaceId: "",
+    local: { x: 0, y: 0, z: 0 },
+    rotation: Quaternion.Identity(),
   };
 }
 </file>
 
-<file path="src/fps/placement/placementController.ts">
-import {
-  AbstractMesh,
-  PointerEventTypes,
-  PointerInfo,
-  Scene,
-  UniversalCamera,
-  Vector3,
-} from "babylonjs";
-import { CAMERA_SETTINGS, INPUT_KEYS, SELECTION_OUTLINE_COLOR } from "../constants";
-import { createLamp, lampKey, nextLampColor, snapLampPosition } from "./lampBuilder";
-import { createWall, snapWallPosition, wallKey } from "./wallBuilder";
-import type { BuilderLamp, BuilderWall, PlacementMode, PlacementState } from "../types";
-import type { GhostSet } from "./ghosts";
+<file path="src/fps/placement/placementTypes.ts">
+import type { AbstractMesh, PointerInfo, Scene, UniversalCamera, Vector3 } from "babylonjs";
 import type { ShadowNetwork } from "../lighting/shadowNetwork";
+import type { GhostHost } from "./ghosts";
+import type { SurfaceRegistry } from "./surfaces/surfaceRegistry";
+import type { PlacementSolver } from "./placementSolver";
+import type { ShipLampState, ShipWallState } from "../state/shipState";
 
-interface PlacementControllerOptions {
+export interface ShipStateActions {
+  upsertWall(wall: ShipWallState): void;
+  removeWall(wallId: string): void;
+  upsertLamp(lamp: ShipLampState): void;
+  removeLamp(lampId: string): void;
+  setLampEnabled(lampId: string, enabled: boolean): void;
+}
+
+export interface ToolMetadata {
+  toolId: string;
+  key: string;
+  structural?: boolean;
+}
+
+export interface ToolRuntimeContext {
   scene: Scene;
-  canvas: HTMLCanvasElement;
   camera: UniversalCamera;
-  ghostSet: GhostSet;
+  canvas: HTMLCanvasElement;
   shadowNetwork: ShadowNetwork;
-  initialWalls?: BuilderWall[];
-  initialLamps?: BuilderLamp[];
+  ghost: GhostHost;
+  surfaceRegistry: SurfaceRegistry;
+  placementSolver: PlacementSolver;
+  withinRange(point?: Vector3 | null): boolean;
+  requestPointerLock(): void;
+  highlight(mesh?: AbstractMesh | null): void;
+  removeMesh(mesh?: AbstractMesh | null): boolean;
+  shipState: ShipStateActions;
 }
 
-export interface PlacementController {
-  getState(): PlacementState;
-  setMode(mode: PlacementMode): void;
-  subscribe(listener: (state: PlacementState) => void): () => void;
-  dispose(): void;
+export interface PlacementToolInstance {
+  id: string;
+  onActivate?(): void;
+  onDeactivate?(): void;
+  onPointerMove?(info: PointerInfo): void;
+  onPointerDown?(info: PointerInfo): void;
+  onPointerUp?(info: PointerInfo): void;
+  onPointerLockChange?(isLocked: boolean): void;
+  onKeyDown?(event: KeyboardEvent): void;
+  onKeyUp?(event: KeyboardEvent): void;
+  remove?(metadata: ToolMetadata, mesh: AbstractMesh): boolean;
+  dispose?(): void;
 }
 
-export function createPlacementController(options: PlacementControllerOptions): PlacementController {
-  const {
-    scene,
-    canvas,
-    camera,
-    ghostSet,
-    shadowNetwork,
-    initialWalls = [],
-    initialLamps = [],
-  } = options;
+export interface PlacementToolDefinition {
+  id: string;
+  label: string;
+  icon: string;
+  hotkey: string;
+  create(context: ToolRuntimeContext, bootstrap?: unknown): PlacementToolInstance;
+}
 
-  const state: PlacementState = {
-    mode: "wall",
-    rotation: 0,
-    lampColorIndex: 0,
-  };
+export interface PlacementState {
+  activeToolId: string;
+}
+</file>
 
-  const walls = new Map<string, BuilderWall>();
-  const lamps = new Map<string, BuilderLamp>();
-  const baseCameraSpeed = CAMERA_SETTINGS.speed;
-  const sprintKeys = new Set<string>(Array.from(INPUT_KEYS.sprint));
-  const listeners = new Set<(state: PlacementState) => void>();
-  let highlighted: AbstractMesh | null = null;
+<file path="src/fps/placement/tools/lampTool.ts">
+import { AbstractMesh, Color3, Matrix, MeshBuilder, PointerEventTypes, Quaternion, StandardMaterial } from "babylonjs";
+import type { BuilderLamp, WallLampPlacement } from "../../types";
+import { GRID_SIZE, INPUT_KEYS, LAMP_COLOR_PALETTE, WALL_LAMP_PLACEMENT } from "../../constants";
+import { createLamp, lampKey, nextLampColor } from "../lampBuilder";
+import type {
+  PlacementToolDefinition,
+  ToolMetadata,
+  ToolRuntimeContext,
+} from "../placementTypes";
+import type { PlacementFrame } from "../surfaces/types";
+import type { PlacementProfile } from "../placementSolver";
 
-  const notify = () => {
-    const snapshot = { ...state };
-    listeners.forEach((listener) => listener(snapshot));
-  };
-
-  const clearHighlight = () => {
-    if (!highlighted) {
-      return;
-    }
-    highlighted.renderOutline = false;
-    highlighted = null;
-  };
-
-  const applyHighlight = (mesh?: AbstractMesh | null) => {
-    const target = mesh ?? null;
-    if (!target || target === highlighted) {
-      if (!target) {
-        clearHighlight();
-      }
-      return;
-    }
-
-    clearHighlight();
-    target.renderOutline = true;
-    target.outlineColor = SELECTION_OUTLINE_COLOR;
-    target.outlineWidth = 0.018;
-    highlighted = target;
-  };
-
-  const pickRemovable = () =>
-    scene.pick(
-      scene.pointerX,
-      scene.pointerY,
-      (mesh?: AbstractMesh) => {
-        const type = mesh?.metadata?.type;
-        return type === "builder-wall" || type === "builder-lamp";
-      },
-    );
-
-  const setMode = (mode: PlacementMode) => {
-    if (state.mode === mode) {
-      return;
-    }
-    state.mode = mode;
-    ghostSet.setMode(mode);
-    clearHighlight();
-    notify();
-  };
-
-  initialWalls.forEach((wall) => {
-    walls.set(wall.key, wall);
-  });
-
-  initialLamps.forEach((lamp) => {
-    lamps.set(lamp.key, lamp);
-  });
-
-  const showPlacementPreview = (point: Vector3) => {
-    if (state.mode === "wall") {
-      const snapped = snapWallPosition(point);
-      ghostSet.showWall(snapped, state.rotation);
-    } else {
-      const snapped = snapLampPosition(point);
-      ghostSet.showLamp(snapped);
-    }
-  };
-
-  const pointerMoveObserver = scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
-    if (pointerInfo.type !== PointerEventTypes.POINTERMOVE) {
-      return;
-    }
-
-    if (state.mode === "delete") {
-      const pick = pickRemovable();
-      const targetMesh = pick?.pickedMesh;
-      if (targetMesh) {
-        applyHighlight(targetMesh);
-      } else {
-        clearHighlight();
-      }
-      ghostSet.hide();
-      return;
-    }
-
-    clearHighlight();
-
-    const pick = scene.pick(
-      scene.pointerX,
-      scene.pointerY,
-      (mesh?: AbstractMesh) => mesh?.name === "hangar-floor",
-    );
-    const point = pick?.pickedPoint;
-
-    if (!point) {
-      ghostSet.hide();
-      return;
-    }
-
-    showPlacementPreview(point);
-  });
-
-  const placeWall = (point: Vector3) => {
-    const snapped = snapWallPosition(point);
-    const key = wallKey(snapped, state.rotation);
-    if (walls.has(key)) {
-      return;
-    }
-
-    const wall = createWall(scene, snapped, state.rotation);
-    walls.set(key, wall);
-    shadowNetwork.registerDynamic(wall.mesh);
-  };
-
-  const placeLamp = (point: Vector3) => {
-    const snapped = snapLampPosition(point);
-    const key = lampKey(snapped);
-    if (lamps.has(key)) {
-      return;
-    }
-
-    const color = nextLampColor(state.lampColorIndex);
-    state.lampColorIndex = (state.lampColorIndex + 1) % Number.MAX_SAFE_INTEGER;
-
-    const lamp = createLamp(scene, snapped, color);
-    lamps.set(key, lamp);
-    shadowNetwork.registerDynamic(lamp.mesh);
-    shadowNetwork.attachLamp(lamp);
-  };
-
-  const removeTarget = (mesh?: AbstractMesh) => {
-    if (!mesh || !mesh.metadata) {
-      return;
-    }
-
-    if (mesh === highlighted) {
-      highlighted.renderOutline = false;
-      highlighted = null;
-    }
-
-    const meta = mesh.metadata as { type: string; key: string };
-    if (meta.type === "builder-wall") {
-      const entry = walls.get(meta.key);
-      if (!entry) {
-        return;
-      }
-      shadowNetwork.unregisterDynamic(entry.mesh);
-      entry.mesh.dispose(false, true);
-      walls.delete(meta.key);
-    } else if (meta.type === "builder-lamp") {
-      const entry = lamps.get(meta.key);
-      if (!entry) {
-        return;
-      }
-      shadowNetwork.detachLamp(entry);
-      shadowNetwork.unregisterDynamic(entry.mesh);
-      entry.shadow.dispose();
-      entry.light.dispose();
-      entry.fillLight?.dispose();
-      entry.mesh.dispose(false, true);
-      lamps.delete(meta.key);
-    }
-    clearHighlight();
-  };
-
-  const pointerDownObserver = scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
-    if (pointerInfo.type !== PointerEventTypes.POINTERDOWN) {
-      return;
-    }
-
-    const event = pointerInfo.event;
-
-    if (event.button === 0) {
-      if (document.pointerLockElement !== canvas) {
-        canvas.requestPointerLock();
-      }
-
-      if (state.mode === "delete") {
-        const pick = pickRemovable();
-        const mesh = pick?.pickedMesh;
-        if (mesh) {
-          removeTarget(mesh);
-        }
-        return;
-      }
-
-      const pick = scene.pick(
-        scene.pointerX,
-        scene.pointerY,
-        (mesh?: AbstractMesh) => mesh?.name === "hangar-floor",
-      );
-      const point = pick?.pickedPoint;
-      if (!point) {
-        return;
-      }
-
-      if (state.mode === "wall") {
-        placeWall(point);
-      } else {
-        placeLamp(point);
-      }
-
-      showPlacementPreview(point);
-    } else if (event.button === 2) {
-      event.preventDefault();
-
-      const pick = scene.pick(
-        scene.pointerX,
-        scene.pointerY,
-        (mesh?: AbstractMesh) => {
-          const type = mesh?.metadata?.type;
-          return type === "builder-wall" || type === "builder-lamp";
+const TOOL_ID = "lamp";
+const LAMP_PROFILE: PlacementProfile = {
+  modes: [
+    {
+      mode: "wall-mount",
+      constraints: {
+        type: "wall-mount",
+        grid: GRID_SIZE,
+        itemSize: {
+          width: WALL_LAMP_PLACEMENT.width,
+          height: WALL_LAMP_PLACEMENT.height,
+          depth: WALL_LAMP_PLACEMENT.depth,
         },
+        offset: WALL_LAMP_PLACEMENT.offset,
+        boundsPadding: {
+          horizontal: 0.06,
+          vertical: 0.08,
+        },
+      },
+    },
+  ],
+};
+
+function createPreviewMesh(context: ToolRuntimeContext) {
+  const mesh = MeshBuilder.CreateBox(
+    "lamp-tool-preview",
+    {
+      width: WALL_LAMP_PLACEMENT.width,
+      height: WALL_LAMP_PLACEMENT.height,
+      depth: WALL_LAMP_PLACEMENT.depth,
+    },
+    context.scene,
+  );
+
+  const material = new StandardMaterial("lamp-tool-preview-mat", context.scene);
+  material.diffuseColor = new Color3(0.58, 0.78, 0.98);
+  material.alpha = 0.38;
+  material.specularColor = new Color3(0.2, 0.35, 0.5);
+  material.emissiveColor = new Color3(0.32, 0.58, 0.86);
+  material.backFaceCulling = false;
+  mesh.material = material;
+  mesh.isPickable = false;
+  mesh.setEnabled(false);
+  return mesh;
+}
+
+const isLampSurface = (mesh?: AbstractMesh | null) => {
+  if (!mesh) {
+    return false;
+  }
+  const metadata = mesh.metadata as Record<string, unknown> | undefined;
+  if (!metadata) {
+    return false;
+  }
+  if (metadata.toolId === "wall") {
+    return true;
+  }
+  if (metadata.type === "ship-wall") {
+    return true;
+  }
+  return false;
+};
+
+const frameToLampPlacement = (frame: PlacementFrame): WallLampPlacement | null => {
+  if (frame.mode !== "wall-mount") {
+    return null;
+  }
+  return {
+    mesh: frame.mesh,
+    position: frame.position.clone(),
+    forward: frame.forward.clone(),
+    right: frame.right.clone(),
+    up: frame.up.clone(),
+    surfaceId: frame.surfaceId,
+    local: {
+      x: Number(frame.local.x.toFixed(3)),
+      y: Number(frame.local.y.toFixed(3)),
+      z: Number(frame.local.z.toFixed(3)),
+    },
+  };
+};
+
+export const lampToolDefinition: PlacementToolDefinition = {
+  id: TOOL_ID,
+  label: "Lâmpada",
+  icon: "◎",
+  hotkey: INPUT_KEYS.lampMode,
+  create: (context: ToolRuntimeContext, bootstrap?: unknown) => {
+    const preview = createPreviewMesh(context);
+    const lamps = new Map<string, BuilderLamp>();
+    const initialLamps = Array.isArray(bootstrap) ? (bootstrap as BuilderLamp[]) : [];
+    let dynamicLampCount = 0;
+    initialLamps.forEach((lamp) => {
+      lamps.set(lamp.key, lamp);
+      const metadata = (lamp.mesh.metadata as Record<string, unknown>) ?? {};
+      const isStructural = metadata.structural === true;
+      const surfaceId =
+        typeof metadata.surfaceId === "string" && metadata.surfaceId.length > 0
+          ? metadata.surfaceId
+          : lamp.anchorSurfaceId;
+      const local = (metadata.local as WallLampPlacement["local"] | undefined) ?? lamp.local;
+      lamp.mesh.metadata = {
+        ...metadata,
+        toolId: TOOL_ID,
+        key: lamp.key,
+        surfaceId,
+        local,
+        structural: isStructural,
+      };
+      context.shadowNetwork.registerDynamic(lamp.mesh);
+      context.shadowNetwork.attachLamp(lamp);
+      if (isStructural) {
+        context.shipState.setLampEnabled(lamp.key, true);
+        return;
+      }
+      dynamicLampCount += 1;
+      context.shipState.upsertLamp({
+        id: lamp.key,
+        anchorSurfaceId: surfaceId,
+        position: {
+          x: Number(lamp.mesh.position.x.toFixed(5)),
+          y: Number(lamp.mesh.position.y.toFixed(5)),
+          z: Number(lamp.mesh.position.z.toFixed(5)),
+        },
+        rotation: {
+          x: Number(lamp.rotation.x.toFixed(5)),
+          y: Number(lamp.rotation.y.toFixed(5)),
+          z: Number(lamp.rotation.z.toFixed(5)),
+          w: Number(lamp.rotation.w.toFixed(5)),
+        },
+        color: {
+          r: Number(lamp.color.r.toFixed(5)),
+          g: Number(lamp.color.g.toFixed(5)),
+          b: Number(lamp.color.b.toFixed(5)),
+        },
+        local: { ...local },
+        structural: false,
+        enabled: true,
+      });
+    });
+
+    let pendingPlacement: WallLampPlacement | null = null;
+    let colorIndex = dynamicLampCount % Math.max(LAMP_COLOR_PALETTE.length, 1);
+
+    const hidePreview = () => {
+      pendingPlacement = null;
+      context.ghost.hide();
+    };
+
+    const updatePreview = (placement: WallLampPlacement | null) => {
+      if (!placement) {
+        hidePreview();
+        return;
+      }
+      pendingPlacement = placement;
+      preview.position.copyFrom(placement.position);
+
+      const basis = new Matrix();
+      Matrix.FromXYZAxesToRef(placement.right, placement.up, placement.forward, basis);
+      const rotation = Quaternion.FromRotationMatrix(basis);
+      preview.rotationQuaternion = rotation;
+      context.ghost.show(preview);
+    };
+
+    const placeLamp = (placement: WallLampPlacement) => {
+      const key = lampKey(placement);
+      if (lamps.has(key)) {
+        return;
+      }
+
+      const color = nextLampColor(colorIndex);
+      colorIndex = (colorIndex + 1) % LAMP_COLOR_PALETTE.length;
+
+      const lamp = createLamp(context.scene, placement, color);
+      lamp.mesh.metadata = {
+        toolId: TOOL_ID,
+        key,
+        surfaceId: placement.surfaceId,
+        local: placement.local,
+        structural: false,
+      };
+      lamps.set(key, lamp);
+      context.shadowNetwork.registerDynamic(lamp.mesh);
+      context.shadowNetwork.attachLamp(lamp);
+      context.shipState.upsertLamp({
+        id: key,
+        anchorSurfaceId: placement.surfaceId,
+        position: {
+          x: Number(placement.position.x.toFixed(5)),
+          y: Number(placement.position.y.toFixed(5)),
+          z: Number(placement.position.z.toFixed(5)),
+        },
+        rotation: {
+          x: Number(lamp.rotation.x.toFixed(5)),
+          y: Number(lamp.rotation.y.toFixed(5)),
+          z: Number(lamp.rotation.z.toFixed(5)),
+          w: Number(lamp.rotation.w.toFixed(5)),
+        },
+        color: {
+          r: Number(lamp.color.r.toFixed(5)),
+          g: Number(lamp.color.g.toFixed(5)),
+          b: Number(lamp.color.b.toFixed(5)),
+        },
+        local: { ...lamp.local },
+        structural: false,
+        enabled: true,
+      });
+    };
+
+    const pickSurface = () =>
+      context.scene.pick(
+        context.scene.pointerX,
+        context.scene.pointerY,
+        (mesh) => isLampSurface(mesh),
+        false,
       );
 
-      removeTarget(pick?.pickedMesh ?? undefined);
-    }
-  });
+    return {
+      id: TOOL_ID,
+      onActivate: () => {
+        hidePreview();
+      },
+      onDeactivate: () => {
+        hidePreview();
+      },
+      onPointerLockChange: (isLocked: boolean) => {
+        if (!isLocked) {
+          hidePreview();
+        }
+      },
+      onPointerMove: (pointerInfo) => {
+        if (pointerInfo.type !== PointerEventTypes.POINTERMOVE) {
+          return;
+        }
 
-  const handleContextMenu = (event: MouseEvent) => {
-    event.preventDefault();
-  };
+        const pick = pickSurface();
+        if (!context.withinRange(pick?.pickedPoint)) {
+          updatePreview(null);
+          return;
+        }
 
-  canvas.addEventListener("contextmenu", handleContextMenu);
+        if (!pick || !pick.hit) {
+          updatePreview(null);
+          return;
+        }
 
-  const handleKeyDown = (event: KeyboardEvent) => {
-    if (event.code === INPUT_KEYS.rotate && state.mode === "wall") {
-      state.rotation = (state.rotation + 90) % 360;
-    }
+        const frame = context.placementSolver.solve(LAMP_PROFILE, pick);
+        const placement = frame ? frameToLampPlacement(frame) : null;
+        if (!placement) {
+          updatePreview(null);
+          return;
+        }
 
-    if (sprintKeys.has(event.code)) {
-      camera.speed = baseCameraSpeed * CAMERA_SETTINGS.sprintMultiplier;
-    }
+        updatePreview(placement);
+      },
+      onPointerDown: (pointerInfo) => {
+        if (pointerInfo.type !== PointerEventTypes.POINTERDOWN) {
+          return;
+        }
 
-    if (event.code === INPUT_KEYS.wallMode) {
-      setMode("wall");
-    }
+        if (pointerInfo.event.button !== 0) {
+          return;
+        }
 
-    if (event.code === INPUT_KEYS.lampMode) {
-      setMode("lamp");
-    }
+        const placement =
+          pendingPlacement ??
+          (() => {
+            const pick = pickSurface();
+            if (!context.withinRange(pick?.pickedPoint)) {
+              return null;
+            }
+            const frame = context.placementSolver.solve(LAMP_PROFILE, pick ?? null);
+            return frame ? frameToLampPlacement(frame) : null;
+          })();
 
-    if (event.code === INPUT_KEYS.deleteMode) {
-      setMode("delete");
-    }
-  };
+        if (!placement) {
+          return;
+        }
 
-  const handleKeyUp = (event: KeyboardEvent) => {
-    if (sprintKeys.has(event.code)) {
-      camera.speed = baseCameraSpeed;
-    }
-  };
-
-  window.addEventListener("keydown", handleKeyDown);
-  window.addEventListener("keyup", handleKeyUp);
-
-  const handlePointerLockChange = () => {
-    if (document.pointerLockElement !== canvas) {
-      ghostSet.hide();
-      clearHighlight();
-    }
-  };
-
-  document.addEventListener("pointerlockchange", handlePointerLockChange);
-
-  return {
-    getState: () => ({ ...state }),
-    setMode,
-    subscribe: (listener: (snapshot: PlacementState) => void) => {
-      listeners.add(listener);
-      listener({ ...state });
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-    dispose: () => {
-      scene.onPointerObservable.remove(pointerMoveObserver);
-      scene.onPointerObservable.remove(pointerDownObserver);
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-      document.removeEventListener("pointerlockchange", handlePointerLockChange);
-      canvas.removeEventListener("contextmenu", handleContextMenu);
-
-      walls.forEach((wall) => wall.mesh.dispose(false, true));
-      lamps.forEach((lamp) => {
-        lamp.shadow.dispose();
-        lamp.light.dispose();
-        lamp.fillLight?.dispose();
-        lamp.mesh.dispose(false, true);
-      });
-      walls.clear();
-      lamps.clear();
-      listeners.clear();
-      clearHighlight();
-    },
-  };
-}
+        placeLamp(placement);
+        updatePreview(placement);
+      },
+      remove: (metadata: ToolMetadata) => {
+        if (metadata.toolId !== TOOL_ID) {
+          return false;
+        }
+        const entry = lamps.get(metadata.key);
+        if (!entry) {
+          return false;
+        }
+        const isStructural = metadata.structural === true;
+        context.shadowNetwork.detachLamp(entry);
+        context.shadowNetwork.unregisterDynamic(entry.mesh);
+        entry.shadow.dispose();
+        entry.light.dispose();
+        entry.areaLight?.dispose();
+        entry.fillLight?.dispose();
+        entry.auxiliaryLights?.forEach((aux) => aux.dispose());
+        if (entry.gi) {
+          entry.gi.solution.dispose();
+          entry.gi.rsm.dispose();
+        }
+        entry.mesh.dispose(false, true);
+        lamps.delete(metadata.key);
+        if (isStructural) {
+          context.shipState.setLampEnabled(metadata.key, false);
+        } else {
+          context.shipState.removeLamp(metadata.key);
+        }
+        return true;
+      },
+      dispose: () => {
+        context.ghost.hide();
+        preview.dispose(false, true);
+        lamps.forEach((lamp) => {
+          context.shadowNetwork.detachLamp(lamp);
+          context.shadowNetwork.unregisterDynamic(lamp.mesh);
+          lamp.shadow.dispose();
+          lamp.light.dispose();
+          lamp.areaLight?.dispose();
+          lamp.fillLight?.dispose();
+          lamp.auxiliaryLights?.forEach((aux) => aux.dispose());
+          if (lamp.gi) {
+            lamp.gi.solution.dispose();
+            lamp.gi.rsm.dispose();
+          }
+          lamp.mesh.dispose(false, true);
+        });
+        lamps.clear();
+        pendingPlacement = null;
+      },
+    };
+  },
+};
 </file>
 
 <file path="src/fps/constants.ts">
@@ -4043,6 +6559,7 @@ export const WALL_DIMENSIONS = {
   width: 1,
   height: SHIP_INTERIOR_DIMENSIONS.deckClearance,
   thickness: 0.18,
+  footingDepth: 0.04,
 } as const;
 
 export const HULL_DIMENSIONS = {
@@ -4105,32 +6622,24 @@ export const LAMP_COLOR_PALETTE = [
   new Color3(0.72, 0.84, 1),
 ] as const;
 
+export const WALL_LAMP_PLACEMENT = {
+  width: 1.15,
+  height: 0.12,
+  depth: 0.22,
+  offset: 0.06,
+  tilt: 0.45,
+  shadowMapSize: 640,
+  intensity: 1.9,
+  range: 11,
+} as const;
+
+export const LIGHTING_LIMITS = {
+  maxSimultaneousLights: 24,
+} as const;
+
 export const SELECTION_OUTLINE_COLOR = new Color3(0.2, 0.65, 1);
-</file>
 
-<file path="src/fps/types.ts">
-import type { Mesh, PointLight, ShadowGenerator, SpotLight } from "babylonjs";
-
-export type PlacementMode = "wall" | "lamp" | "delete";
-
-export interface BuilderWall {
-  mesh: Mesh;
-  key: string;
-}
-
-export interface BuilderLamp {
-  mesh: Mesh;
-  light: SpotLight;
-  shadow: ShadowGenerator;
-  fillLight?: PointLight;
-  key: string;
-}
-
-export interface PlacementState {
-  mode: PlacementMode;
-  rotation: number;
-  lampColorIndex: number;
-}
+export const INTERACTION_RANGE = 16;
 </file>
 
 <file path="AGENTS.md">
@@ -4145,7 +6654,12 @@ Welcome aboard the Mad Dash Initiative. We rebuilt the project structure mid-fli
 ## Code Constellation
 - `src/` now hosts the new MVP:
   - `App.tsx`, `main.tsx` — minimal bootstrap for the builder prototype.
-  - `fps/ShipBuilderCanvas.tsx` — Babylon.js scene for first-person movement, grid snapping, wall placement/removal, and ghost previews.
+  - `fps/ShipBuilderCanvas.tsx` — Babylon.js scene for first-person movement, placement tooling, and HUD overlays.
+- Placement runtime highlights:
+  - `fps/core/sceneContext.ts` builds the hangar hull, registers static meshes, and now publishes a `SurfaceRegistry`.
+  - `fps/placement/surfaces/` defines pluggable surface adapters (`WallSurface`, `FloorSurface`, …); every pickable surface registers here with consistent normals, snap grids, and offsets.
+  - `fps/placement/placementSolver.ts` takes a tool profile (modes + constraints) and resolves placement frames from ray picks, so tools no longer manage Babylon math directly.
+  - Tools (e.g., `lampTool`, `wallTool`) receive the shared solver via `ToolRuntimeContext` and only worry about preview meshes and item lifecycles. Adding a new “crate” that lives on the floor (or multi-surface items) is now a matter of declaring allowed modes in the profile and registering the relevant surfaces.
 - `src/legacy/` shelters the previous React panels, HAL wiring, and Babylon scene (`game/`, `ui/`, `hal/`, plus old entry points). Use this when you need to reference assets or revive older features without polluting the new loop.
 - `dist/`, `docs/`, and `releases/` retain their original purposes; respect `.gitignore` for generated assets.
 
@@ -4161,6 +6675,13 @@ Welcome aboard the Mad Dash Initiative. We rebuilt the project structure mid-fli
 - Two-space indent, camelCase helpers, PascalCase React components.
 - Inline styles acceptable for HUD prototypes; migrate to shared styling once components settle.
 - Add comments only where Babylon abstractions or math need extra context.
+
+### Lighting & Shadows (2025-10-21)
+- Babylon spot/area lights inherit their parent transform; set the light up in local space so the `forward` axis actually matches the emitter. We now parent a pivot node to each fixture, transform the desired world frame into that local basis, and attach both the area light and the shadow-casting spotlight to the pivot.
+- Keep `Vector3.Backward()` as the local forward for the spotlight once it is parented to the pivot. Feeding world-space forward directly into the constructor caused the shadow cone to flip when fixtures were rotated.
+- Clamp shadow bias aggressively (`0.00022` / `0.0035` for bias/normal bias) and pull `shadowMinZ` close to zero (`≈0.008`) so thin walls stay grounded without acne.
+- Give walls a shallow footing (`WALL_DIMENSIONS.footingDepth = 0.04`) and sink instanced walls by half that depth; otherwise light leaks under the panels even if the mesh appears flush.
+- Disable `forceBackFacesOnly` on all generators. It looked tempting for RSM GI, but it ignored the illuminated faces and inverted the shadow direction.
 
 ## Testing & Telemetry
 - Vitest + React Testing Library remain the plan. For now, favor small utility tests when you introduce deterministic builders or data serializers.
@@ -4183,33 +6704,1009 @@ Welcome aboard the Mad Dash Initiative. We rebuilt the project structure mid-fli
 Document the weird, celebrate the breakthroughs, and keep shipping. The hangar is ours now.
 </file>
 
-<file path="src/fps/core/sceneContext.ts">
-import {
+<file path="src/fps/types.ts">
+import type {
+  AbstractMesh,
   Color3,
-  Color4,
-  Engine,
-  GlowLayer,
+  GIRSM,
   Light,
   Mesh,
-  MeshBuilder,
-  Scene,
+  RectAreaLight,
+  ReflectiveShadowMap,
   ShadowGenerator,
-  SpotLight,
-  StandardMaterial,
+  ShadowLight,
+  Quaternion,
+  Vector3,
+} from "babylonjs";
+
+export interface BuilderWall {
+  mesh: Mesh;
+  key: string;
+  rotation: number; // degrees around Y
+}
+
+export interface BuilderLamp {
+  mesh: Mesh;
+  light: ShadowLight;
+  shadow: ShadowGenerator;
+  areaLight?: RectAreaLight;
+  fillLight?: Light;
+  auxiliaryLights?: Light[];
+  gi?: {
+    rsm: ReflectiveShadowMap;
+    solution: GIRSM;
+  };
+  key: string;
+  color: Color3;
+  anchorSurfaceId: string;
+  local: { x: number; y: number; z: number };
+  rotation: Quaternion;
+}
+
+export interface WallLampPlacement {
+  mesh: AbstractMesh;
+  position: Vector3;
+  forward: Vector3;
+  right: Vector3;
+  up: Vector3;
+  surfaceId: string;
+  local: { x: number; y: number; z: number };
+}
+</file>
+
+<file path="src/fps/placement/placementController.ts">
+import {
+  AbstractMesh,
+  PointerEventTypes,
+  PointerInfo,
+  Scene,
   UniversalCamera,
   Vector3,
 } from "babylonjs";
-import { CAMERA_SETTINGS, GRID_SIZE, HULL_DIMENSIONS, INPUT_KEYS, WALL_DIMENSIONS } from "../constants";
+import { CAMERA_SETTINGS, INPUT_KEYS, INTERACTION_RANGE, SELECTION_OUTLINE_COLOR } from "../constants";
+import type { ShadowNetwork } from "../lighting/shadowNetwork";
+import type { BuilderLamp, BuilderWall } from "../types";
+import type { GhostHost } from "./ghosts";
+import type {
+  PlacementState,
+  PlacementToolInstance,
+  ShipStateActions,
+  ToolMetadata,
+  ToolRuntimeContext,
+} from "./placementTypes";
+import { TOOL_DEFINITION_BY_ID, TOOL_DEFINITIONS } from "./tools";
+import type { SurfaceRegistry } from "./surfaces/surfaceRegistry";
+import { createPlacementSolver } from "./placementSolver";
+import type { ShipStore } from "../state/shipStore";
+
+interface PlacementControllerOptions {
+  scene: Scene;
+  canvas: HTMLCanvasElement;
+  camera: UniversalCamera;
+  ghost: GhostHost;
+  shadowNetwork: ShadowNetwork;
+  surfaceRegistry: SurfaceRegistry;
+  initialWalls?: BuilderWall[];
+  initialLamps?: BuilderLamp[];
+  shipStore: ShipStore;
+}
+
+export interface PlacementController {
+  getState(): PlacementState;
+  setActiveTool(toolId: string): void;
+  subscribe(listener: (state: PlacementState) => void): () => void;
+  dispose(): void;
+}
+
+export function createPlacementController(options: PlacementControllerOptions): PlacementController {
+  const { scene, canvas, camera, ghost, shadowNetwork, surfaceRegistry, shipStore } = options;
+  const initialWalls = options.initialWalls ?? [];
+  const initialLamps = options.initialLamps ?? [];
+  const placementSolver = createPlacementSolver(surfaceRegistry);
+  const shipActions: ShipStateActions = {
+    upsertWall: (wall) => shipStore.upsertWall(wall),
+    removeWall: (wallId) => shipStore.removeWall(wallId),
+    upsertLamp: (lamp) => shipStore.upsertLamp(lamp),
+    removeLamp: (lampId) => shipStore.removeLamp(lampId),
+    setLampEnabled: (lampId, enabled) => shipStore.setLampEnabled(lampId, enabled),
+  };
+
+  const defaultToolId = TOOL_DEFINITIONS[0]?.id ?? "wall";
+
+  const state: PlacementState = {
+    activeToolId: defaultToolId,
+  };
+
+  const toolBootstrap = new Map<string, unknown>();
+  if (initialWalls.length > 0) {
+    toolBootstrap.set("wall", initialWalls);
+  }
+  if (initialLamps.length > 0) {
+    toolBootstrap.set("lamp", initialLamps);
+  }
+
+  const listeners = new Set<(snapshot: PlacementState) => void>();
+  const toolInstances = new Map<string, PlacementToolInstance>();
+  const sprintKeys = new Set<string>(Array.from(INPUT_KEYS.sprint));
+  const hotkeyToToolId = new Map<string, string>();
+  const baseCameraSpeed = CAMERA_SETTINGS.speed;
+
+  let activeTool: PlacementToolInstance | null = null;
+  let highlighted: AbstractMesh | null = null;
+
+  const notify = () => {
+    const snapshot: PlacementState = { ...state };
+    listeners.forEach((listener) => listener(snapshot));
+  };
+
+  const clearHighlight = () => {
+    if (!highlighted || highlighted.isDisposed()) {
+      highlighted = null;
+      return;
+    }
+    highlighted.renderOutline = false;
+    highlighted = null;
+  };
+
+  const applyHighlight = (mesh?: AbstractMesh | null) => {
+    const target = mesh ?? null;
+    if (!target) {
+      clearHighlight();
+      return;
+    }
+
+    if (highlighted === target) {
+      return;
+    }
+
+    clearHighlight();
+    target.renderOutline = true;
+    target.outlineColor = SELECTION_OUTLINE_COLOR;
+    target.outlineWidth = 0.018;
+    highlighted = target;
+  };
+
+  const withinRange = (point?: Vector3 | null) => {
+    if (!point) {
+      return false;
+    }
+    return Vector3.Distance(camera.position, point) <= INTERACTION_RANGE;
+  };
+
+  hotkeyToToolId.clear();
+  TOOL_DEFINITIONS.forEach((definition) => {
+    hotkeyToToolId.set(definition.hotkey, definition.id);
+  });
+
+  const runtimeContext: ToolRuntimeContext = {
+    scene,
+    camera,
+    canvas,
+    shadowNetwork,
+    ghost,
+    surfaceRegistry,
+    placementSolver,
+    shipState: shipActions,
+    withinRange,
+    requestPointerLock: () => {
+      if (document.pointerLockElement !== canvas) {
+        canvas.requestPointerLock();
+      }
+    },
+    highlight: (mesh?: AbstractMesh | null) => {
+      if (!mesh) {
+        clearHighlight();
+        return;
+      }
+      applyHighlight(mesh);
+    },
+    removeMesh: (mesh?: AbstractMesh | null) => {
+      const removed = removeMesh(mesh);
+      if (removed) {
+        clearHighlight();
+      }
+      return removed;
+    },
+  };
+
+  const getToolInstance = (toolId: string): PlacementToolInstance | null => {
+    const existing = toolInstances.get(toolId);
+    if (existing) {
+      return existing;
+    }
+
+    const definition = TOOL_DEFINITION_BY_ID.get(toolId);
+    if (!definition) {
+      return null;
+    }
+
+    const bootstrap = toolBootstrap.get(toolId);
+    const instance = definition.create(runtimeContext, bootstrap);
+    toolInstances.set(toolId, instance);
+    return instance;
+  };
+
+  toolBootstrap.forEach((_, toolId) => {
+    if (toolId !== state.activeToolId) {
+      getToolInstance(toolId);
+    }
+  });
+
+  const removeMesh = (mesh?: AbstractMesh | null): boolean => {
+    if (!mesh) {
+      return false;
+    }
+
+    const metadata = mesh.metadata as ToolMetadata | undefined;
+    if (
+      !metadata ||
+      typeof metadata.toolId !== "string" ||
+      typeof metadata.key !== "string"
+    ) {
+      return false;
+    }
+
+    const tool = getToolInstance(metadata.toolId);
+    if (!tool || !tool.remove) {
+      return false;
+    }
+
+    const removed = tool.remove(metadata, mesh);
+    if (removed && mesh === highlighted) {
+      clearHighlight();
+    }
+    return removed;
+  };
+
+  const setActiveToolInternal = (toolId: string, fromHotkey = false) => {
+    if (state.activeToolId === toolId && !fromHotkey) {
+      return;
+    }
+
+    const next = getToolInstance(toolId);
+    if (!next) {
+      return;
+    }
+
+    if (activeTool && activeTool.onDeactivate) {
+      activeTool.onDeactivate();
+    }
+
+    activeTool = next;
+    state.activeToolId = toolId;
+    if (activeTool.onActivate) {
+      activeTool.onActivate();
+    }
+    notify();
+  };
+
+  const attemptRemoveAtPointer = () => {
+    const pick = scene.pick(
+      scene.pointerX,
+      scene.pointerY,
+      (mesh) => {
+        const metadata = mesh?.metadata as { toolId?: unknown } | undefined;
+        return typeof metadata?.toolId === "string";
+      },
+    );
+
+    if (!withinRange(pick?.pickedPoint)) {
+      return false;
+    }
+
+    return removeMesh(pick?.pickedMesh ?? null);
+  };
+
+  const pointerObserver = scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
+    switch (pointerInfo.type) {
+      case PointerEventTypes.POINTERMOVE:
+        activeTool?.onPointerMove?.(pointerInfo);
+        break;
+      case PointerEventTypes.POINTERDOWN: {
+        if (pointerInfo.event.button === 0) {
+          runtimeContext.requestPointerLock();
+        }
+
+        if (pointerInfo.event.button === 2) {
+          pointerInfo.event.preventDefault();
+          attemptRemoveAtPointer();
+          return;
+        }
+
+        activeTool?.onPointerDown?.(pointerInfo);
+        break;
+      }
+      case PointerEventTypes.POINTERUP:
+        activeTool?.onPointerUp?.(pointerInfo);
+        break;
+      default:
+        break;
+    }
+  });
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (sprintKeys.has(event.code)) {
+      camera.speed = baseCameraSpeed * CAMERA_SETTINGS.sprintMultiplier;
+    }
+
+    const toolId = hotkeyToToolId.get(event.code);
+    if (toolId) {
+      setActiveToolInternal(toolId, true);
+      return;
+    }
+
+    activeTool?.onKeyDown?.(event);
+  };
+
+  const handleKeyUp = (event: KeyboardEvent) => {
+    if (sprintKeys.has(event.code)) {
+      camera.speed = baseCameraSpeed;
+    }
+
+    activeTool?.onKeyUp?.(event);
+  };
+
+  const handlePointerLockChange = () => {
+    const locked = document.pointerLockElement === canvas;
+    if (!locked) {
+      ghost.hide();
+      clearHighlight();
+    }
+    activeTool?.onPointerLockChange?.(locked);
+  };
+
+  const handleContextMenu = (event: MouseEvent) => {
+    event.preventDefault();
+  };
+
+  window.addEventListener("keydown", handleKeyDown);
+  window.addEventListener("keyup", handleKeyUp);
+  document.addEventListener("pointerlockchange", handlePointerLockChange);
+  canvas.addEventListener("contextmenu", handleContextMenu);
+
+  const initialTool = getToolInstance(state.activeToolId);
+  activeTool = initialTool;
+  activeTool?.onActivate?.();
+
+  return {
+    getState: () => ({ ...state }),
+    setActiveTool: (toolId: string) => {
+      setActiveToolInternal(toolId);
+    },
+    subscribe: (listener: (snapshot: PlacementState) => void) => {
+      listeners.add(listener);
+      listener({ ...state });
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    dispose: () => {
+      scene.onPointerObservable.remove(pointerObserver);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      document.removeEventListener("pointerlockchange", handlePointerLockChange);
+      canvas.removeEventListener("contextmenu", handleContextMenu);
+
+      if (activeTool && activeTool.onDeactivate) {
+        activeTool.onDeactivate();
+      }
+
+      toolInstances.forEach((tool) => {
+        tool.dispose?.();
+      });
+      toolInstances.clear();
+
+      ghost.clear();
+      clearHighlight();
+      listeners.clear();
+      hotkeyToToolId.clear();
+    },
+  };
+}
+</file>
+
+<file path="src/fps/placement/wallBuilder.ts">
+import { Matrix, MeshBuilder, PBRMaterial, Vector3 } from "babylonjs";
+import type { Scene } from "babylonjs";
+import { GRID_SIZE, HULL_DIMENSIONS, WALL_DIMENSIONS, LIGHTING_LIMITS } from "../constants";
+import type { BuilderWall } from "../types";
+import { clamp, degreesToRadians } from "../utils/math";
+import { applyHangarTextures, disposeHangarMaterial, getHangarTextureSet } from "../core/hangarTextures";
+
+export function snapWallPosition(point: Vector3) {
+  const halfWidth = HULL_DIMENSIONS.width / 2 - WALL_DIMENSIONS.width / 2;
+  const halfLength = HULL_DIMENSIONS.length / 2 - WALL_DIMENSIONS.width / 2;
+
+  const snappedX = clamp(
+    Math.round(point.x / GRID_SIZE) * GRID_SIZE,
+    -halfWidth,
+    halfWidth,
+  );
+  const snappedZ = clamp(
+    Math.round(point.z / GRID_SIZE) * GRID_SIZE,
+    -halfLength,
+    halfLength,
+  );
+
+  return new Vector3(snappedX, WALL_DIMENSIONS.height / 2, snappedZ);
+}
+
+export function wallKey(position: Vector3, rotation: number) {
+  return `${position.x}:${position.y}:${position.z}:${rotation}`;
+}
+
+export function createWall(scene: Scene, position: Vector3, rotation: number): BuilderWall {
+  const footingDepth = WALL_DIMENSIONS.footingDepth ?? 0;
+  const boxHeight = WALL_DIMENSIONS.height + footingDepth;
+  const wallMesh = MeshBuilder.CreateBox(
+    `builder-wall-${Date.now()}`,
+    {
+      width: WALL_DIMENSIONS.width,
+      height: boxHeight,
+      depth: WALL_DIMENSIONS.thickness,
+    },
+    scene,
+  );
+
+  wallMesh.position = position.clone();
+  wallMesh.position.y -= footingDepth / 2;
+  wallMesh.rotation.y = degreesToRadians(rotation);
+  wallMesh.checkCollisions = true;
+  wallMesh.receiveShadows = true;
+
+  const armorTextures = getHangarTextureSet(scene, "armor");
+  const material = new PBRMaterial(`builder-wall-pbr-${Date.now()}`, scene);
+  const tileU = Math.max(WALL_DIMENSIONS.width, WALL_DIMENSIONS.height) * 0.9;
+  const tileV = WALL_DIMENSIONS.height * 0.95;
+  applyHangarTextures(material, armorTextures, { u: tileU, v: tileV });
+  material.ambientTextureStrength = 0.94;
+  material.useAmbientInGrayScale = true;
+  material.metallic = 0.36;
+  material.roughness = 0.88;
+  material.microSurface = 0.8;
+  material.environmentIntensity = 0.7;
+  material.specularIntensity = 1.0;
+  material.backFaceCulling = true;
+  material.twoSidedLighting = false;
+  material.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
+  wallMesh.material = material;
+
+  const key = wallKey(position, rotation);
+  const rotationMatrix = Matrix.RotationY(wallMesh.rotation.y);
+  const inward = Vector3.TransformNormal(Vector3.Forward(), rotationMatrix).scale(-1).normalize();
+  const up = Vector3.Up();
+
+  wallMesh.metadata = {
+    toolId: "wall",
+    key,
+    surfaceId: key,
+    lampOrientation: {
+      forward: inward.asArray(),
+      up: up.asArray(),
+    },
+    textureTiling: { u: tileU, v: tileV },
+  };
+
+  wallMesh.onDisposeObservable.add(() => {
+    disposeHangarMaterial(material);
+  });
+
+  return {
+    mesh: wallMesh,
+    key,
+    rotation,
+  };
+}
+</file>
+
+<file path="src/App.tsx">
+import { ShipBuilderCanvas } from "./fps/ShipBuilderCanvas";
+
+export default function App() {
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+        background: "#05060a",
+        color: "#f1f5f9",
+        fontFamily: "'Segoe UI', Roboto, sans-serif",
+      }}
+    >
+      <ShipBuilderCanvas />
+      <div
+        style={{
+          position: "absolute",
+          top: 16,
+          left: 16,
+          padding: "12px 16px",
+          background: "rgba(15, 23, 42, 0.72)",
+          border: "1px solid rgba(148, 163, 184, 0.32)",
+          borderRadius: 8,
+          maxWidth: 360,
+          backdropFilter: "blur(10px)",
+        }}
+      >
+        <h1 style={{ fontSize: 18, margin: "0 0 8px" }}>Ship Builder MVP</h1>
+        <p style={{ margin: "6px 0", fontSize: 13, lineHeight: 1.4 }}>
+          Explore the hangar in first-person and experiment with dropping walls
+          inside the rectangular hull. This pass focuses on grid snapping and
+          quick prototyping of construction flow.
+        </p>
+        <ul style={{ margin: "6px 0 0", paddingLeft: 16, fontSize: 13 }}>
+          <li>WASD — move / Shift — sprint</li>
+          <li>Mouse — look (click canvas to lock)</li>
+          <li>1 — wall mode / 2 — lamp mode / 3 — remove mode</li>
+          <li>Left click — place item / Delete mode + click (ou botão direito) — remove</li>
+          <li>R — rotate walls (90° steps)</li>
+          <li>Esc — release cursor lock</li>
+        </ul>
+        <p style={{ margin: "10px 0 0", fontSize: 12, opacity: 0.85 }}>
+          Lamps cycle between warm and cool tones and cast soft shadows—perfect
+          for finding that cozy blue-gold balance.
+        </p>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="src/fps/ShipBuilderCanvas.tsx">
+import { useEffect, useRef, useState } from "react";
+import { createSceneContext } from "./core/sceneContext";
+import { createPlayerController } from "./core/playerController";
+import { createPlacementController } from "./placement/placementController";
+import type { PlacementController } from "./placement/placementController";
+import { createGhostHost } from "./placement/ghosts";
+import type { PlacementState } from "./placement/placementTypes";
+import { TOOL_DEFINITIONS } from "./placement/tools";
+import { createShadowNetwork } from "./lighting/shadowNetwork";
+import { ShipStore } from "./state/shipStore";
+import { createShipPersistence, loadShipState } from "./state/shipPersistence";
+import { hydrateShipAssets } from "./state/shipHydrator";
+import { PlayerStore } from "./state/playerStore";
+import { createPlayerPersistence, loadPlayerState } from "./state/playerPersistence";
+import { registerBaselinePlayerModules } from "./state/playerModules";
+import type { BuilderLamp } from "./types";
+import { serializeColor, serializeQuaternion, serializeVector3 } from "./state/shipState";
+
+const defaultToolId = TOOL_DEFINITIONS[0]?.id ?? "wall";
+
+function formatHotkey(code: string) {
+  if (code.startsWith("Digit")) {
+    return code.slice(5);
+  }
+  if (code.startsWith("Key")) {
+    return code.slice(3);
+  }
+  if (code.startsWith("Numpad")) {
+    return `Num${code.slice(6)}`;
+  }
+  if (code.endsWith("Arrow")) {
+    return code.replace("Arrow", "");
+  }
+  if (code === "ShiftLeft" || code === "ShiftRight") {
+    return "Shift";
+  }
+  return code;
+}
+
+export function ShipBuilderCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const controllerRef = useRef<PlacementController | null>(null);
+  const shipStoreRef = useRef<ShipStore | null>(null);
+  const playerStoreRef = useRef<PlayerStore | null>(null);
+  const [placementState, setPlacementState] = useState<PlacementState>({
+    activeToolId: defaultToolId,
+  });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    if (!shipStoreRef.current) {
+      shipStoreRef.current = new ShipStore();
+    }
+    const shipStore = shipStoreRef.current;
+    const persistedShipState = loadShipState();
+    if (persistedShipState) {
+      shipStore.replace(persistedShipState);
+    }
+
+    if (!playerStoreRef.current) {
+      const persistedPlayer = loadPlayerState();
+      playerStoreRef.current = new PlayerStore(persistedPlayer ?? undefined);
+      registerBaselinePlayerModules(playerStoreRef.current);
+    }
+    const playerStore = playerStoreRef.current;
+    if (!playerStore) {
+      return;
+    }
+
+    const disposeStructuralLamp = (lamp: BuilderLamp) => {
+      lamp.shadow.dispose();
+      lamp.light.dispose();
+      lamp.areaLight?.dispose();
+      lamp.fillLight?.dispose();
+      lamp.auxiliaryLights?.forEach((aux) => aux.dispose());
+      lamp.gi?.solution.dispose();
+      lamp.gi?.rsm.dispose();
+      lamp.mesh.dispose(false, true);
+    };
+
+    const sceneContext = createSceneContext(canvas);
+    const structuralLamps: BuilderLamp[] = [];
+    sceneContext.structuralLamps.forEach((lamp) => {
+      const key = lamp.key;
+      if (!key) {
+        structuralLamps.push(lamp);
+        return;
+      }
+
+      const currentSnapshot = shipStore.getSnapshot();
+      const existing = currentSnapshot.lamps[key];
+      const local = lamp.local ?? { x: 0, y: 0, z: 0 };
+
+      if (!existing) {
+        shipStore.upsertLamp({
+          id: key,
+          anchorSurfaceId: lamp.anchorSurfaceId,
+          position: serializeVector3(lamp.mesh.position.x, lamp.mesh.position.y, lamp.mesh.position.z),
+          rotation: serializeQuaternion(lamp.rotation.x, lamp.rotation.y, lamp.rotation.z, lamp.rotation.w),
+          color: serializeColor(lamp.color.r, lamp.color.g, lamp.color.b),
+          local: { ...local },
+          structural: true,
+          enabled: true,
+        });
+      } else {
+        if (existing.enabled === false) {
+          disposeStructuralLamp(lamp);
+          return;
+        }
+        if (!existing.structural || existing.enabled === undefined) {
+          shipStore.upsertLamp({
+            ...existing,
+            structural: true,
+            enabled: existing.enabled ?? true,
+          });
+        }
+      }
+
+      lamp.mesh.metadata = {
+        ...(lamp.mesh.metadata as Record<string, unknown> | undefined),
+        toolId: "lamp",
+        key,
+        structural: true,
+        surfaceId: lamp.anchorSurfaceId,
+        local,
+      };
+      structuralLamps.push(lamp);
+    });
+    sceneContext.structuralLamps = structuralLamps;
+    const ghost = createGhostHost();
+    const shadowNetwork = createShadowNetwork(
+      structuralLamps.map((lamp) => lamp.shadow),
+    );
+    const staticMeshes = [sceneContext.floor, ...sceneContext.staticMeshes];
+    structuralLamps.forEach((lamp) => {
+      shadowNetwork.registerDynamic(lamp.mesh);
+      shadowNetwork.attachLamp(lamp);
+    });
+    shadowNetwork.registerStatic(staticMeshes);
+
+    const playerController = createPlayerController({
+      scene: sceneContext.scene,
+      canvas,
+      store: playerStore,
+    });
+
+    const hydratedAssets = hydrateShipAssets(sceneContext.scene, shipStore.getSnapshot());
+
+    const placementController = createPlacementController({
+      scene: sceneContext.scene,
+      canvas,
+      camera: playerController.camera,
+      ghost,
+      shadowNetwork,
+      surfaceRegistry: sceneContext.surfaceRegistry,
+      initialWalls: hydratedAssets.walls,
+      initialLamps: [...structuralLamps, ...hydratedAssets.lamps],
+      shipStore,
+    });
+    controllerRef.current = placementController;
+    const unsubscribePlacement = placementController.subscribe(setPlacementState);
+    const persistence = createShipPersistence(shipStore);
+    const playerPersistence = createPlayerPersistence(playerStore);
+
+    let statsHandle = 0;
+    let lastSample = 0;
+    const updateOverlay = (timestamp: number) => {
+      statsHandle = requestAnimationFrame(updateOverlay);
+      if (!overlayRef.current) {
+        return;
+      }
+      if (timestamp - lastSample < 250) {
+        return;
+      }
+      lastSample = timestamp;
+
+      const fps = sceneContext.engine.getFps();
+      const meshCount = sceneContext.scene.meshes.length;
+      const lightCount = sceneContext.scene.lights.length;
+      const shadowedLights = sceneContext.scene.lights.filter((light) => light.shadowEnabled).length;
+      const camera = playerController.camera.position;
+
+      overlayRef.current.textContent = [
+        `FPS: ${fps.toFixed(1)}`,
+        `Meshes: ${meshCount}`,
+        `Lights: ${lightCount} (shadowed: ${shadowedLights})`,
+        `Camera: (${camera.x.toFixed(2)}, ${camera.y.toFixed(2)}, ${camera.z.toFixed(2)})`,
+      ].join("\n");
+    };
+    statsHandle = requestAnimationFrame(updateOverlay);
+
+    return () => {
+      persistence.flush();
+      persistence.dispose();
+      playerPersistence.flush();
+      playerPersistence.dispose();
+      unsubscribePlacement();
+      placementController.dispose();
+      controllerRef.current = null;
+      ghost.dispose();
+      shadowNetwork.dispose();
+      playerController.dispose();
+      sceneContext.dispose();
+      cancelAnimationFrame(statsHandle);
+    };
+  }, []);
+
+  const handleToolClick = (toolId: string) => () => {
+    controllerRef.current?.setActiveTool(toolId);
+  };
+
+  const toolbarItems = TOOL_DEFINITIONS.map((tool) => ({
+    id: tool.id,
+    label: tool.label,
+    hint: formatHotkey(tool.hotkey),
+    icon: tool.icon,
+  }));
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "block",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          bottom: 24,
+          transform: "translateX(-50%)",
+          display: "flex",
+          gap: 12,
+          padding: "10px 16px",
+          borderRadius: 18,
+          background: "rgba(8, 10, 16, 0.76)",
+          border: "1px solid rgba(88, 126, 168, 0.45)",
+          boxShadow: "0 10px 32px rgba(0, 0, 0, 0.44)",
+          backdropFilter: "blur(9px)",
+        }}
+      >
+        {toolbarItems.map((item) => {
+          const isActive = placementState.activeToolId === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={handleToolClick(item.id)}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                minWidth: 76,
+                padding: "10px 14px 8px",
+                borderRadius: 12,
+                border: isActive
+                  ? "1px solid rgba(160, 210, 255, 0.8)"
+                  : "1px solid rgba(120, 168, 220, 0.35)",
+                background: isActive ? "rgba(56, 120, 200, 0.45)" : "rgba(22, 28, 40, 0.68)",
+                color: isActive ? "#e8f6ff" : "#9db6d4",
+                fontFamily: "Inter, system-ui, sans-serif",
+                fontSize: "13px",
+                letterSpacing: "0.02em",
+                cursor: "pointer",
+                transition: "background 120ms ease, transform 120ms ease, border-color 120ms ease",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "18px",
+                  marginBottom: 6,
+                }}
+              >
+                {item.icon}
+              </span>
+              <span>{item.label}</span>
+              <span
+                style={{
+                  fontSize: "11px",
+                  marginTop: 4,
+                  opacity: 0.72,
+                }}
+              >
+                [{item.hint}]
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div
+        ref={overlayRef}
+        style={{
+          position: "absolute",
+          top: 16,
+          right: 16,
+          padding: "10px 14px",
+          background: "rgba(8, 10, 16, 0.82)",
+          color: "#d8f1ff",
+          fontFamily: "monospace",
+          fontSize: "12px",
+          lineHeight: "16px",
+          borderRadius: 8,
+          border: "1px solid rgba(95, 136, 180, 0.45)",
+          pointerEvents: "none",
+          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.35)",
+          textShadow: "0 0 6px rgba(40, 132, 210, 0.4)",
+          whiteSpace: "pre",
+        }}
+      />
+    </div>
+  );
+}
+</file>
+
+<file path="src/fps/placement/lampBuilder.ts">
+import { Color3, Matrix, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector3 } from "babylonjs";
+import { LAMP_COLOR_PALETTE, WALL_LAMP_PLACEMENT, LIGHTING_LIMITS } from "../constants";
+import type { BuilderLamp, WallLampPlacement } from "../types";
+import { createRectAreaLamp } from "../lighting/rectAreaLamp";
+
+export function nextLampColor(index: number) {
+  return LAMP_COLOR_PALETTE[index % LAMP_COLOR_PALETTE.length];
+}
+
+export function lampKey(placement: WallLampPlacement) {
+  // Local coordinates are already snapped, so we can use them for deterministic keys.
+  return `${placement.surfaceId}:${placement.local.x}:${placement.local.y}`;
+}
+
+export function createLamp(scene: Scene, placement: WallLampPlacement, color: Color3): BuilderLamp {
+  const fixture = MeshBuilder.CreateBox(
+    `lamp-fixture-${Date.now()}`,
+    {
+      width: WALL_LAMP_PLACEMENT.width,
+      height: WALL_LAMP_PLACEMENT.height,
+      depth: WALL_LAMP_PLACEMENT.depth,
+    },
+    scene,
+  );
+
+  const forwardDir = placement.forward.clone();
+  const upDir = placement.up.clone();
+  const rightDir = placement.right.clone();
+
+  const basis = new Matrix();
+  Matrix.FromXYZAxesToRef(rightDir, upDir, forwardDir, basis);
+  const rotation = Quaternion.FromRotationMatrix(basis);
+
+  fixture.rotationQuaternion = rotation;
+  const anchoredPosition = placement.position.clone();
+  fixture.position = anchoredPosition;
+  fixture.isPickable = true;
+  fixture.checkCollisions = false;
+
+  const material = new StandardMaterial(`lamp-fixture-mat-${Date.now()}`, scene);
+  material.diffuseColor = color.scale(0.18);
+  material.specularColor = color.scale(0.24);
+  material.emissiveColor = color.scale(1.18);
+  material.backFaceCulling = false;
+  material.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
+  fixture.material = material;
+
+  const lampKeyValue = lampKey(placement);
+  fixture.metadata = { toolId: "lamp", key: lampKeyValue };
+
+  const lamp = createRectAreaLamp({
+    name: `lamp-${lampKeyValue}`,
+    scene,
+    fixture,
+    position: anchoredPosition.clone(),
+    right: rightDir,
+    up: upDir,
+    forward: forwardDir,
+    areaSize: { width: WALL_LAMP_PLACEMENT.width, height: WALL_LAMP_PLACEMENT.height },
+    color,
+    range: WALL_LAMP_PLACEMENT.range,
+    tilt: WALL_LAMP_PLACEMENT.tilt,
+    twoSided: false,
+    areaIntensity: WALL_LAMP_PLACEMENT.intensity * 8,
+    shadowIntensity: WALL_LAMP_PLACEMENT.intensity,
+    ambientIntensity: WALL_LAMP_PLACEMENT.intensity * 0.28,
+    ambientRangeMultiplier: 0.7,
+    ambientAttenuation: 0.52,
+    shadowAngle: Math.PI / 2.35,
+    shadowMapSize: WALL_LAMP_PLACEMENT.shadowMapSize,
+    shadowBias: 0.00024,
+    shadowNormalBias: 0.0038,
+    forceBackFacesOnly: false,
+    shadowMinZ: 0.008,
+    areaOffset: WALL_LAMP_PLACEMENT.depth * 0.42,
+    enableRsm: true,
+    rsmTextureSize: 192,
+    rsmNumSamples: 160,
+    rsmRadius: 0.18,
+    rsmIntensity: 0.22,
+    rsmEdgeCorrection: 0.1,
+    rsmNoiseFactor: 70,
+  });
+  lamp.key = lampKeyValue;
+  lamp.mesh.metadata = { toolId: "lamp", key: lampKeyValue };
+  lamp.color = color.clone();
+  lamp.anchorSurfaceId = placement.surfaceId;
+  lamp.local = { x: placement.local.x, y: placement.local.y, z: placement.local.z };
+  lamp.rotation = rotation.clone();
+  return lamp;
+}
+</file>
+
+<file path="src/fps/core/sceneContext.ts">
+import { Color3, Color4, Engine, GlowLayer, Mesh, MeshBuilder, Scene, Vector3, PBRMaterial, StandardMaterial } from "babylonjs";
+import {
+  GRID_SIZE,
+  HULL_DIMENSIONS,
+  WALL_DIMENSIONS,
+  LIGHTING_LIMITS,
+} from "../constants";
 import type { BuilderLamp } from "../types";
+import { createSurfaceRegistry } from "../placement/surfaces/surfaceRegistry";
+import type { SurfaceRegistry } from "../placement/surfaces/surfaceRegistry";
+import { FloorSurface } from "../placement/surfaces/floorSurface";
+import { WallSurface } from "../placement/surfaces/wallSurface";
+import { createRectAreaLamp } from "../lighting/rectAreaLamp";
+import {
+  applyHangarTextures,
+  disposeHangarMaterial,
+  disposeHangarTextureCache,
+  getHangarTextureSet,
+  type HangarTextureSet,
+} from "./hangarTextures";
 
 export interface SceneContext {
   engine: Engine;
   scene: Scene;
-  camera: UniversalCamera;
   glowLayer: GlowLayer;
   floor: Mesh;
   staticMeshes: Mesh[];
   structuralLamps: BuilderLamp[];
+  surfaceRegistry: SurfaceRegistry;
   dispose(): void;
 }
 
@@ -4219,6 +7716,7 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
     stencil: true,
     doNotHandleContextLost: true,
   });
+  engine.disableUniformBuffers = true;
 
   const scene = new Scene(engine);
   scene.clearColor = new Color4(5 / 255, 6 / 255, 10 / 255, 1);
@@ -4229,38 +7727,45 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
   scene.imageProcessingConfiguration.exposure = 1.08;
   scene.imageProcessingConfiguration.contrast = 1.04;
 
-  const camera = new UniversalCamera(
-    "fpCam",
-    new Vector3(0, CAMERA_SETTINGS.eyeLevel, -HULL_DIMENSIONS.length / 2 + 4),
-    scene,
-  );
-  camera.minZ = CAMERA_SETTINGS.minZ;
-  camera.maxZ = CAMERA_SETTINGS.maxZ;
-  camera.speed = CAMERA_SETTINGS.speed;
-  camera.angularSensibility = CAMERA_SETTINGS.angularSensibility;
-  camera.inertia = CAMERA_SETTINGS.inertia;
-  camera.applyGravity = true;
-  camera.checkCollisions = true;
-  camera.ellipsoid = new Vector3(
-    CAMERA_SETTINGS.ellipsoid.x,
-    CAMERA_SETTINGS.ellipsoid.y,
-    CAMERA_SETTINGS.ellipsoid.z,
-  );
-  camera.ellipsoidOffset = new Vector3(
-    CAMERA_SETTINGS.ellipsoidOffset.x,
-    CAMERA_SETTINGS.ellipsoidOffset.y,
-    CAMERA_SETTINGS.ellipsoidOffset.z,
-  );
-  camera.keysUp.push(INPUT_KEYS.move.forward);
-  camera.keysLeft.push(INPUT_KEYS.move.left);
-  camera.keysDown.push(INPUT_KEYS.move.backward);
-  camera.keysRight.push(INPUT_KEYS.move.right);
-  camera.attachControl(canvas, true);
-
   const glowLayer = new GlowLayer("hangar-glow", scene);
   glowLayer.intensity = 0.18;
 
-  const { floor, staticMeshes } = buildHangar(scene);
+  const floorTextures = getHangarTextureSet(scene, "metal");
+  const wallTextures = getHangarTextureSet(scene, "armor");
+
+  const { floor, ceiling, walls } = buildHangar(scene, {
+    floor: floorTextures,
+    wall: wallTextures,
+  });
+  const surfaceRegistry = createSurfaceRegistry();
+  surfaceRegistry.register(
+    new FloorSurface({
+      id: "hangar-floor",
+      mesh: floor,
+      up: Vector3.Up(),
+      forward: new Vector3(0, 0, 1),
+    }),
+  );
+  walls.forEach((wall) => {
+    const inward = new Vector3(-wall.position.x, 0, -wall.position.z);
+    if (inward.lengthSquared() < 1e-4) {
+      const normal = Vector3.TransformNormal(Vector3.Forward(), wall.getWorldMatrix());
+      inward.copyFrom(normal.scale(-1));
+      inward.y = 0;
+    }
+    if (inward.lengthSquared() < 1e-4) {
+      inward.copyFrom(Vector3.Forward());
+    }
+    surfaceRegistry.register(
+      new WallSurface({
+        id: wall.name ?? `wall-${wall.uniqueId}`,
+        mesh: wall,
+        inward,
+        up: Vector3.Up(),
+      }),
+    );
+  });
+  const staticMeshes = [...walls, ceiling];
   floor.receiveShadows = true;
   floor.checkCollisions = true;
   staticMeshes.forEach((mesh) => {
@@ -4283,149 +7788,238 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
   };
   window.addEventListener("resize", resize);
 
-  return {
+  const sceneContext: SceneContext = {
     engine,
     scene,
-    camera,
     glowLayer,
     floor,
     staticMeshes,
     structuralLamps,
+    surfaceRegistry,
     dispose: () => {
       window.removeEventListener("resize", resize);
       glowLayer.dispose();
       structuralLamps.forEach((lamp) => {
+        if (lamp.mesh.isDisposed()) {
+          return;
+        }
         lamp.shadow.dispose();
         lamp.light.dispose();
+        lamp.areaLight?.dispose();
         lamp.fillLight?.dispose();
+        lamp.auxiliaryLights?.forEach((aux) => aux.dispose());
+        if (lamp.gi) {
+          lamp.gi.solution.dispose();
+          lamp.gi.rsm.dispose();
+        }
         lamp.mesh.dispose(false, true);
       });
+      surfaceRegistry.dispose();
+      disposeHangarMaterials([floor, ceiling, ...walls]);
+      disposeHangarTextureCache(scene);
       scene.dispose();
       engine.dispose();
     },
   };
+  return sceneContext;
 }
 
-function buildHangar(scene: Scene) {
-  const floorSubdivisionsX = Math.max(1, Math.round(HULL_DIMENSIONS.width / GRID_SIZE));
-  const floorSubdivisionsZ = Math.max(1, Math.round(HULL_DIMENSIONS.length / GRID_SIZE));
+interface HangarAssets {
+  floor: Mesh;
+  ceiling: Mesh;
+  walls: Mesh[];
+}
+
+function buildHangar(
+  scene: Scene,
+  textures: {
+    floor: HangarTextureSet;
+    wall: HangarTextureSet;
+  },
+): HangarAssets {
+  const floor = createHangarFloor(scene, textures.floor);
+  const ceiling = createHangarCeiling(scene, textures.floor);
+  const walls = createHangarWalls(scene, textures.wall);
+  return { floor, ceiling, walls };
+}
+
+function createHangarFloor(scene: Scene, textures: HangarTextureSet): Mesh {
+  const subdivisionsX = Math.max(1, Math.round(HULL_DIMENSIONS.width / GRID_SIZE));
+  const subdivisionsZ = Math.max(1, Math.round(HULL_DIMENSIONS.length / GRID_SIZE));
 
   const floor = MeshBuilder.CreateGround(
     "hangar-floor",
     {
       width: HULL_DIMENSIONS.width,
       height: HULL_DIMENSIONS.length,
-      subdivisionsX: floorSubdivisionsX,
-      subdivisionsY: floorSubdivisionsZ,
+      subdivisionsX,
+      subdivisionsY: subdivisionsZ,
     },
     scene,
   );
   floor.position.y = 0;
-  floor.metadata = { type: "ship-foundation" };
+  floor.metadata = { type: "ship-foundation", textureTiling: { u: 4.2, v: 6.0 } };
 
-  const floorMaterial = new StandardMaterial("floor-mat", scene);
-  floorMaterial.diffuseColor = new Color3(0.12, 0.14, 0.18);
-  floorMaterial.specularColor = new Color3(0.26, 0.29, 0.33);
-  floorMaterial.specularPower = 48;
-  floorMaterial.emissiveColor = new Color3(0.015, 0.02, 0.026);
+  const floorMaterial = new PBRMaterial("floor-pbr", scene);
+  applyHangarTextures(floorMaterial, textures, (floor.metadata as { textureTiling: { u: number; v: number } }).textureTiling);
+  floorMaterial.ambientTextureStrength = 0.92;
+  floorMaterial.useAmbientInGrayScale = true;
+  floorMaterial.metallic = 0.42;
+  floorMaterial.roughness = 0.84;
+  floorMaterial.microSurface = 0.86;
+  floorMaterial.environmentIntensity = 0.72;
+  floorMaterial.specularIntensity = 1.1;
+  floorMaterial.backFaceCulling = true;
+  floorMaterial.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
   floor.material = floorMaterial;
 
-  const walls = [
-    createHullWall(scene, {
-      name: "wall-north",
-      width: HULL_DIMENSIONS.width,
-      height: HULL_DIMENSIONS.height,
-      depth: WALL_DIMENSIONS.thickness,
-      position: new Vector3(0, HULL_DIMENSIONS.height / 2, -HULL_DIMENSIONS.length / 2),
-    }),
-    createHullWall(scene, {
-      name: "wall-south",
-      width: HULL_DIMENSIONS.width,
-      height: HULL_DIMENSIONS.height,
-      depth: WALL_DIMENSIONS.thickness,
-      position: new Vector3(0, HULL_DIMENSIONS.height / 2, HULL_DIMENSIONS.length / 2),
-    }),
-    createHullWall(scene, {
-      name: "wall-east",
-      width: HULL_DIMENSIONS.length,
-      height: HULL_DIMENSIONS.height,
-      depth: WALL_DIMENSIONS.thickness,
-      position: new Vector3(HULL_DIMENSIONS.width / 2, HULL_DIMENSIONS.height / 2, 0),
-      rotationY: Math.PI / 2,
-    }),
-    createHullWall(scene, {
-      name: "wall-west",
-      width: HULL_DIMENSIONS.length,
-      height: HULL_DIMENSIONS.height,
-      depth: WALL_DIMENSIONS.thickness,
-      position: new Vector3(-HULL_DIMENSIONS.width / 2, HULL_DIMENSIONS.height / 2, 0),
-      rotationY: Math.PI / 2,
-    }),
-  ];
+  return floor;
+}
+
+function createHangarCeiling(scene: Scene, textures: HangarTextureSet): Mesh {
+  const subdivisionsX = Math.max(1, Math.round(HULL_DIMENSIONS.width / GRID_SIZE));
+  const subdivisionsZ = Math.max(1, Math.round(HULL_DIMENSIONS.length / GRID_SIZE));
 
   const ceiling = MeshBuilder.CreateGround(
     "hangar-ceiling",
     {
       width: HULL_DIMENSIONS.width,
       height: HULL_DIMENSIONS.length,
-      subdivisionsX: floorSubdivisionsX,
-      subdivisionsY: floorSubdivisionsZ,
+      subdivisionsX,
+      subdivisionsY: subdivisionsZ,
     },
     scene,
   );
   ceiling.position.y = HULL_DIMENSIONS.height;
   ceiling.rotation.x = Math.PI;
-  ceiling.metadata = { type: "ship-foundation" };
+  ceiling.metadata = { type: "ship-foundation", textureTiling: { u: 3.4, v: 5.0 } };
 
-  const ceilingMaterial = new StandardMaterial("ceiling-mat", scene);
-  ceilingMaterial.diffuseColor = new Color3(0.14, 0.17, 0.22);
-  ceilingMaterial.specularColor = new Color3(0.16, 0.18, 0.23);
-  ceilingMaterial.specularPower = 34;
+  const ceilingMaterial = new PBRMaterial("ceiling-pbr", scene);
+  applyHangarTextures(
+    ceilingMaterial,
+    textures,
+    (ceiling.metadata as { textureTiling: { u: number; v: number } }).textureTiling,
+  );
+  ceilingMaterial.ambientTextureStrength = 0.85;
+  ceilingMaterial.useAmbientInGrayScale = true;
+  ceilingMaterial.metallic = 0.28;
+  ceilingMaterial.roughness = 0.9;
+  ceilingMaterial.microSurface = 0.78;
+  ceilingMaterial.environmentIntensity = 0.66;
+  ceilingMaterial.specularIntensity = 0.9;
+  ceilingMaterial.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
   ceiling.material = ceilingMaterial;
 
-  return {
-    floor,
-    staticMeshes: [...walls, ceiling],
-  };
+  return ceiling;
 }
 
-function createHullWall(
+function createHangarWalls(scene: Scene, textures: HangarTextureSet): Mesh[] {
+  const halfHeight = HULL_DIMENSIONS.height / 2;
+  const thickness = WALL_DIMENSIONS.thickness;
+  const footingDepth = WALL_DIMENSIONS.footingDepth ?? 0;
+  const wallHeight = HULL_DIMENSIONS.height + footingDepth;
+  const centerY = halfHeight - footingDepth / 2;
+
+  return [
+    createHangarWall(scene, textures, {
+      name: "wall-north",
+      size: { width: HULL_DIMENSIONS.width, height: wallHeight, depth: thickness },
+      position: new Vector3(0, centerY, -HULL_DIMENSIONS.length / 2),
+      inward: new Vector3(0, 0, 1),
+    }),
+    createHangarWall(scene, textures, {
+      name: "wall-south",
+      size: { width: HULL_DIMENSIONS.width, height: wallHeight, depth: thickness },
+      position: new Vector3(0, centerY, HULL_DIMENSIONS.length / 2),
+      inward: new Vector3(0, 0, -1),
+    }),
+    createHangarWall(scene, textures, {
+      name: "wall-east",
+      size: { width: HULL_DIMENSIONS.length, height: wallHeight, depth: thickness },
+      position: new Vector3(HULL_DIMENSIONS.width / 2, centerY, 0),
+      rotationY: Math.PI / 2,
+      inward: new Vector3(-1, 0, 0),
+    }),
+    createHangarWall(scene, textures, {
+      name: "wall-west",
+      size: { width: HULL_DIMENSIONS.length, height: wallHeight, depth: thickness },
+      position: new Vector3(-HULL_DIMENSIONS.width / 2, centerY, 0),
+      rotationY: Math.PI / 2,
+      inward: new Vector3(1, 0, 0),
+    }),
+  ];
+}
+
+function createHangarWall(
   scene: Scene,
-  options: {
+  textures: HangarTextureSet,
+  config: {
     name: string;
-    width: number;
-    height: number;
-    depth: number;
+    size: { width: number; height: number; depth: number };
     position: Vector3;
+    inward: Vector3;
     rotationY?: number;
   },
-) {
+): Mesh {
   const wall = MeshBuilder.CreateBox(
-    options.name,
+    config.name,
     {
-      width: options.width,
-      height: options.height,
-      depth: options.depth,
+      width: config.size.width,
+      height: config.size.height,
+      depth: config.size.depth,
     },
     scene,
   );
 
-  wall.position = options.position;
-  if (options.rotationY !== undefined) {
-    wall.rotation.y = options.rotationY;
+  wall.position = config.position.clone();
+  if (typeof config.rotationY === "number") {
+    wall.rotation.y = config.rotationY;
   }
+  wall.checkCollisions = true;
+  wall.isPickable = true;
 
-  const material = new StandardMaterial(`${options.name}-mat`, scene);
-  material.diffuseColor = new Color3(0.09, 0.11, 0.15);
-  material.specularColor = new Color3(0.17, 0.21, 0.26);
-  material.specularPower = 36;
-  material.emissiveColor = new Color3(0.012, 0.018, 0.024);
-  wall.material = material;
-  wall.metadata = { type: "ship-wall" };
+  const wallMaterial = new PBRMaterial(`${config.name}-pbr`, scene);
+  const footingDepth = WALL_DIMENSIONS.footingDepth ?? 0;
+  const visibleHeight = config.size.height - footingDepth;
+  const tileU = Math.max(config.size.width, visibleHeight) * 0.9;
+  const tileV = visibleHeight * 0.95;
+  applyHangarTextures(wallMaterial, textures, { u: tileU, v: tileV });
+  wallMaterial.ambientTextureStrength = 0.94;
+  wallMaterial.useAmbientInGrayScale = true;
+  wallMaterial.metallic = 0.36;
+  wallMaterial.roughness = 0.88;
+  wallMaterial.microSurface = 0.8;
+  wallMaterial.environmentIntensity = 0.7;
+  wallMaterial.specularIntensity = 1.0;
+  wallMaterial.backFaceCulling = true;
+  wallMaterial.twoSidedLighting = false;
+  wallMaterial.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
+  wall.material = wallMaterial;
 
-  createWindowCutout(scene, wall, options);
+  const inward = config.inward.clone().normalize();
+  const up = Vector3.Up();
+  const existingMetadata = (wall.metadata as Record<string, unknown>) ?? {};
+  wall.metadata = {
+    ...existingMetadata,
+    type: "ship-wall",
+    lampOrientation: {
+      forward: inward.asArray(),
+      up: up.asArray(),
+    },
+    textureTiling: { u: tileU, v: tileV },
+  };
 
   return wall;
+}
+
+function disposeHangarMaterials(meshes: Mesh[]) {
+  meshes.forEach((mesh) => {
+    const material = mesh.material;
+    if (material instanceof PBRMaterial) {
+      disposeHangarMaterial(material);
+      material.dispose(false, true);
+    }
+  });
 }
 
 function createStructuralLamps(scene: Scene): BuilderLamp[] {
@@ -4514,337 +8108,76 @@ function createWallBandLamp(
   if (config.rotationY !== undefined) {
     fixture.rotation.y = config.rotationY;
   }
-  fixture.isPickable = false;
+  fixture.isPickable = true;
   fixture.checkCollisions = false;
-  fixture.metadata = { type: "builder-lamp", key: config.name };
+  fixture.metadata = {
+    type: "builder-lamp",
+    key: config.name,
+    toolId: "lamp",
+    structural: true,
+  };
 
   const fixtureMaterial = new StandardMaterial(`${config.name}-mat`, scene);
   fixtureMaterial.diffuseColor = config.color.scale(0.18);
   fixtureMaterial.specularColor = config.color.scale(0.26);
-  fixtureMaterial.emissiveColor = config.color.scale(1.2);
+  fixtureMaterial.emissiveColor = config.color.scale(1.12);
   fixtureMaterial.backFaceCulling = false;
+  fixtureMaterial.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
   fixture.material = fixtureMaterial;
 
-  const direction = Vector3.Normalize(config.direction);
-  const light = new SpotLight(
-    `${config.name}-light`,
-    fixture.position.add(direction.scale(0.05)),
-    direction,
-    config.angle ?? Math.PI / 2.6,
-    1.05,
-    scene,
-  );
-  light.diffuse = config.color;
-  light.specular = config.color.scale(0.32);
-  light.intensity = 1.85;
-  light.range = config.range;
-  light.falloffType = Light.FALLOFF_PHYSICAL;
-  light.shadowEnabled = true;
-  light.shadowMinZ = 0.1;
-  light.shadowMaxZ = config.range * 1.08;
-
-  const shadow = new ShadowGenerator(config.shadowMapSize ?? 640, light);
-  shadow.usePercentageCloserFiltering = true;
-  shadow.filteringQuality = ShadowGenerator.QUALITY_HIGH;
-  shadow.bias = 0.00055;
-  shadow.normalBias = 0.16;
-  shadow.darkness = 0.17;
-  shadow.frustumEdgeFalloff = 0.16;
-
-  return {
-    mesh: fixture,
-    light,
-    shadow,
-    key: config.name,
-  };
-}
-function createWindowCutout(
-  scene: Scene,
-  wall: Mesh,
-  options: {
-    width: number;
-    height: number;
-  },
-) {
-  if (options.width < 8) {
-    return;
+  const forward = Vector3.Normalize(config.direction);
+  let right = Vector3.Cross(Vector3.Up(), forward);
+  if (right.lengthSquared() < 1e-4) {
+    right = new Vector3(1, 0, 0);
   }
+  right.normalize();
 
-  const windowWidth = options.width * 0.35;
-  const windowHeight = options.height * 0.3;
-
-  const window = MeshBuilder.CreatePlane(
-    `${wall.name}-window`,
-    {
-      width: windowWidth,
-      height: windowHeight,
-    },
+  const lamp = createRectAreaLamp({
+    name: config.name,
     scene,
-  );
-
-  window.parent = wall;
-  window.position = new Vector3(0, windowHeight, 0.21);
-
-  const material = new StandardMaterial(`${wall.name}-window-mat`, scene);
-  material.emissiveColor = new Color3(0.2, 0.45, 0.75);
-  material.alpha = 0.55;
-  window.material = material;
-}
-</file>
-
-<file path="src/fps/ShipBuilderCanvas.tsx">
-import { useEffect, useRef, useState } from "react";
-import { createSceneContext } from "./core/sceneContext";
-import { createGhostSet } from "./placement/ghosts";
-import { createPlacementController } from "./placement/placementController";
-import type { PlacementController } from "./placement/placementController";
-import { createShadowNetwork } from "./lighting/shadowNetwork";
-import type { PlacementMode, PlacementState } from "./types";
-
-export function ShipBuilderCanvas() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const overlayRef = useRef<HTMLDivElement | null>(null);
-  const controllerRef = useRef<PlacementController | null>(null);
-  const [placementState, setPlacementState] = useState<PlacementState>({
-    mode: "wall",
-    rotation: 0,
-    lampColorIndex: 0,
+    fixture,
+    position: fixture.position.clone(),
+    right,
+    up: Vector3.Up(),
+    forward,
+    areaSize: { width: config.span, height: config.thickness },
+    color: config.color,
+    range: config.range,
+    tilt: 0.4,
+    twoSided: false,
+    areaIntensity: 24,
+    shadowIntensity: 1.6,
+    ambientIntensity: 0.42,
+    ambientRangeMultiplier: 0.76,
+    ambientAttenuation: 0.58,
+    shadowAngle: config.angle ?? Math.PI / 2.3,
+    shadowMapSize: config.shadowMapSize ?? 1024,
+    shadowBias: 0.00022,
+    shadowNormalBias: 0.0035,
+    forceBackFacesOnly: false,
+    shadowMinZ: 0.008,
+    areaOffset: config.depth * 0.45,
+    enableRsm: true,
+    rsmTextureSize: 256,
+    rsmNumSamples: 220,
+    rsmRadius: 0.24,
+    rsmIntensity: 0.26,
+    rsmEdgeCorrection: 0.09,
+    rsmRotateSample: true,
+    rsmNoiseFactor: 90,
   });
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
-
-    const sceneContext = createSceneContext(canvas);
-    const ghostSet = createGhostSet(sceneContext.scene);
-    const shadowNetwork = createShadowNetwork(
-      sceneContext.structuralLamps.map((lamp) => lamp.shadow),
-    );
-    const staticMeshes = [sceneContext.floor, ...sceneContext.staticMeshes];
-    sceneContext.structuralLamps.forEach((lamp) => {
-      shadowNetwork.registerDynamic(lamp.mesh);
-      shadowNetwork.attachLamp(lamp);
-    });
-    shadowNetwork.registerStatic(staticMeshes);
-
-    const placementController = createPlacementController({
-      scene: sceneContext.scene,
-      canvas,
-      camera: sceneContext.camera,
-      ghostSet,
-      shadowNetwork,
-      initialLamps: sceneContext.structuralLamps,
-    });
-    controllerRef.current = placementController;
-    const unsubscribePlacement = placementController.subscribe(setPlacementState);
-
-    let statsHandle = 0;
-    let lastSample = 0;
-    const updateOverlay = (timestamp: number) => {
-      statsHandle = requestAnimationFrame(updateOverlay);
-      if (!overlayRef.current) {
-        return;
-      }
-      if (timestamp - lastSample < 250) {
-        return;
-      }
-      lastSample = timestamp;
-
-      const fps = sceneContext.engine.getFps();
-      const meshCount = sceneContext.scene.meshes.length;
-      const lightCount = sceneContext.scene.lights.length;
-      const shadowedLights = sceneContext.scene.lights.filter((light) => light.shadowEnabled).length;
-      const camera = sceneContext.camera.position;
-
-      overlayRef.current.textContent = [
-        `FPS: ${fps.toFixed(1)}`,
-        `Meshes: ${meshCount}`,
-        `Lights: ${lightCount} (shadowed: ${shadowedLights})`,
-        `Camera: (${camera.x.toFixed(2)}, ${camera.y.toFixed(2)}, ${camera.z.toFixed(2)})`,
-      ].join("\n");
-    };
-    statsHandle = requestAnimationFrame(updateOverlay);
-
-    return () => {
-      unsubscribePlacement();
-      placementController.dispose();
-      controllerRef.current = null;
-      ghostSet.dispose();
-      shadowNetwork.dispose();
-      sceneContext.dispose();
-      cancelAnimationFrame(statsHandle);
-    };
-  }, []);
-
-  const handleModeClick = (mode: PlacementMode) => () => {
-    controllerRef.current?.setMode(mode);
+  lamp.key = config.name;
+  lamp.anchorSurfaceId = config.name;
+  lamp.mesh.metadata = {
+    ...(lamp.mesh.metadata as Record<string, unknown> | undefined),
+    type: "builder-lamp",
+    key: config.name,
+    toolId: "lamp",
+    structural: true,
+    surfaceId: config.name,
+    local: { ...lamp.local },
   };
-
-  const toolbarItems: Array<{ mode: PlacementMode; label: string; hint: string; icon: string }> = [
-    { mode: "wall", label: "Parede", hint: "1", icon: "▭" },
-    { mode: "lamp", label: "Lâmpada", hint: "2", icon: "◎" },
-    { mode: "delete", label: "Remover", hint: "3", icon: "✖" },
-  ];
-
-  return (
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-      }}
-    >
-      <canvas
-        ref={canvasRef}
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "block",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          left: "50%",
-          bottom: 24,
-          transform: "translateX(-50%)",
-          display: "flex",
-          gap: 12,
-          padding: "10px 16px",
-          borderRadius: 18,
-          background: "rgba(8, 10, 16, 0.76)",
-          border: "1px solid rgba(88, 126, 168, 0.45)",
-          boxShadow: "0 10px 32px rgba(0, 0, 0, 0.44)",
-          backdropFilter: "blur(9px)",
-        }}
-      >
-        {toolbarItems.map((item) => {
-          const isActive = placementState.mode === item.mode;
-          return (
-            <button
-              key={item.mode}
-              type="button"
-              onClick={handleModeClick(item.mode)}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                minWidth: 76,
-                padding: "10px 14px 8px",
-                borderRadius: 12,
-                border: isActive
-                  ? "1px solid rgba(160, 210, 255, 0.8)"
-                  : "1px solid rgba(120, 168, 220, 0.35)",
-                background: isActive ? "rgba(56, 120, 200, 0.45)" : "rgba(22, 28, 40, 0.68)",
-                color: isActive ? "#e8f6ff" : "#9db6d4",
-                fontFamily: "Inter, system-ui, sans-serif",
-                fontSize: "13px",
-                letterSpacing: "0.02em",
-                cursor: "pointer",
-                transition: "background 120ms ease, transform 120ms ease, border-color 120ms ease",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "18px",
-                  marginBottom: 6,
-                }}
-              >
-                {item.icon}
-              </span>
-              <span>{item.label}</span>
-              <span
-                style={{
-                  fontSize: "11px",
-                  marginTop: 4,
-                  opacity: 0.72,
-                }}
-              >
-                [{item.hint}]
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <div
-        ref={overlayRef}
-        style={{
-          position: "absolute",
-          top: 16,
-          right: 16,
-          padding: "10px 14px",
-          background: "rgba(8, 10, 16, 0.82)",
-          color: "#d8f1ff",
-          fontFamily: "monospace",
-          fontSize: "12px",
-          lineHeight: "16px",
-          whiteSpace: "pre",
-          borderRadius: 8,
-          border: "1px solid rgba(95, 136, 180, 0.45)",
-          pointerEvents: "none",
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.35)",
-          textShadow: "0 0 6px rgba(40, 132, 210, 0.4)",
-        }}
-      />
-    </div>
-  );
-}
-</file>
-
-<file path="src/App.tsx">
-import { ShipBuilderCanvas } from "./fps/ShipBuilderCanvas";
-
-export default function App() {
-  return (
-    <div
-      style={{
-        position: "relative",
-        width: "100vw",
-        height: "100vh",
-        overflow: "hidden",
-        background: "#05060a",
-        color: "#f1f5f9",
-        fontFamily: "'Segoe UI', Roboto, sans-serif",
-      }}
-    >
-      <ShipBuilderCanvas />
-      <div
-        style={{
-          position: "absolute",
-          top: 16,
-          left: 16,
-          padding: "12px 16px",
-          background: "rgba(15, 23, 42, 0.72)",
-          border: "1px solid rgba(148, 163, 184, 0.32)",
-          borderRadius: 8,
-          maxWidth: 360,
-          backdropFilter: "blur(10px)",
-        }}
-      >
-        <h1 style={{ fontSize: 18, margin: "0 0 8px" }}>Ship Builder MVP</h1>
-        <p style={{ margin: "6px 0", fontSize: 13, lineHeight: 1.4 }}>
-          Explore the hangar in first-person and experiment with dropping walls
-          inside the rectangular hull. This pass focuses on grid snapping and
-          quick prototyping of construction flow.
-        </p>
-        <ul style={{ margin: "6px 0 0", paddingLeft: 16, fontSize: 13 }}>
-          <li>WASD — move / Shift — sprint</li>
-          <li>Mouse — look (click canvas to lock)</li>
-          <li>1 — wall mode / 2 — lamp mode / 3 — remove mode</li>
-          <li>Left click — place item / Delete mode + click (ou botão direito) — remove</li>
-          <li>R — rotate walls (90° steps)</li>
-          <li>Esc — release cursor lock</li>
-        </ul>
-        <p style={{ margin: "10px 0 0", fontSize: 12, opacity: 0.85 }}>
-          Lamps cycle between warm and cool tones and cast soft shadows—perfect
-          for finding that cozy blue-gold balance.
-        </p>
-      </div>
-    </div>
-  );
+  return lamp;
 }
 </file>
 
