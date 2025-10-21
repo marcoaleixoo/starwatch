@@ -13,10 +13,40 @@ import { hydrateShipAssets } from "./state/shipHydrator";
 import { PlayerStore } from "./state/playerStore";
 import { createPlayerPersistence, loadPlayerState } from "./state/playerPersistence";
 import { registerBaselinePlayerModules } from "./state/playerModules";
-import type { BuilderLamp } from "./types";
 import { serializeColor, serializeQuaternion, serializeVector3 } from "./state/shipState";
 
 const defaultToolId = TOOL_DEFINITIONS[0]?.id ?? "wall";
+const DEFAULT_LAMP_ID = "wall-east:0:0.5";
+const DEFAULT_LAMP_STATE = {
+  id: DEFAULT_LAMP_ID,
+  anchorSurfaceId: "wall-east",
+  position: serializeVector3(1.94513, 1.46013, 0),
+  rotation: serializeQuaternion(0.14771, -0.6832, 0, 0.71514),
+  color: serializeColor(0.72, 0.84, 1),
+  local: { x: 0, y: 0.5, z: 0 },
+  structural: false,
+  enabled: true,
+} as const;
+
+function seedDefaultLamp(shipStore: ShipStore, hasPersistedState: boolean) {
+  if (hasPersistedState) {
+    return;
+  }
+  const snapshot = shipStore.getSnapshot();
+  if (snapshot.lamps[DEFAULT_LAMP_ID]) {
+    return;
+  }
+  shipStore.upsertLamp({
+    id: DEFAULT_LAMP_STATE.id,
+    anchorSurfaceId: DEFAULT_LAMP_STATE.anchorSurfaceId,
+    position: DEFAULT_LAMP_STATE.position,
+    rotation: DEFAULT_LAMP_STATE.rotation,
+    color: DEFAULT_LAMP_STATE.color,
+    local: { ...DEFAULT_LAMP_STATE.local },
+    structural: DEFAULT_LAMP_STATE.structural,
+    enabled: DEFAULT_LAMP_STATE.enabled,
+  });
+}
 
 function formatHotkey(code: string) {
   if (code.startsWith("Digit")) {
@@ -58,9 +88,11 @@ export function ShipBuilderCanvas() {
     }
     const shipStore = shipStoreRef.current;
     const persistedShipState = loadShipState();
+    const hasPersistedState = Boolean(persistedShipState);
     if (persistedShipState) {
       shipStore.replace(persistedShipState);
     }
+    seedDefaultLamp(shipStore, hasPersistedState);
 
     if (!playerStoreRef.current) {
       const persistedPlayer = loadPlayerState();
@@ -72,75 +104,10 @@ export function ShipBuilderCanvas() {
       return;
     }
 
-    const disposeStructuralLamp = (lamp: BuilderLamp) => {
-      lamp.shadow.dispose();
-      lamp.light.dispose();
-      lamp.areaLight?.dispose();
-      lamp.fillLight?.dispose();
-      lamp.auxiliaryLights?.forEach((aux) => aux.dispose());
-      lamp.gi?.solution.dispose();
-      lamp.gi?.rsm.dispose();
-      lamp.mesh.dispose(false, true);
-    };
-
     const sceneContext = createSceneContext(canvas);
-    const structuralLamps: BuilderLamp[] = [];
-    sceneContext.structuralLamps.forEach((lamp) => {
-      const key = lamp.key;
-      if (!key) {
-        structuralLamps.push(lamp);
-        return;
-      }
-
-      const currentSnapshot = shipStore.getSnapshot();
-      const existing = currentSnapshot.lamps[key];
-      const local = lamp.local ?? { x: 0, y: 0, z: 0 };
-
-      if (!existing) {
-        shipStore.upsertLamp({
-          id: key,
-          anchorSurfaceId: lamp.anchorSurfaceId,
-          position: serializeVector3(lamp.mesh.position.x, lamp.mesh.position.y, lamp.mesh.position.z),
-          rotation: serializeQuaternion(lamp.rotation.x, lamp.rotation.y, lamp.rotation.z, lamp.rotation.w),
-          color: serializeColor(lamp.color.r, lamp.color.g, lamp.color.b),
-          local: { ...local },
-          structural: true,
-          enabled: true,
-        });
-      } else {
-        if (existing.enabled === false) {
-          disposeStructuralLamp(lamp);
-          return;
-        }
-        if (!existing.structural || existing.enabled === undefined) {
-          shipStore.upsertLamp({
-            ...existing,
-            structural: true,
-            enabled: existing.enabled ?? true,
-          });
-        }
-      }
-
-      lamp.mesh.metadata = {
-        ...(lamp.mesh.metadata as Record<string, unknown> | undefined),
-        toolId: "lamp",
-        key,
-        structural: true,
-        surfaceId: lamp.anchorSurfaceId,
-        local,
-      };
-      structuralLamps.push(lamp);
-    });
-    sceneContext.structuralLamps = structuralLamps;
     const ghost = createGhostHost();
-    const shadowNetwork = createShadowNetwork(
-      structuralLamps.map((lamp) => lamp.shadow),
-    );
+    const shadowNetwork = createShadowNetwork();
     const staticMeshes = [sceneContext.floor, ...sceneContext.staticMeshes];
-    structuralLamps.forEach((lamp) => {
-      shadowNetwork.registerDynamic(lamp.mesh);
-      shadowNetwork.attachLamp(lamp);
-    });
     shadowNetwork.registerStatic(staticMeshes);
 
     const playerController = createPlayerController({
@@ -159,7 +126,7 @@ export function ShipBuilderCanvas() {
       shadowNetwork,
       surfaceRegistry: sceneContext.surfaceRegistry,
       initialWalls: hydratedAssets.walls,
-      initialLamps: [...structuralLamps, ...hydratedAssets.lamps],
+      initialLamps: hydratedAssets.lamps,
       shipStore,
     });
     controllerRef.current = placementController;

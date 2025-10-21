@@ -1,16 +1,14 @@
-import { Color3, Color4, Engine, GlowLayer, Mesh, MeshBuilder, Scene, Vector3, PBRMaterial, StandardMaterial } from "babylonjs";
+import { Color3, Color4, Engine, GlowLayer, Mesh, MeshBuilder, Scene, Vector3, PBRMaterial } from "babylonjs";
 import {
   GRID_SIZE,
   HULL_DIMENSIONS,
   WALL_DIMENSIONS,
   LIGHTING_LIMITS,
 } from "../constants";
-import type { BuilderLamp } from "../types";
 import { createSurfaceRegistry } from "../placement/surfaces/surfaceRegistry";
 import type { SurfaceRegistry } from "../placement/surfaces/surfaceRegistry";
 import { FloorSurface } from "../placement/surfaces/floorSurface";
 import { WallSurface } from "../placement/surfaces/wallSurface";
-import { createRectAreaLamp } from "../lighting/rectAreaLamp";
 import {
   applyHangarTextures,
   disposeHangarMaterial,
@@ -25,7 +23,6 @@ export interface SceneContext {
   glowLayer: GlowLayer;
   floor: Mesh;
   staticMeshes: Mesh[];
-  structuralLamps: BuilderLamp[];
   surfaceRegistry: SurfaceRegistry;
   dispose(): void;
 }
@@ -93,12 +90,6 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
     mesh.checkCollisions = true;
   });
 
-  const structuralLamps = createStructuralLamps(scene);
-  structuralLamps.forEach((lamp) => {
-    lamp.mesh.checkCollisions = false;
-    lamp.mesh.isPickable = false;
-  });
-
   engine.runRenderLoop(() => {
     scene.render();
   });
@@ -114,26 +105,10 @@ export function createSceneContext(canvas: HTMLCanvasElement): SceneContext {
     glowLayer,
     floor,
     staticMeshes,
-    structuralLamps,
     surfaceRegistry,
     dispose: () => {
       window.removeEventListener("resize", resize);
       glowLayer.dispose();
-      structuralLamps.forEach((lamp) => {
-        if (lamp.mesh.isDisposed()) {
-          return;
-        }
-        lamp.shadow.dispose();
-        lamp.light.dispose();
-        lamp.areaLight?.dispose();
-        lamp.fillLight?.dispose();
-        lamp.auxiliaryLights?.forEach((aux) => aux.dispose());
-        if (lamp.gi) {
-          lamp.gi.solution.dispose();
-          lamp.gi.rsm.dispose();
-        }
-        lamp.mesh.dispose(false, true);
-      });
       surfaceRegistry.dispose();
       disposeHangarMaterials([floor, ceiling, ...walls]);
       disposeHangarTextureCache(scene);
@@ -340,162 +315,4 @@ function disposeHangarMaterials(meshes: Mesh[]) {
       material.dispose(false, true);
     }
   });
-}
-
-function createStructuralLamps(scene: Scene): BuilderLamp[] {
-  const color = new Color3(0.6, 0.78, 1);
-  const height = HULL_DIMENSIONS.height - 0.22;
-  const bandDepth = 0.22;
-  const bandThickness = 0.12;
-  const inset = bandDepth / 2 + 0.015;
-  const spanX = HULL_DIMENSIONS.width * 0.62;
-  const spanZ = HULL_DIMENSIONS.length * 0.62;
-  const range = Math.max(HULL_DIMENSIONS.length, HULL_DIMENSIONS.width) * 1.25;
-
-  return [
-    createWallBandLamp(scene, {
-      name: "structural-light-north",
-      span: spanX,
-      thickness: bandThickness,
-      depth: bandDepth,
-      position: new Vector3(0, height, -HULL_DIMENSIONS.length / 2 + inset),
-      direction: new Vector3(0, -0.45, 1),
-      color,
-      range,
-    }),
-    createWallBandLamp(scene, {
-      name: "structural-light-south",
-      span: spanX,
-      thickness: bandThickness,
-      depth: bandDepth,
-      position: new Vector3(0, height, HULL_DIMENSIONS.length / 2 - inset),
-      direction: new Vector3(0, -0.45, -1),
-      color,
-      range,
-    }),
-    createWallBandLamp(scene, {
-      name: "structural-light-east",
-      span: spanZ,
-      thickness: bandThickness,
-      depth: bandDepth,
-      position: new Vector3(HULL_DIMENSIONS.width / 2 - inset, height, 0),
-      rotationY: Math.PI / 2,
-      direction: new Vector3(-1, -0.45, 0),
-      color,
-      range,
-    }),
-    createWallBandLamp(scene, {
-      name: "structural-light-west",
-      span: spanZ,
-      thickness: bandThickness,
-      depth: bandDepth,
-      position: new Vector3(-HULL_DIMENSIONS.width / 2 + inset, height, 0),
-      rotationY: Math.PI / 2,
-      direction: new Vector3(1, -0.45, 0),
-      color,
-      range,
-    }),
-  ];
-}
-
-function createWallBandLamp(
-  scene: Scene,
-  config: {
-    name: string;
-    span: number;
-    thickness: number;
-    depth: number;
-    position: Vector3;
-    direction: Vector3;
-    color: Color3;
-    range: number;
-    rotationY?: number;
-    angle?: number;
-    shadowMapSize?: number;
-  },
-): BuilderLamp {
-  const fixture = MeshBuilder.CreateBox(
-    `${config.name}-fixture`,
-    {
-      width: config.span,
-      height: config.thickness,
-      depth: config.depth,
-    },
-    scene,
-  );
-
-  fixture.position = config.position.clone();
-  if (config.rotationY !== undefined) {
-    fixture.rotation.y = config.rotationY;
-  }
-  fixture.isPickable = true;
-  fixture.checkCollisions = false;
-  fixture.metadata = {
-    type: "builder-lamp",
-    key: config.name,
-    toolId: "lamp",
-    structural: true,
-  };
-
-  const fixtureMaterial = new StandardMaterial(`${config.name}-mat`, scene);
-  fixtureMaterial.diffuseColor = config.color.scale(0.18);
-  fixtureMaterial.specularColor = config.color.scale(0.26);
-  fixtureMaterial.emissiveColor = config.color.scale(1.12);
-  fixtureMaterial.backFaceCulling = false;
-  fixtureMaterial.maxSimultaneousLights = LIGHTING_LIMITS.maxSimultaneousLights;
-  fixture.material = fixtureMaterial;
-
-  const forward = Vector3.Normalize(config.direction);
-  let right = Vector3.Cross(Vector3.Up(), forward);
-  if (right.lengthSquared() < 1e-4) {
-    right = new Vector3(1, 0, 0);
-  }
-  right.normalize();
-
-  const lamp = createRectAreaLamp({
-    name: config.name,
-    scene,
-    fixture,
-    position: fixture.position.clone(),
-    right,
-    up: Vector3.Up(),
-    forward,
-    areaSize: { width: config.span, height: config.thickness },
-    color: config.color,
-    range: config.range,
-    tilt: 0.4,
-    twoSided: false,
-    areaIntensity: 24,
-    shadowIntensity: 1.6,
-    ambientIntensity: 0.42,
-    ambientRangeMultiplier: 0.76,
-    ambientAttenuation: 0.58,
-    shadowAngle: config.angle ?? Math.PI / 2.3,
-    shadowMapSize: config.shadowMapSize ?? 1024,
-    shadowBias: 0.00022,
-    shadowNormalBias: 0.0035,
-    forceBackFacesOnly: false,
-    shadowMinZ: 0.008,
-    areaOffset: config.depth * 0.45,
-    enableRsm: true,
-    rsmTextureSize: 256,
-    rsmNumSamples: 220,
-    rsmRadius: 0.24,
-    rsmIntensity: 0.26,
-    rsmEdgeCorrection: 0.09,
-    rsmRotateSample: true,
-    rsmNoiseFactor: 90,
-  });
-  lamp.key = config.name;
-  lamp.anchorSurfaceId = config.name;
-  lamp.mesh.metadata = {
-    ...(lamp.mesh.metadata as Record<string, unknown> | undefined),
-    type: "builder-lamp",
-    key: config.name,
-    toolId: "lamp",
-    structural: true,
-    surfaceId: config.name,
-    local: { ...lamp.local },
-  };
-  return lamp;
 }
