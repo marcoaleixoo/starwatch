@@ -31,6 +31,13 @@ Welcome aboard the Mad Dash Initiative. We rebuilt the project structure mid-fli
 - Inline styles acceptable for HUD prototypes; migrate to shared styling once components settle.
 - Add comments only where Babylon abstractions or math need extra context.
 
+### Lighting & Shadows (2025-10-21)
+- Babylon spot/area lights inherit their parent transform; set the light up in local space so the `forward` axis actually matches the emitter. We now parent a pivot node to each fixture, transform the desired world frame into that local basis, and attach both the area light and the shadow-casting spotlight to the pivot.
+- Keep `Vector3.Backward()` as the local forward for the spotlight once it is parented to the pivot. Feeding world-space forward directly into the constructor caused the shadow cone to flip when fixtures were rotated.
+- Clamp shadow bias aggressively (`0.00022` / `0.0035` for bias/normal bias) and pull `shadowMinZ` close to zero (`≈0.008`) so thin walls stay grounded without acne.
+- Give walls a shallow footing (`WALL_DIMENSIONS.footingDepth = 0.04`) and sink instanced walls by half that depth; otherwise light leaks under the panels even if the mesh appears flush.
+- Disable `forceBackFacesOnly` on all generators. It looked tempting for RSM GI, but it ignored the illuminated faces and inverted the shadow direction.
+
 ## Testing & Telemetry
 - Vitest + React Testing Library remain the plan. For now, favor small utility tests when you introduce deterministic builders or data serializers.
 - Record manual repro steps when you tweak input handling (mouse lock, sprint, rotation) so the next agent can verify quickly.
