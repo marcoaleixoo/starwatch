@@ -9,6 +9,7 @@ export const ENGINE_OPTIONS = {
   chunkAddDistance: 1.5,
   chunkRemoveDistance: 2.1,
   playerStart: [0, 6, 0] as [number, number, number],
+  clearColor: [0, 0, 0, 1] as [number, number, number, number],
 };
 
 export const DEFAULT_BLOCK_SELECTION_INDEX = 0;

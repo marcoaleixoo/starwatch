@@ -1,6 +1,7 @@
 import { Engine } from 'noa-engine';
 import { DEFAULT_BLOCK_SELECTION_INDEX, ENGINE_OPTIONS } from '../config/constants';
 import { initializeWorld } from '../world/world';
+import type { WorldContext } from '../world/world';
 import { initializePlayer } from '../player/player';
 import { initializePointerLock } from '../player/input/pointerLock';
 import { initializeInteractions } from '../player/input/interactions';
@@ -10,16 +11,21 @@ import { createHudController } from '../hud/hud';
 import { createCrosshairController } from '../hud/crosshair';
 import { CROSSHAIR_STATE_IDLE, CROSSHAIR_STATE_TARGET } from '../hud/constants';
 import { initializeToolbar } from '../hud/toolbar';
+import { PersistenceManager } from '../persistence/manager';
 
 export interface StarwatchContext {
   noa: Engine;
+  persistence: PersistenceManager;
+  sector: WorldContext['sector'];
 }
 
 export function bootstrapStarwatch(): StarwatchContext {
   const noa = new Engine(ENGINE_OPTIONS);
+  const persistence = new PersistenceManager(noa, 'sector.001');
 
-  const worldContext = initializeWorld(noa);
+  const worldContext = initializeWorld(noa, persistence);
   initializePlayer(noa);
+  persistence.applyPlayerSnapshot();
   initializePointerLock(noa);
 
   let selectedIndex = DEFAULT_BLOCK_SELECTION_INDEX;
@@ -43,9 +49,12 @@ export function bootstrapStarwatch(): StarwatchContext {
 
   applySelection();
 
-  initializeInteractions(noa, resolveBlockId);
+  initializeInteractions(noa, resolveBlockId, (mutation) => {
+    persistence.registerBlockMutation(mutation);
+  });
 
   const systems: TickSystem[] = [
+    ...worldContext.systems,
     {
       id: HUD_SYSTEM_ID,
       update: () => {
@@ -59,9 +68,10 @@ export function bootstrapStarwatch(): StarwatchContext {
         crosshair.setState(noa.targetedBlock ? CROSSHAIR_STATE_TARGET : CROSSHAIR_STATE_IDLE);
       },
     },
+    persistence.createTickSystem(),
   ];
 
   initializeTickLoop(noa, systems);
 
-  return { noa };
+  return { noa, persistence, sector: worldContext.sector };
 }

@@ -32,11 +32,18 @@ declare module 'noa-engine' {
       height: number;
     };
     addComponent(id: number, name: string, data: any): void;
+    setPosition(id: number, position: [number, number, number]): void;
   }
 
   export interface Rendering {
     getScene(): any;
     makeStandardMaterial(options?: Record<string, unknown>): any;
+    addMeshToScene(mesh: any, isStatic?: boolean): void;
+  }
+
+  export interface Camera {
+    heading: number;
+    pitch: number;
   }
 
   interface Container {
@@ -53,7 +60,7 @@ declare module 'noa-engine' {
     playerEntity: number;
     targetedBlock: TargetedBlock | null;
     container: Container;
-    camera: any;
+    camera: Camera;
     on(event: string, handler: (dt: number) => void): void;
     setBlock(id: number, x: number, y: number, z: number): void;
   }
