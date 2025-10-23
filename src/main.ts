@@ -113,7 +113,11 @@ noa.on('tick', (dt) => {
   updateCrosshair();
 });
 
-initializeToolbar();
+if (toolbarEl) {
+  initializeToolbar();
+} else {
+  window.addEventListener('DOMContentLoaded', initializeToolbar, { once: true });
+}
 
 function updateCrosshair() {
   if (!crosshairEl) return;
@@ -144,9 +148,11 @@ if (canvas) {
 
 window.addEventListener('blur', () => {
   if (document.pointerLockElement) {
-    document.exitPointerLock().catch(() => {
-      /* ignore */
-    });
+    try {
+      document.exitPointerLock();
+    } catch (error) {
+      // ignore
+    }
   }
 });
 
