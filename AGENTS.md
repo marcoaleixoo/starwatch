@@ -2,6 +2,7 @@
 
 
 The MANIFESTO.md is the bible of this project. Always check it to see if the user already defined something there, if not, try to confirm, you are working for a user that's building a game and you are the engineer, the user the the master who know how the game needs to look like/behave.
+Feel free to add console.log() so the user can collect the logs for you.
 
 
 ## Project Structure & Module Organization
