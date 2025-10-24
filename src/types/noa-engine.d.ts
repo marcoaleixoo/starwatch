@@ -64,5 +64,7 @@ declare module 'noa-engine' {
     camera: Camera;
     on(event: string, handler: (dt: number) => void): void;
     setBlock(id: number, x: number, y: number, z: number): void;
+    globalToLocal(position: [number, number, number], store?: any, out?: number[]): number[];
+    localToGlobal(position: [number, number, number], store?: any, out?: number[]): number[];
   }
 }

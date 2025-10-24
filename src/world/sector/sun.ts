@@ -18,6 +18,8 @@ const MIN_DISTANCE = 1;
 const MAX_GLOW_SCALE = 4;
 
 export class SunEntity {
+  private readonly noa: Engine;
+
   private readonly mesh: Mesh;
 
   private readonly glow: GlowLayer;
@@ -38,7 +40,10 @@ export class SunEntity {
 
   private readonly baseLightIntensity = SUN_LIGHT_INTENSITY;
 
+  private readonly globalPosition: Vector3;
+
   constructor(noa: Engine, scene: Scene, position: Vector3) {
+    this.noa = noa;
     this.mesh = MeshBuilder.CreateSphere('sector-sun', { diameter: SUN_BASE_DIAMETER, segments: 24 }, scene);
     this.mesh.position = position.clone();
     this.mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
@@ -47,6 +52,8 @@ export class SunEntity {
     this.mesh.applyFog = false;
     this.mesh.renderingGroupId = 1;
     this.mesh.isVisible = true;
+    this.mesh.alwaysSelectAsActiveMesh = true;
+    this.mesh.doNotSyncBoundingInfo = false;
     noa.rendering.addMeshToScene(this.mesh, false);
 
     const material = new StandardMaterial('sector-sun-material', scene);
@@ -55,6 +62,7 @@ export class SunEntity {
     material.alpha = 0.9;
     material.specularColor = Color3.Black();
     this.mesh.material = material;
+    this.mesh.refreshBoundingInfo();
 
     this.light = new PointLight('sector-solar-light', position.clone(), scene);
     this.light.intensity = SUN_LIGHT_INTENSITY;
@@ -80,7 +88,9 @@ export class SunEntity {
     }
 
     this.currentDiameter = SUN_BASE_DIAMETER;
+    this.globalPosition = position.clone();
     this.setDiameter(DEFAULT_SUN_DIAMETER);
+    this.applyTransforms();
 
     console.log('[Sector] SunEntity initialized at', position.toString());
   }
@@ -105,8 +115,9 @@ export class SunEntity {
   setDistance(distance: number) {
     const clamped = Math.max(distance, MIN_DISTANCE);
     this.currentDistance = clamped;
-    this.direction.scaleToRef(clamped, this.mesh.position);
-    this.light.position.copyFrom(this.mesh.position);
+    this.direction.scaleToRef(clamped, this.globalPosition);
+    this.applyTransforms();
+    this.mesh.refreshBoundingInfo();
   }
 
   getDiameter(): number {
@@ -120,9 +131,18 @@ export class SunEntity {
     this.mesh.scaling.setAll(scale);
     this.light.range = this.baseLightRange * Math.max(scale, 0.2);
     this.light.intensity = this.baseLightIntensity * Math.max(scale, 0.2);
+    this.mesh.refreshBoundingInfo();
   }
 
   private getSizeScale(): number {
     return this.currentDiameter / SUN_BASE_DIAMETER;
+  }
+
+  private applyTransforms() {
+    const globalArray = this.globalPosition.asArray();
+    const localPosition = this.noa.globalToLocal(globalArray, null, []);
+    const [lx, ly, lz] = localPosition as [number, number, number];
+    this.mesh.position.set(lx, ly, lz);
+    this.light.position.set(lx, ly, lz);
   }
 }

@@ -83,7 +83,7 @@ export function initializeSector(
   scene.fogDensity = 0;
   const camera = scene.activeCamera as FreeCamera | null;
   if (camera) {
-    camera.maxZ = 8000;
+    camera.maxZ = 50000;
   }
 
   const skybox = new SectorSkybox(noa, scene, mergedOptions.sectorSeed);
