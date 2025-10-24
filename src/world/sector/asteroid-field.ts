@@ -1,5 +1,7 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import type { Engine } from 'noa-engine';
 import { SeededRandom } from '../../utils/seeded-random';
+import { AsteroidMeshController } from './asteroid-meshes';
 import { GRID_UNIT_METERS } from '../../config/constants';
 
 export interface AsteroidMaterialIds {
@@ -33,7 +35,10 @@ interface ClusterBlob {
   radiusSquared: number;
 }
 
-interface AsteroidCluster {
+type ClusterMode = 'mesh' | 'voxel';
+
+export interface AsteroidCluster {
+  hash: string;
   center: Vector3;
   radius: number;
   radiusSquared: number;
@@ -42,6 +47,7 @@ interface AsteroidCluster {
   maxSurfaceRadiusSquared: number;
   blobs: ClusterBlob[];
   voids: ClusterBlob[];
+  mode: ClusterMode;
 }
 
 const CHUNK_SIZE = 32;
@@ -52,10 +58,10 @@ const MIN_CLUSTER_CELL_SIZE = CHUNK_SIZE * 8;
 const BASE_CLUSTER_CELL_SIZE = 4096;
 const CLUSTER_CELL_SIZE = Math.max(
   MIN_CLUSTER_CELL_SIZE,
-  Math.round(BASE_CLUSTER_CELL_SIZE * PROTOTYPE_DISTANCE_SCALE * 3.2),
+  Math.round(BASE_CLUSTER_CELL_SIZE * PROTOTYPE_DISTANCE_SCALE * 1.6),
 );
-const CLUSTER_SEPARATION_RATIO = 0.85; // express desired clearance relative to blob envelopes
-const CLUSTER_SEPARATION_PADDING = 48; // blocks; ensures a visible gap even for small asteroids
+const CLUSTER_SEPARATION_RATIO = 0.62; // express desired clearance relative to blob envelopes
+const CLUSTER_SEPARATION_PADDING = 28; // blocks; ensures a visible gap even for small asteroids
 
 const kmToBlocksDistance = (km: number) =>
   Math.max(1, Math.round(km * BLOCKS_PER_KM * PROTOTYPE_DISTANCE_SCALE));
@@ -67,16 +73,16 @@ const ZONES: ZoneConfig[] = [
     id: 'inner',
     minDistance: kmToBlocksDistance(100),
     maxDistance: kmToBlocksDistance(400),
-    spawnProbability: 0.45,
-    radiusRange: [kmToBlocksSize(0.8), kmToBlocksSize(2.4)],
+    spawnProbability: 0.58,
+    radiusRange: [kmToBlocksSize(0.6), kmToBlocksSize(1.6)],
     verticalRange: [-kmToBlocksDistance(25), kmToBlocksDistance(25)],
     materials: [
       { key: 'stone', weight: 0.6 },
       { key: 'copper', weight: 0.25 },
       { key: 'iron', weight: 0.15 },
     ],
-    asteroidCountRange: [6, 12],
-    asteroidRadiusScale: [0.18, 0.28],
+    asteroidCountRange: [8, 14],
+    asteroidRadiusScale: [0.22, 0.38],
     voidCountRange: [0, 1],
     voidRadiusScale: [0.2, 0.45],
   },
@@ -84,16 +90,16 @@ const ZONES: ZoneConfig[] = [
     id: 'mid',
     minDistance: kmToBlocksDistance(400),
     maxDistance: kmToBlocksDistance(1200),
-    spawnProbability: 0.32,
-    radiusRange: [kmToBlocksSize(1.5), kmToBlocksSize(4.0)],
+    spawnProbability: 0.46,
+    radiusRange: [kmToBlocksSize(1.2), kmToBlocksSize(3.2)],
     verticalRange: [-kmToBlocksDistance(45), kmToBlocksDistance(45)],
     materials: [
       { key: 'stone', weight: 0.5 },
       { key: 'iron', weight: 0.3 },
       { key: 'copper', weight: 0.2 },
     ],
-    asteroidCountRange: [8, 14],
-    asteroidRadiusScale: [0.2, 0.32],
+    asteroidCountRange: [10, 18],
+    asteroidRadiusScale: [0.26, 0.42],
     voidCountRange: [0, 2],
     voidRadiusScale: [0.25, 0.4],
   },
@@ -101,16 +107,16 @@ const ZONES: ZoneConfig[] = [
     id: 'outer',
     minDistance: kmToBlocksDistance(1200),
     maxDistance: kmToBlocksDistance(2000),
-    spawnProbability: 0.2,
-    radiusRange: [kmToBlocksSize(2.5), kmToBlocksSize(6.0)],
+    spawnProbability: 0.32,
+    radiusRange: [kmToBlocksSize(2.0), kmToBlocksSize(5.0)],
     verticalRange: [-kmToBlocksDistance(65), kmToBlocksDistance(65)],
     materials: [
       { key: 'stone', weight: 0.4 },
       { key: 'iron', weight: 0.35 },
       { key: 'copper', weight: 0.25 },
     ],
-    asteroidCountRange: [10, 20],
-    asteroidRadiusScale: [0.22, 0.35],
+    asteroidCountRange: [14, 24],
+    asteroidRadiusScale: [0.28, 0.45],
     voidCountRange: [1, 3],
     voidRadiusScale: [0.25, 0.45],
   },
@@ -123,28 +129,29 @@ const MAX_CLUSTER_RADIUS = Math.ceil(
 const getChunkBase = (value: number) => Math.floor(value / CHUNK_SIZE) * CHUNK_SIZE;
 
 export class AsteroidField {
+  private readonly noa: Engine;
+
   private readonly sectorSeed: string;
 
   private readonly materialIds: AsteroidMaterialIds;
 
-  private readonly chunkCache = new Map<string, AsteroidCluster[]>();
+  private readonly clusterModes = new Map<string, ClusterMode>();
 
-  private readonly cacheQueue: string[] = [];
+  private readonly meshController: AsteroidMeshController;
 
-  private readonly maxCacheSize = 2048;
-
-  private readonly lastChunk: { key: string | null; clusters: AsteroidCluster[] } = {
-    key: null,
-    clusters: [],
-  };
-
-  constructor(materialIds: AsteroidMaterialIds, options?: { sectorSeed?: string }) {
+  constructor(noa: Engine, materialIds: AsteroidMaterialIds, options?: { sectorSeed?: string }) {
+    this.noa = noa;
     this.materialIds = materialIds;
     this.sectorSeed = options?.sectorSeed ?? 'sector.001';
+    this.meshController = new AsteroidMeshController(noa);
   }
 
   sample(x: number, y: number, z: number): number {
-    const clusters = this.loadClustersForChunk(getChunkBase(x), getChunkBase(y), getChunkBase(z));
+    const clusters = this.computeClustersForChunk(
+      getChunkBase(x),
+      getChunkBase(y),
+      getChunkBase(z),
+    );
     return this.sampleWithinClusters(x, y, z, clusters);
   }
 
@@ -154,6 +161,9 @@ export class AsteroidField {
     }
     for (let i = 0; i < clusters.length; i += 1) {
       const cluster = clusters[i];
+      if (cluster.mode !== 'voxel') {
+        continue;
+      }
       const dx = x - cluster.center.x;
       const dy = y - cluster.center.y;
       const dz = z - cluster.center.z;
@@ -195,31 +205,42 @@ export class AsteroidField {
   }
 
   getClustersForChunk(chunkX: number, chunkY: number, chunkZ: number): AsteroidCluster[] {
-    return this.loadClustersForChunk(
-  getChunkBase(chunkX),
-  getChunkBase(chunkY),
-  getChunkBase(chunkZ),
-);
-  }
-
-  private loadClustersForChunk(chunkX: number, chunkY: number, chunkZ: number): AsteroidCluster[] {
-    const chunkKey = `${chunkX}:${chunkY}:${chunkZ}`;
-
-    if (this.lastChunk.key === chunkKey) {
-      return this.lastChunk.clusters;
-    }
-
-    const clusters = this.computeClustersForChunk(chunkX, chunkY, chunkZ);
-    this.lastChunk.key = chunkKey;
-    this.lastChunk.clusters = clusters;
-    return clusters;
+    return this.computeClustersForChunk(
+      getChunkBase(chunkX),
+      getChunkBase(chunkY),
+      getChunkBase(chunkZ),
+    ).filter((cluster) => cluster.mode === 'voxel');
   }
 
   getCacheStats(): { cachedChunks: number; queueSize: number } {
-    return {
-      cachedChunks: this.chunkCache.size,
-      queueSize: this.cacheQueue.length,
-    };
+    return { cachedChunks: 0, queueSize: 0 };
+  }
+
+  getClustersWithinRadius(center: Vector3, radius: number): AsteroidCluster[] {
+    const min = new Vector3(center.x - radius, center.y - radius, center.z - radius);
+    const max = new Vector3(center.x + radius, center.y + radius, center.z + radius);
+    return this.generateClustersForBounds(min, max);
+  }
+
+  setClusterMode(cluster: AsteroidCluster, mode: ClusterMode) {
+    const previous = this.clusterModes.get(cluster.hash);
+    if (previous === mode) {
+      return;
+    }
+
+    if (mode === 'mesh') {
+      this.meshController.enable(cluster);
+    } else {
+      this.meshController.disable(cluster);
+    }
+
+    cluster.mode = mode;
+    this.clusterModes.set(cluster.hash, mode);
+    this.invalidateCluster(cluster);
+  }
+
+  updateMeshes(dt: number) {
+    this.meshController.update(dt);
   }
 
   populateChunk(
@@ -242,6 +263,9 @@ export class AsteroidField {
 
     for (let c = 0; c < clusters.length; c += 1) {
       const cluster = clusters[c];
+      if (cluster.mode !== 'voxel') {
+        continue;
+      }
       const maxRadius = cluster.maxSurfaceRadius;
       const minWorldX = Math.max(chunkX, Math.floor(cluster.center.x - maxRadius - 1));
       const maxWorldX = Math.min(chunkX + sizeX - 1, Math.ceil(cluster.center.x + maxRadius + 1));
@@ -317,38 +341,36 @@ export class AsteroidField {
   }
 
   private computeClustersForChunk(chunkX: number, chunkY: number, chunkZ: number): AsteroidCluster[] {
-    const key = `${chunkX}:${chunkY}:${chunkZ}`;
-    const cached = this.chunkCache.get(key);
-    if (cached) {
-      return cached;
-    }
-
-    const clusters: AsteroidCluster[] = [];
-
     const chunkMin = new Vector3(chunkX, chunkY, chunkZ);
     const chunkMax = new Vector3(chunkX + CHUNK_SIZE, chunkY + CHUNK_SIZE, chunkZ + CHUNK_SIZE);
+    return this.generateClustersForBounds(chunkMin, chunkMax);
+  }
 
-    const cellMinX = Math.floor((chunkMin.x - MAX_CLUSTER_RADIUS) / CLUSTER_CELL_SIZE);
-    const cellMaxX = Math.floor((chunkMax.x + MAX_CLUSTER_RADIUS) / CLUSTER_CELL_SIZE);
-    const cellMinZ = Math.floor((chunkMin.z - MAX_CLUSTER_RADIUS) / CLUSTER_CELL_SIZE);
-    const cellMaxZ = Math.floor((chunkMax.z + MAX_CLUSTER_RADIUS) / CLUSTER_CELL_SIZE);
+  private generateClustersForBounds(min: Vector3, max: Vector3): AsteroidCluster[] {
+    const clusters: AsteroidCluster[] = [];
+    const seen = new Set<string>();
+
+    const cellMinX = Math.floor((min.x - MAX_CLUSTER_RADIUS) / CLUSTER_CELL_SIZE);
+    const cellMaxX = Math.floor((max.x + MAX_CLUSTER_RADIUS) / CLUSTER_CELL_SIZE);
+    const cellMinZ = Math.floor((min.z - MAX_CLUSTER_RADIUS) / CLUSTER_CELL_SIZE);
+    const cellMaxZ = Math.floor((max.z + MAX_CLUSTER_RADIUS) / CLUSTER_CELL_SIZE);
 
     for (let cx = cellMinX; cx <= cellMaxX; cx += 1) {
       for (let cz = cellMinZ; cz <= cellMaxZ; cz += 1) {
-        this.tryAddClusterForCell(cx, cz, chunkMin, chunkMax, clusters);
+        this.tryAddClusterForCell(cx, cz, min, max, clusters, seen);
       }
     }
 
-    this.storeInCache(key, clusters);
     return clusters;
   }
 
   private tryAddClusterForCell(
     cellX: number,
     cellZ: number,
-    chunkMin: Vector3,
-    chunkMax: Vector3,
+    boundsMin: Vector3,
+    boundsMax: Vector3,
     clusters: AsteroidCluster[],
+    seen: Set<string>,
   ) {
     const cellSeed = `${this.sectorSeed}:${cellX}:${cellZ}`;
     const random = new SeededRandom(cellSeed);
@@ -374,42 +396,43 @@ export class AsteroidField {
         centerY,
         candidateZ + random.nextFloat(-radius, radius) * 0.2,
       );
-      const blobs = this.createBlobSet(center, radius, zone, random);
-      const voids = this.createVoidSet(center, radius, zone, random);
-      let maxSurfaceRadius = radius;
-      for (let b = 0; b < blobs.length; b += 1) {
-        const blob = blobs[b];
-        const ox = blob.center.x - center.x;
-        const oy = blob.center.y - center.y;
-        const oz = blob.center.z - center.z;
-        const offset = Math.sqrt(ox * ox + oy * oy + oz * oz);
-        if (blob.radius + offset > maxSurfaceRadius) {
-          maxSurfaceRadius = blob.radius + offset;
-        }
-      }
-
-      const minX = center.x - maxSurfaceRadius;
-      const maxX = center.x + maxSurfaceRadius;
-      const minY = center.y - maxSurfaceRadius;
-      const maxY = center.y + maxSurfaceRadius;
-      const minZ = center.z - maxSurfaceRadius;
-      const maxZ = center.z + maxSurfaceRadius;
-
-      if (maxX < chunkMin.x || minX > chunkMax.x || maxY < chunkMin.y || minY > chunkMax.y || maxZ < chunkMin.z || minZ > chunkMax.z) {
+      const candidate = this.createCluster(cellSeed, attempt, center, radius, zone, random);
+      if (!candidate) {
         continue;
       }
 
-      const materialId = this.pickMaterial(zone, random);
-      if (!materialId) {
+      const maxSurfaceRadius = candidate.maxSurfaceRadius;
+      const minX = candidate.center.x - maxSurfaceRadius;
+      const maxX = candidate.center.x + maxSurfaceRadius;
+      const minY = candidate.center.y - maxSurfaceRadius;
+      const maxY = candidate.center.y + maxSurfaceRadius;
+      const minZ = candidate.center.z - maxSurfaceRadius;
+      const maxZ = candidate.center.z + maxSurfaceRadius;
+
+      if (
+        maxX < boundsMin.x ||
+        minX > boundsMax.x ||
+        maxY < boundsMin.y ||
+        minY > boundsMax.y ||
+        maxZ < boundsMin.z ||
+        minZ > boundsMax.z
+      ) {
+        continue;
+      }
+
+      if (seen.has(candidate.hash)) {
         continue;
       }
 
       const tooCloseToExisting = clusters.some((existing) => {
-        const dx = center.x - existing.center.x;
-        const dy = center.y - existing.center.y;
-        const dz = center.z - existing.center.z;
+        if (existing.hash === candidate.hash) {
+          return false;
+        }
+        const dx = candidate.center.x - existing.center.x;
+        const dy = candidate.center.y - existing.center.y;
+        const dz = candidate.center.z - existing.center.z;
         const minAllowed =
-          (maxSurfaceRadius + existing.maxSurfaceRadius) * CLUSTER_SEPARATION_RATIO + CLUSTER_SEPARATION_PADDING;
+          (candidate.maxSurfaceRadius + existing.maxSurfaceRadius) * CLUSTER_SEPARATION_RATIO + CLUSTER_SEPARATION_PADDING;
         const minAllowedSquared = minAllowed * minAllowed;
         return dx * dx + dy * dy + dz * dz < minAllowedSquared;
       });
@@ -417,16 +440,8 @@ export class AsteroidField {
         continue;
       }
 
-      clusters.push({
-        center,
-        radius,
-        radiusSquared: radius * radius,
-        maxSurfaceRadius,
-        maxSurfaceRadiusSquared: maxSurfaceRadius * maxSurfaceRadius,
-        blockId: materialId,
-        blobs,
-        voids,
-      });
+      seen.add(candidate.hash);
+      clusters.push(candidate);
     }
   }
 
@@ -453,6 +468,45 @@ export class AsteroidField {
     return this.materialIds[zone.materials[zone.materials.length - 1].key] ?? null;
   }
 
+  private createCluster(
+    cellSeed: string,
+    attempt: number,
+    center: Vector3,
+    radius: number,
+    zone: ZoneConfig,
+    random: SeededRandom,
+  ): AsteroidCluster | null {
+    const clusterHash = `${cellSeed}:${attempt}`;
+    const materialId = this.pickMaterial(zone, random);
+    if (!materialId) {
+      return null;
+    }
+    const blobs = this.createBlobSet(center, radius, zone, random);
+    const voids = this.createVoidSet(center, radius, zone, random);
+    let maxSurfaceRadius = radius;
+    for (let i = 0; i < blobs.length; i += 1) {
+      const blob = blobs[i];
+      const offsetVector = blob.center.subtract(center);
+      const offset = offsetVector.length();
+      if (blob.radius + offset > maxSurfaceRadius) {
+        maxSurfaceRadius = blob.radius + offset;
+      }
+    }
+    const cluster: AsteroidCluster = {
+      hash: clusterHash,
+      center,
+      radius,
+      radiusSquared: radius * radius,
+      blockId: materialId,
+      maxSurfaceRadius,
+      maxSurfaceRadiusSquared: maxSurfaceRadius * maxSurfaceRadius,
+      blobs,
+      voids,
+      mode: this.clusterModes.get(clusterHash) ?? 'mesh',
+    };
+    return cluster;
+  }
+
   private createBlobSet(
     center: Vector3,
     radius: number,
@@ -463,7 +517,7 @@ export class AsteroidField {
     const min = Math.max(zone.asteroidCountRange[0], 1);
     const max = Math.max(zone.asteroidCountRange[1], min);
     const count = random.nextInt(min, max + 1);
-    const attempts = count * 3;
+    const attempts = Math.max(count * 5, count + 4);
     let placed = 0;
     for (let i = 0; i < attempts && placed < count; i += 1) {
       const direction = this.randomUnitVector(random);
@@ -551,14 +605,22 @@ export class AsteroidField {
     return new Vector3(x * lengthInv, y * lengthInv, z * lengthInv);
   }
 
-  private storeInCache(key: string, clusters: AsteroidCluster[]) {
-    this.chunkCache.set(key, clusters);
-    this.cacheQueue.push(key);
-    if (this.cacheQueue.length > this.maxCacheSize) {
-      const oldest = this.cacheQueue.shift();
-      if (oldest) {
-        this.chunkCache.delete(oldest);
-      }
-    }
+  private invalidateCluster(cluster: AsteroidCluster) {
+    const radius = cluster.maxSurfaceRadius + 4;
+    const base = [
+      cluster.center.x - radius,
+      cluster.center.y - radius,
+      cluster.center.z - radius,
+    ];
+    const max = [
+      cluster.center.x + radius,
+      cluster.center.y + radius,
+      cluster.center.z + radius,
+    ];
+    const world = this.noa.world as unknown as {
+      invalidateVoxelsInAABB(box: { base: number[]; max: number[] }): void;
+    };
+    world.invalidateVoxelsInAABB({ base, max });
   }
+
 }

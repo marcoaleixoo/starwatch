@@ -6,6 +6,7 @@ import { SectorSkybox } from './skybox';
 import { SunEntity, DEFAULT_SUN_DISTANCE_BLOCKS } from './sun';
 import { AsteroidField, AsteroidMaterialIds } from './asteroid-field';
 import { SECTOR_SKYBOX_SYSTEM_ID, SECTOR_SUN_SYSTEM_ID } from '../../core/constants';
+import { initializeAsteroidLOD } from '../../systems/asteroid-lod';
 
 export interface SectorTickSystem {
   id: string;
@@ -89,7 +90,7 @@ export function initializeSector(
 
   const skybox = new SectorSkybox(noa, scene, mergedOptions.sectorSeed);
   const sun = new SunEntity(noa, scene, mergedOptions.sunPosition);
-  const field = new AsteroidField(materialIds, {
+  const field = new AsteroidField(noa, materialIds, {
     sectorSeed: mergedOptions.sectorSeed,
   });
   const solarRadiation = new SolarRadiation(noa, sun);
@@ -108,6 +109,7 @@ export function initializeSector(
         solarRadiation.update();
       },
     },
+    initializeAsteroidLOD(noa, field),
   ];
 
   return {
