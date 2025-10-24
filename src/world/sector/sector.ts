@@ -1,6 +1,7 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Engine } from 'noa-engine';
 import { Scene } from '@babylonjs/core/scene';
+import type { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { SectorSkybox } from './skybox';
 import { SunEntity } from './sun';
 import { AsteroidField, AsteroidMaterialIds } from './asteroid-field';
@@ -23,7 +24,7 @@ interface SectorOptions {
 
 const DEFAULT_SECTOR_OPTIONS: SectorOptions = {
   sectorSeed: 'sector.001',
-  sunPosition: new Vector3(0, 180, 0),
+  sunPosition: new Vector3(3, 8, 6),
 };
 
 class SolarRadiation implements SectorEnvironment {
@@ -67,6 +68,7 @@ export interface SectorSetupResult {
   field: AsteroidField;
   systems: SectorTickSystem[];
   environment: SectorEnvironment;
+  sun: SunEntity;
 }
 
 export function initializeSector(
@@ -79,15 +81,19 @@ export function initializeSector(
   scene.fogMode = Scene.FOGMODE_NONE;
   scene.fogEnabled = false;
   scene.fogDensity = 0;
+  const camera = scene.activeCamera as FreeCamera | null;
+  if (camera) {
+    camera.maxZ = 8000;
+  }
 
   const skybox = new SectorSkybox(noa, scene, mergedOptions.sectorSeed);
-  const sun = new SunEntity(scene, mergedOptions.sunPosition);
+  const sun = new SunEntity(noa, scene, mergedOptions.sunPosition);
   const field = new AsteroidField(materialIds, {
     sectorSeed: mergedOptions.sectorSeed,
     exclusionZones: [
       {
         center: mergedOptions.sunPosition,
-        radius: 120,
+        radius: 12,
       },
     ],
   });
@@ -113,5 +119,6 @@ export function initializeSector(
     field,
     systems,
     environment: solarRadiation,
+    sun,
   };
 }

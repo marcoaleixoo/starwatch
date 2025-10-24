@@ -12,11 +12,13 @@ import { createCrosshairController } from '../hud/crosshair';
 import { CROSSHAIR_STATE_IDLE, CROSSHAIR_STATE_TARGET } from '../hud/constants';
 import { initializeToolbar } from '../hud/toolbar';
 import { PersistenceManager } from '../persistence/manager';
+import { initializeRenderSettingsDrawer } from '../hud/render-settings';
 
 export interface StarwatchContext {
   noa: Engine;
   persistence: PersistenceManager;
   sector: WorldContext['sector'];
+  sun: WorldContext['sun'];
 }
 
 export function bootstrapStarwatch(): StarwatchContext {
@@ -53,6 +55,15 @@ export function bootstrapStarwatch(): StarwatchContext {
     persistence.registerBlockMutation(mutation);
   });
 
+  const chunkSize = ENGINE_OPTIONS.chunkSize ?? 32;
+  const horizontalDefault =
+    typeof ENGINE_OPTIONS.chunkAddDistance === 'number'
+      ? ENGINE_OPTIONS.chunkAddDistance
+      : Array.isArray(ENGINE_OPTIONS.chunkAddDistance)
+        ? ENGINE_OPTIONS.chunkAddDistance[0]
+        : 2.5;
+  initializeRenderSettingsDrawer(noa, chunkSize, { horizontal: horizontalDefault }, worldContext.sun);
+
   const systems: TickSystem[] = [
     ...worldContext.systems,
     {
@@ -73,5 +84,5 @@ export function bootstrapStarwatch(): StarwatchContext {
 
   initializeTickLoop(noa, systems);
 
-  return { noa, persistence, sector: worldContext.sector };
+  return { noa, persistence, sector: worldContext.sector, sun: worldContext.sun };
 }

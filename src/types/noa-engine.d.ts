@@ -11,6 +11,7 @@ declare module 'noa-engine' {
   export interface World {
     on(event: 'worldDataNeeded', handler: (id: string, data: any, x: number, y: number, z: number) => void): void;
     setChunkData(id: string, data: any): void;
+    setAddRemoveDistance(addDist?: number | [number, number], remDist?: number | [number, number]): void;
   }
 
   export interface Inputs {

@@ -15,6 +15,65 @@
       </div>
       <div class="toolbar" id="toolbar"></div>
     </div>
+    <div id="starwatch-controls">
+      <button
+        id="render-settings-toggle"
+        class="drawer-toggle"
+        type="button"
+        aria-expanded="false"
+      >
+        Setor
+      </button>
+      <div id="render-settings" class="drawer" aria-hidden="true">
+        <header class="drawer__header">
+          <span>Render Distance</span>
+          <span id="render-settings-distance-readout" class="drawer__value">0.0 chunks</span>
+        </header>
+        <label class="drawer__field" for="render-settings-distance">
+          <span>Horizonte</span>
+          <input
+            id="render-settings-distance"
+            type="range"
+            min="1.5"
+            max="180"
+            step="0.5"
+            value="2.5"
+          />
+        </label>
+        <p id="render-settings-hint" class="drawer__hint"></p>
+        <div class="drawer__divider"></div>
+        <header class="drawer__section">
+          <span>Solar Controls</span>
+        </header>
+        <label class="drawer__field" for="render-settings-sun-distance">
+          <span>Sun Distance</span>
+          <input
+            id="render-settings-sun-distance"
+            type="range"
+            min="2"
+            max="10000"
+            step="10"
+            value="10"
+          />
+        </label>
+        <p id="render-settings-sun-distance-readout" class="drawer__hint"></p>
+        <label class="drawer__field" for="render-settings-sun-size">
+          <span>Sun Diameter</span>
+          <input
+            id="render-settings-sun-size"
+            type="range"
+            min="0.5"
+            max="400"
+            step="0.5"
+            value="40"
+          />
+        </label>
+        <p id="render-settings-sun-size-readout" class="drawer__hint"></p>
+        <p class="drawer__support">
+          Distâncias maiores mostram clusters mais distantes, mas podem custar FPS.
+        </p>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

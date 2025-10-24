@@ -4,6 +4,7 @@ import { BLOCK_DEFINITIONS, type BlockDefinition } from './config';
 import type { PersistenceManager } from '../persistence/manager';
 import { initializeSector, type SectorEnvironment } from './sector/sector';
 import type { AsteroidField } from './sector/asteroid-field';
+import { SunEntity } from './sector/sun';
 
 export interface BlockPaletteEntry {
   id: number;
@@ -16,6 +17,7 @@ export interface WorldContext {
   blockIds: Record<string, number>;
   systems: { id: string; update(dt: number): void }[];
   sector: SectorEnvironment;
+  sun: SunEntity;
 }
 
 const WORLD_DATA_EVENT = 'worldDataNeeded';
@@ -37,6 +39,7 @@ export function initializeWorld(noa: Engine, persistence: PersistenceManager): W
     blockIds,
     systems: sectorSetup.systems,
     sector: sectorSetup.environment,
+    sun: sectorSetup.sun,
   };
 }
 
