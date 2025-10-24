@@ -10,7 +10,7 @@ const VERTICAL_RATIO = 0.6;
 const REMOVE_OFFSET = 1;
 
 interface StoredRenderSettings {
-  viewKm: number;
+  horizontalChunks: number;
 }
 
 interface SunAdjustment {
@@ -24,7 +24,7 @@ function parseStoredSettings(raw: string | null): StoredRenderSettings | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as StoredRenderSettings;
-    if (typeof parsed.viewKm !== 'number' || Number.isNaN(parsed.viewKm)) {
+    if (typeof parsed.horizontalChunks !== 'number' || Number.isNaN(parsed.horizontalChunks)) {
       return null;
     }
     return parsed;
