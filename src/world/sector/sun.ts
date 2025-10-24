@@ -8,8 +8,9 @@ import type { Scene } from '@babylonjs/core/scene';
 import type { Engine } from 'noa-engine';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 
-const SUN_BASE_DIAMETER = 4;
-const DEFAULT_SUN_DIAMETER = 40;
+export const SUN_BASE_DIAMETER = 4;
+export const DEFAULT_SUN_DIAMETER_BLOCKS = 8000; // ≈2.4 km
+export const DEFAULT_SUN_DISTANCE_BLOCKS = 200000; // ≈60 km
 const SUN_GLOW_INTENSITY = 1.6;
 const SUN_LIGHT_INTENSITY = 1.2;
 const SUN_LIGHT_RANGE = 90;
@@ -89,8 +90,9 @@ export class SunEntity {
 
     this.currentDiameter = SUN_BASE_DIAMETER;
     this.globalPosition = position.clone();
-    this.setDiameter(DEFAULT_SUN_DIAMETER);
-    this.applyTransforms();
+    const initialDistance = position.length() < MIN_DISTANCE ? DEFAULT_SUN_DISTANCE_BLOCKS : position.length();
+    this.setDistance(initialDistance);
+    this.setDiameter(DEFAULT_SUN_DIAMETER_BLOCKS);
 
     console.log('[Sector] SunEntity initialized at', position.toString());
   }

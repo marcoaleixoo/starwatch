@@ -3,7 +3,7 @@ import type { Engine } from 'noa-engine';
 import { Scene } from '@babylonjs/core/scene';
 import type { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { SectorSkybox } from './skybox';
-import { SunEntity } from './sun';
+import { SunEntity, DEFAULT_SUN_DISTANCE_BLOCKS } from './sun';
 import { AsteroidField, AsteroidMaterialIds } from './asteroid-field';
 import { SECTOR_SKYBOX_SYSTEM_ID, SECTOR_SUN_SYSTEM_ID } from '../../core/constants';
 
@@ -24,7 +24,7 @@ interface SectorOptions {
 
 const DEFAULT_SECTOR_OPTIONS: SectorOptions = {
   sectorSeed: 'sector.001',
-  sunPosition: new Vector3(3, 8, 6),
+  sunPosition: new Vector3(0, DEFAULT_SUN_DISTANCE_BLOCKS, 0),
 };
 
 class SolarRadiation implements SectorEnvironment {
@@ -83,7 +83,8 @@ export function initializeSector(
   scene.fogDensity = 0;
   const camera = scene.activeCamera as FreeCamera | null;
   if (camera) {
-    camera.maxZ = 50000;
+    const desiredMaxZ = Math.max(50000, DEFAULT_SUN_DISTANCE_BLOCKS * 2);
+    camera.maxZ = desiredMaxZ;
   }
 
   const skybox = new SectorSkybox(noa, scene, mergedOptions.sectorSeed);
