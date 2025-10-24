@@ -21,6 +21,7 @@ declare module 'noa-engine' {
     bind(action: string, bindings: string | string[]): void;
     pointerLock(): void;
     exitPointerLock(): void;
+    state: Record<string, boolean>;
   }
 
   export interface Entities {
@@ -34,6 +35,7 @@ declare module 'noa-engine' {
     };
     addComponent(id: number, name: string, data: any): void;
     setPosition(id: number, position: [number, number, number]): void;
+    getPhysics(id: number): { body: any } | null;
   }
 
   export interface Rendering {

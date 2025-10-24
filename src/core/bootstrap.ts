@@ -5,6 +5,7 @@ import type { WorldContext } from '../world/world';
 import { initializePlayer } from '../player/player';
 import { initializePointerLock } from '../player/input/pointerLock';
 import { initializeInteractions } from '../player/input/interactions';
+import { initializeFlightControls } from '../player/input/fly';
 import { initializeTickLoop, TickSystem } from './loop';
 import { CROSSHAIR_SYSTEM_ID, HUD_SYSTEM_ID } from './constants';
 import { createHudController } from '../hud/hud';
@@ -64,8 +65,11 @@ export function bootstrapStarwatch(): StarwatchContext {
         : 2.5;
   initializeRenderSettingsDrawer(noa, chunkSize, { horizontal: horizontalDefault }, worldContext.sun);
 
+  const flightSystem = initializeFlightControls(noa);
+
   const systems: TickSystem[] = [
     ...worldContext.systems,
+    flightSystem,
     {
       id: HUD_SYSTEM_ID,
       update: () => {

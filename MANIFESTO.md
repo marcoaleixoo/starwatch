@@ -103,7 +103,7 @@
 * **Baterias** armazenam MJ; **painéis** e **reatores** geram.
 * **Eficiência solar** decai ≈ **0,3 %/°C** acima de 25 °C.
 * **Overheat** > **80 °C** → desligamento automático de módulos.
-* **Cloak mode:** ≈ **80 W** + **8–10 % CPU**, velocidade < 200 m/s (sono seguro/ocultação).
+* **Cloak mode:** ≈ **80 W** + **8–10 % CPU**, velocidade < 10 m/s (sono seguro/ocultação).
 
 **Módulos de energia (v1):**
 
@@ -149,6 +149,7 @@
 ## 9. Mundo: Galaxy View, Setores & FOW
 
 * **Galaxy View:** grade procedural de milhares de setores conectados por rotas de hiperespaço. Viagens **em tempo real** (15–60 min; nave/tech dependente).
+* **Spawn padrão:** frota surge em órbita segura (~1 000 km da estrela local), com anéis minerais mapeados pelo HAL.
 * **Fog of War:** revelar por exploração ativa (naves) ou sensores de longo alcance.
 * **Variedade:** níveis de perigo, riqueza mineral, anomalias, densidade de asteroides.
 
@@ -156,11 +157,29 @@
 
 ## 10. Geração Procedural & Conteúdo do Setor
 
-* **Estrela Central:** cor/tipo/intensidade variam; alguns setores “escuros” (exigem reatores).
+### Escala e Zonas
+
+* **Raio útil:** ~2 000 km em torno da estrela; jogador spawna a ≈1 000 km (3 330 000 blocos) da coroa solar.
+* **Zona letal:** raio ≤50 km; aproximação prolongada sobreaquece a nave (failstate futuro).
+* **Faixas de conteúdo:**
+  * **Anel interno (100–400 km):** maior densidade de asteroides comuns (ferro, cobre, silício) + infraestrutura inicial.
+  * **Anel médio (400–1 200 km):** mistura equilibrada; POIs principais, ruínas, tráfego comercial.
+  * **Anel externo (1 200–2 000 km):** clusters raros/grandes, exóticos, eventos temporais.
+* **Campo vazio:** >2 000 km reservado para expansão; radar detecta assinaturas antes de renderizar.
+
+### Asteroides e Fenômenos
+
+* **Estrela Central:** cor/tipo/intensidade variam; alguns setores “escuros” exigem reatores.
 * **Planetas (decorativos v1):** gasosos/rochosos/gelados — marcos visuais.
-* **Aglomerados de Asteroides:** 30–60 clusters (1 000–2 000 corpos). Raridade por distâncias, FOW e proximidade de anomalias (comum → raro).
+* **Aglomerados Procedurais:** geração determinística por chunk; 30–60 clusters ativos próximos, rehidratados conforme o jogador avança entre anéis.
 * **Fenômenos:** nebulosas (interferência/radar), campos de gelo, cinturões de detritos.
 * **Pontos de interesse:** ruínas/estações (3–5); traders; sinais antigos; colisões iminentes.
+
+### Sensores & Visibilidade
+
+* **FOV renderizado:** ~20 km (66 667 blocos). Conteúdo fora disso entra como LOD simplificado ou assinatura de radar.
+* **Radar:** detecta clusters/anomalias fora do FOV; upgrades ampliam alcance e precisão.
+* **LOD:** voxels completos ≤5 km; instâncias simplificadas 5–20 km; apenas telemetria >20 km.
 
 **População recomendada (setor):** 40–100 jogadores (co‑presença futura); 100–300 naves totais com NPCs.
 
@@ -437,7 +456,7 @@ Dia 7: blueprint “real” via Research Forge; rotina serrote (mineração↔pe
 
 ## 29. Glossário
 
-**Cloak Mode:** modo de baixo consumo/baixa velocidade para sono seguro e atividades discretas.
+**Cloak Mode:** modo de baixo consumo/baixa velocidade (limite 10 m/s) para sono seguro e atividades discretas.
 **FOW (Fog of War):** névoa de guerra; setores não explorados ocos/ocultos.
 **HAL‑9001:** IA de bordo, LLM do jogador; converte intenção em scripts; monitora execução.
 **Rooms:** compartimentos fechados detectados por geometria; possuem variáveis de ambiente.

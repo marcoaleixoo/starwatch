@@ -10,7 +10,7 @@ const VERTICAL_RATIO = 0.6;
 const REMOVE_OFFSET = 1;
 
 interface StoredRenderSettings {
-  horizontal: number;
+  viewKm: number;
 }
 
 interface SunAdjustment {
@@ -24,7 +24,7 @@ function parseStoredSettings(raw: string | null): StoredRenderSettings | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as StoredRenderSettings;
-    if (typeof parsed.horizontal !== 'number' || Number.isNaN(parsed.horizontal)) {
+    if (typeof parsed.viewKm !== 'number' || Number.isNaN(parsed.viewKm)) {
       return null;
     }
     return parsed;
@@ -43,14 +43,6 @@ function parseStoredNumber(raw: string | null): number | null {
   const value = Number(raw);
   if (Number.isFinite(value)) return value;
   return null;
-}
-
-function formatMeters(horizontalDistance: number, chunkSize: number): string {
-  const meters = horizontalDistance * chunkSize * GRID_UNIT_METERS;
-  if (meters >= 1000) {
-    return `${(meters / 1000).toFixed(1)} km`;
-  }
-  return `${meters.toFixed(0)} m`;
 }
 
 function formatWorldUnits(value: number): string {
@@ -84,39 +76,39 @@ export function initializeRenderSettingsDrawer(
   }
 
   const stored = parseStoredSettings(window.localStorage?.getItem(STORAGE_KEY) ?? null);
-  const defaultHorizontal = defaults.horizontal || DEFAULT_HORIZONTAL;
-  const initialHorizontal = clamp(
-    stored?.horizontal ?? defaultHorizontal,
-    Number(slider.min),
-    Number(slider.max),
-  );
+  const kmFromChunks = (chunks: number) => (chunks * chunkSize * GRID_UNIT_METERS) / 1000;
 
-  slider.value = initialHorizontal.toString();
+  const sliderMinChunks = Number(slider.min);
+  const sliderMaxChunks = Number(slider.max);
+  const HARD_MAX_CHUNKS = 120;
+  const storedChunks = stored?.horizontalChunks ?? defaults.horizontal ?? DEFAULT_HORIZONTAL;
+  const initialChunks = clamp(storedChunks, sliderMinChunks, Math.min(sliderMaxChunks, HARD_MAX_CHUNKS));
+  slider.value = initialChunks.toString();
 
-  const applyDistance = (horizontal: number) => {
-    const clampedHorizontal = clamp(horizontal, Number(slider.min), Number(slider.max));
-    const vertical = Math.max(1, Math.round(clampedHorizontal * VERTICAL_RATIO));
-    const removeHorizontal = clampedHorizontal + REMOVE_OFFSET;
-    const removeVertical = vertical + REMOVE_OFFSET;
+  const applyDistance = (horizontalChunksRaw: number) => {
+    const horizontalChunks = clamp(horizontalChunksRaw, sliderMinChunks, Math.min(sliderMaxChunks, HARD_MAX_CHUNKS));
+    const verticalChunks = Math.max(1, Math.round(horizontalChunks * VERTICAL_RATIO));
+    const removeHorizontal = horizontalChunks + REMOVE_OFFSET;
+    const removeVertical = verticalChunks + REMOVE_OFFSET;
 
-    noa.world.setAddRemoveDistance([clampedHorizontal, vertical], [removeHorizontal, removeVertical]);
+    noa.world.setAddRemoveDistance([horizontalChunks, verticalChunks], [removeHorizontal, removeVertical]);
 
-    const formatted = formatMeters(clampedHorizontal, chunkSize);
-    readout.textContent = `${clampedHorizontal.toFixed(1)} chunks • ${formatted}`;
+    const km = kmFromChunks(horizontalChunks);
+    readout.textContent = `${km.toFixed(2)} km • ${horizontalChunks.toFixed(0)} chunks`;
 
     if (hint) {
-      hint.textContent = `Vertical draw ${vertical.toFixed(0)} chunks`;
+      hint.textContent = `Vertical draw ~${verticalChunks.toFixed(0)} chunks`;
     }
 
     window.localStorage?.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        horizontal: clampedHorizontal,
+        horizontalChunks,
       }),
     );
   };
 
-  applyDistance(initialHorizontal);
+  applyDistance(initialChunks);
 
   slider.addEventListener('input', () => {
     applyDistance(Number(slider.value));
@@ -130,11 +122,21 @@ export function initializeRenderSettingsDrawer(
       Number(sunDistanceSlider.min),
       Number(sunDistanceSlider.max),
     );
+    const updateFarPlane = (distance: number) => {
+      const scene = noa.rendering.getScene();
+      const camera = scene?.activeCamera as { maxZ?: number } | undefined;
+      if (!camera) return;
+      const desired = Math.max(distance * 1.5, 50000);
+      if (!camera.maxZ || camera.maxZ < desired) {
+        camera.maxZ = desired;
+      }
+    };
     const applySunDistance = (distance: number) => {
       const clampedDistance = clamp(distance, Number(sunDistanceSlider.min), Number(sunDistanceSlider.max));
       sunControls.setDistance(clampedDistance);
       sunDistanceReadout.textContent = `${clampedDistance.toFixed(1)} blocks • ${formatWorldUnits(clampedDistance)}`;
       window.localStorage?.setItem(SUN_DISTANCE_STORAGE_KEY, clampedDistance.toString());
+      updateFarPlane(clampedDistance);
     };
     sunDistanceSlider.value = initialDistance.toString();
     applySunDistance(initialDistance);

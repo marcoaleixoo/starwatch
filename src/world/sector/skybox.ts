@@ -6,7 +6,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import type { Engine } from 'noa-engine';
 import { SeededRandom } from '../../utils/seeded-random';
 
-const SKYBOX_SIZE = 4000;
+const SKYBOX_SIZE = 40000000; // 40,000 km in blocks
 const STAR_CANVAS_SIZE = 1024;
 const STAR_COUNT = 560;
 

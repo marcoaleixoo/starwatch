@@ -24,7 +24,7 @@ interface SectorOptions {
 
 const DEFAULT_SECTOR_OPTIONS: SectorOptions = {
   sectorSeed: 'sector.001',
-  sunPosition: new Vector3(0, DEFAULT_SUN_DISTANCE_BLOCKS, 0),
+  sunPosition: new Vector3(DEFAULT_SUN_DISTANCE_BLOCKS, 0, 0),
 };
 
 class SolarRadiation implements SectorEnvironment {
@@ -91,12 +91,6 @@ export function initializeSector(
   const sun = new SunEntity(noa, scene, mergedOptions.sunPosition);
   const field = new AsteroidField(materialIds, {
     sectorSeed: mergedOptions.sectorSeed,
-    exclusionZones: [
-      {
-        center: mergedOptions.sunPosition,
-        radius: 12,
-      },
-    ],
   });
   const solarRadiation = new SolarRadiation(noa, sun);
 

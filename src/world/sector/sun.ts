@@ -7,10 +7,13 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Engine } from 'noa-engine';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { GRID_UNIT_METERS } from '../../config/constants';
+
+const BLOCKS_PER_KM = 1000 / GRID_UNIT_METERS;
 
 export const SUN_BASE_DIAMETER = 4;
-export const DEFAULT_SUN_DIAMETER_BLOCKS = 8000; // ≈2.4 km
-export const DEFAULT_SUN_DISTANCE_BLOCKS = 200000; // ≈60 km
+export const DEFAULT_SUN_DISTANCE_BLOCKS = Math.round(1000 * BLOCKS_PER_KM); // ≈1 000 km
+export const DEFAULT_SUN_DIAMETER_BLOCKS = Math.round(90 * BLOCKS_PER_KM); // ≈90 km
 const SUN_GLOW_INTENSITY = 1.6;
 const SUN_LIGHT_INTENSITY = 1.2;
 const SUN_LIGHT_RANGE = 90;
@@ -131,8 +134,10 @@ export class SunEntity {
     this.currentDiameter = clamped;
     const scale = clamped / SUN_BASE_DIAMETER;
     this.mesh.scaling.setAll(scale);
-    this.light.range = this.baseLightRange * Math.max(scale, 0.2);
-    this.light.intensity = this.baseLightIntensity * Math.max(scale, 0.2);
+    const rangeScale = Math.max(scale, 0.2);
+    const intensityScale = Math.min(Math.max(scale, 0.2), 50);
+    this.light.range = Math.min(this.baseLightRange * rangeScale, this.baseLightRange * 100000);
+    this.light.intensity = this.baseLightIntensity * intensityScale;
     this.mesh.refreshBoundingInfo();
   }
 
