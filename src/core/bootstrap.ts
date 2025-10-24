@@ -14,6 +14,8 @@ import { CROSSHAIR_STATE_IDLE, CROSSHAIR_STATE_TARGET } from '../hud/constants';
 import { initializeToolbar } from '../hud/toolbar';
 import { PersistenceManager } from '../persistence/manager';
 import { initializeRenderSettingsDrawer } from '../hud/render-settings';
+import { createPerformancePanel } from '../hud/performance-panel';
+import { initializePerformanceMonitor } from '../systems/performance-monitor';
 
 export interface StarwatchContext {
   noa: Engine;
@@ -66,10 +68,13 @@ export function bootstrapStarwatch(): StarwatchContext {
   initializeRenderSettingsDrawer(noa, chunkSize, { horizontal: horizontalDefault }, worldContext.sun);
 
   const flightSystem = initializeFlightControls(noa);
+  const performancePanel = createPerformancePanel();
+  const performanceSystem = initializePerformanceMonitor(noa, worldContext.field, performancePanel);
 
   const systems: TickSystem[] = [
     ...worldContext.systems,
     flightSystem,
+    performanceSystem,
     {
       id: HUD_SYSTEM_ID,
       update: () => {

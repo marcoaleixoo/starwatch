@@ -205,21 +205,67 @@ body {
 
 .hud-panel {
   display: flex;
+  flex-direction: column;
   gap: 12px;
   align-self: flex-start;
+  min-width: 260px;
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: rgba(10, 16, 26, 0.75);
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(10, 16, 26, 0.78);
   border: 1px solid rgba(90, 134, 211, 0.35);
   box-shadow: 0 18px 36px rgba(0, 0, 0, 0.35);
   pointer-events: none;
 }
 
-.hud-panel span {
-  opacity: 0.85;
+.hud-panel__status {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.hud-panel__status span {
+  opacity: 0.88;
+}
+
+.hud-panel__metrics {
+  border-top: 1px solid rgba(84, 128, 204, 0.35);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hud-panel__metrics-title {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  opacity: 0.65;
+}
+
+.hud-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 18px;
+  margin: 0;
+}
+
+.hud-metrics__row {
+  display: contents;
+}
+
+.hud-metrics dt {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.hud-metrics dd {
+  margin: 0;
+  justify-self: end;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  opacity: 0.92;
 }
 
 .toolbar {

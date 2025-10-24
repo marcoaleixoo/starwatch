@@ -18,6 +18,7 @@ export interface WorldContext {
   systems: { id: string; update(dt: number): void }[];
   sector: SectorEnvironment;
   sun: SunEntity;
+  field: AsteroidField;
 }
 
 const WORLD_DATA_EVENT = 'worldDataNeeded';
@@ -40,6 +41,7 @@ export function initializeWorld(noa: Engine, persistence: PersistenceManager): W
     systems: sectorSetup.systems,
     sector: sectorSetup.environment,
     sun: sectorSetup.sun,
+    field: sectorSetup.field,
   };
 }
 
@@ -78,21 +80,61 @@ function setupWorldGeneration(
   persistence: PersistenceManager,
 ) {
   const platformId = blockIds['platform-stone'] ?? 0;
+  const noaWorld = noa.world as unknown as {
+    setChunkData(id: string, array: any, userData?: any, fillVoxelID?: number): void;
+  };
 
   noa.world.on(WORLD_DATA_EVENT, (id, data, x, y, z) => {
-    for (let i = 0; i < data.shape[0]; i += 1) {
-      for (let j = 0; j < data.shape[1]; j += 1) {
-        for (let k = 0; k < data.shape[2]; k += 1) {
-          const worldX = x + i;
-          const worldY = y + j;
-          const worldZ = z + k;
-          const blockId = getVoxelId(worldX, worldY, worldZ, platformId, field, persistence);
-          data.set(i, j, k, blockId);
+    const sizeX = data.shape[0];
+    const sizeY = data.shape[1];
+    const sizeZ = data.shape[2];
+
+    const chunkClusters = field.getClustersForChunk(x, y, z);
+    const chunkCoversPlatformLayer =
+      y <= PLATFORM_BLOCK_Y && y + sizeY > PLATFORM_BLOCK_Y;
+    const hasOverrides = persistence.hasOverridesInChunk(x, y, z, sizeX, sizeY, sizeZ);
+
+    if (chunkClusters.length === 0 && !chunkCoversPlatformLayer && !hasOverrides) {
+      noaWorld.setChunkData(id, data, undefined, 0);
+      return;
+    }
+
+    if (data?.data && typeof data.data.fill === 'function') {
+      data.data.fill(0);
+    } else {
+      for (let i = 0; i < sizeX; i += 1) {
+        for (let j = 0; j < sizeY; j += 1) {
+          for (let k = 0; k < sizeZ; k += 1) {
+            data.set(i, j, k, 0);
+          }
         }
       }
     }
 
-    noa.world.setChunkData(id, data);
+    if (chunkClusters.length > 0) {
+      field.populateChunk(data, x, y, z, chunkClusters);
+    }
+
+    if (chunkCoversPlatformLayer) {
+      const localY = PLATFORM_BLOCK_Y - y;
+      if (localY >= 0 && localY < sizeY) {
+        for (let i = 0; i < sizeX; i += 1) {
+          const worldX = x + i;
+          for (let k = 0; k < sizeZ; k += 1) {
+            const worldZ = z + k;
+            if (withinPlatform(worldX, worldZ)) {
+              data.set(i, localY, k, platformId);
+            }
+          }
+        }
+      }
+    }
+
+    if (hasOverrides) {
+      persistence.applyOverridesToChunk(data, x, y, z);
+    }
+
+    noaWorld.setChunkData(id, data);
   });
 }
 
@@ -103,29 +145,4 @@ function withinPlatform(x: number, z: number): boolean {
     z >= -PLATFORM_HALF_SIZE &&
     z < PLATFORM_HALF_SIZE
   );
-}
-
-function getVoxelId(
-  x: number,
-  y: number,
-  z: number,
-  platformId: number,
-  field: AsteroidField,
-  persistence: PersistenceManager,
-): number {
-  const persistedBlock = persistence.getBlockOverride(x, y, z);
-  if (typeof persistedBlock === 'number') {
-    return persistedBlock;
-  }
-
-  if (y === PLATFORM_BLOCK_Y && withinPlatform(x, z)) {
-    return platformId;
-  }
-
-  const asteroidBlock = field.sample(x, y, z);
-  if (asteroidBlock > 0) {
-    return asteroidBlock;
-  }
-
-  return 0;
 }

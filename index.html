@@ -10,8 +10,47 @@
     <div id="starwatch-ui">
       <div class="crosshair" data-state="idle"></div>
       <div class="hud-panel">
-        <span id="status-energy">POS 0 0 0</span>
-        <span id="status-heat">BLOCK ROCK</span>
+        <div class="hud-panel__status">
+          <span id="status-position">POS 0 0 0</span>
+          <span id="status-selection">BLOCK ROCK</span>
+        </div>
+        <div class="hud-panel__metrics">
+          <span class="hud-panel__metrics-title">Performance</span>
+          <dl class="hud-metrics">
+            <div class="hud-metrics__row">
+              <dt>FPS</dt>
+              <dd id="metric-fps">--</dd>
+            </div>
+            <div class="hud-metrics__row">
+              <dt>Frame</dt>
+              <dd id="metric-frame">--</dd>
+            </div>
+            <div class="hud-metrics__row">
+              <dt>Chunks</dt>
+              <dd id="metric-chunks">--</dd>
+            </div>
+            <div class="hud-metrics__row">
+              <dt>Queues</dt>
+              <dd id="metric-queues">--</dd>
+            </div>
+            <div class="hud-metrics__row">
+              <dt>Meshes</dt>
+              <dd id="metric-meshes">--</dd>
+            </div>
+            <div class="hud-metrics__row">
+              <dt>Verts</dt>
+              <dd id="metric-vertices">--</dd>
+            </div>
+            <div class="hud-metrics__row">
+              <dt>Heap</dt>
+              <dd id="metric-memory">--</dd>
+            </div>
+            <div class="hud-metrics__row">
+              <dt>Asteroids</dt>
+              <dd id="metric-asteroids">--</dd>
+            </div>
+          </dl>
+        </div>
       </div>
       <div class="toolbar" id="toolbar"></div>
     </div>

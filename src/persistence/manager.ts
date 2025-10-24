@@ -101,6 +101,58 @@ export class PersistenceManager {
     return this.blockOverrides.get(coordsKey(x, y, z));
   }
 
+  hasOverridesInChunk(
+    chunkX: number,
+    chunkY: number,
+    chunkZ: number,
+    sizeX: number,
+    sizeY: number,
+    sizeZ: number,
+  ): boolean {
+    if (this.blockOverrides.size === 0) {
+      return false;
+    }
+    const maxX = chunkX + sizeX;
+    const maxY = chunkY + sizeY;
+    const maxZ = chunkZ + sizeZ;
+    for (const key of this.blockOverrides.keys()) {
+      const [rawX, rawY, rawZ] = key.split(',').map(Number);
+      if (rawX >= chunkX && rawX < maxX && rawY >= chunkY && rawY < maxY && rawZ >= chunkZ && rawZ < maxZ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  applyOverridesToChunk(
+    target: { shape: number[]; set(x: number, y: number, z: number, value: number): void },
+    chunkX: number,
+    chunkY: number,
+    chunkZ: number,
+  ) {
+    if (this.blockOverrides.size === 0) {
+      return;
+    }
+
+    const sizeX = target.shape[0];
+    const sizeY = target.shape[1];
+    const sizeZ = target.shape[2];
+
+    this.blockOverrides.forEach((value, key) => {
+      const [rawX, rawY, rawZ] = key.split(',').map(Number);
+      if (
+        rawX >= chunkX &&
+        rawX < chunkX + sizeX &&
+        rawY >= chunkY &&
+        rawY < chunkY + sizeY &&
+        rawZ >= chunkZ &&
+        rawZ < chunkZ + sizeZ
+      ) {
+        target.set(rawX - chunkX, rawY - chunkY, rawZ - chunkZ, value);
+      }
+    });
+  }
+
   registerBlockMutation(mutation: BlockMutation) {
     const [x, y, z] = mutation.position;
     const key = coordsKey(x, y, z);

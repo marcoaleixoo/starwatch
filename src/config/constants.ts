@@ -4,7 +4,7 @@ export const PLATFORM_BLOCK_Y = 1;
 
 export const ENGINE_OPTIONS = {
   debug: true,
-  showFPS: true,
+  showFPS: false,
   chunkSize: 32,
   chunkAddDistance: 1.5,
   chunkRemoveDistance: 2.1,
