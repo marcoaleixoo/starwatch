@@ -35,11 +35,3 @@ Feel free to add console.log() so the user can collect the logs for you.
 - Include testing notes in commit body/PR description (`pnpm dev`, `pnpm build`, `pnpm exec tsc --noEmit`).
 - PRs should link relevant issue/roadmap entry, summarize changes, and attach screenshots/GIFs for UI adjustments.
 
-## NOA Engine Notes
-- NOA wraps Babylon.js for voxel rendering, chunk management, and FPS input.
-- Register materials via `noa.registry.registerMaterial`, then register blocks by ID.
-- Handle chunk generation in the `worldDataNeeded` event, populate the provided ndarray, and call `noa.world.setChunkData`.
-- Access Babylon scene (`noa.rendering.getScene()`) for custom lighting, meshes, or post-processing.
-- Input bindings: use `noa.inputs.bind('action', ['KeyE'])` and listen with `noa.inputs.down.on('action', cb)`.
-- Keep NOA-specific logic encapsulated in `world/` and `player/` so future engine replacements remain feasible.
-

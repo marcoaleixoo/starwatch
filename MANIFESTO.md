@@ -90,7 +90,7 @@
 * Temperatura: **°C** (interior alvo 22–28 °C; vácuo −270 °C).
 * Calor: variação **°C/s**.
 * CPU: **%** (carga do núcleo HAL e scripts).
-* Distância: **m/km** (grid 0,3 m).
+* Distância: **m/km** (grid 1 m).
 * Massa: **kg** (minérios, naves).
 * Tempo: **real (1:1)**, sem pausa.
 
@@ -138,7 +138,7 @@
 
 ## 8. Escala, Geometria e World Layout
 
-* **Bloco base:** **0,3 m** (30 cm) — unidade de construção.
+* **Bloco base:** **1 m** (1m) — unidade de construção.
 * **Nave inicial:** ~**30 m** (≈ 100 blocos); 3–4 rooms.
 * **Asteroide:** **1–3 km**, agrupado em clusters.
 * **Setor:** **30–60 min** de travessia a ~800 m/s (≈ 2 880 km/h).

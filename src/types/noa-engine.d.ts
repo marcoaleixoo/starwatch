@@ -1,72 +1,51 @@
 declare module 'noa-engine' {
-  export interface EngineOptions {
-    [key: string]: unknown;
-  }
-
-  export interface TargetedBlock {
-    position: [number, number, number];
-    adjacent: [number, number, number];
-  }
-
-  export interface World {
-    on(event: 'worldDataNeeded', handler: (id: string, data: any, x: number, y: number, z: number) => void): void;
-    setChunkData(id: string, data: any): void;
-    setAddRemoveDistance(addDist?: number | [number, number], remDist?: number | [number, number]): void;
-  }
-
-  export interface Inputs {
-    down: {
-      on(event: string, handler: (event: any) => void): void;
-    };
-    bind(action: string, bindings: string | string[]): void;
-    pointerLock(): void;
-    exitPointerLock(): void;
-    state: Record<string, boolean>;
-  }
-
-  export interface Entities {
-    names: {
-      mesh: string;
-    };
-    getPositionData(id: number): {
-      position: [number, number, number];
-      width: number;
-      height: number;
-    };
-    addComponent(id: number, name: string, data: any): void;
-    setPosition(id: number, position: [number, number, number]): void;
-    getPhysics(id: number): { body: any } | null;
-  }
-
-  export interface Rendering {
-    getScene(): any;
-    makeStandardMaterial(options?: Record<string, unknown>): any;
-    addMeshToScene(mesh: any, isStatic?: boolean): void;
-  }
-
-  export interface Camera {
-    heading: number;
-    pitch: number;
-  }
-
-  interface Container {
-    canvas: HTMLCanvasElement;
-  }
-
   export class Engine {
-    constructor(options?: EngineOptions);
-    world: World;
-    registry: any;
-    rendering: Rendering;
-    inputs: Inputs;
-    entities: Entities;
-    playerEntity: number;
-    targetedBlock: TargetedBlock | null;
-    container: Container;
-    camera: Camera;
-    on(event: string, handler: (dt: number) => void): void;
+    constructor(opts?: Record<string, unknown>);
+    on(event: string, handler: (...args: any[]) => void): void;
+    off(event: string, handler: (...args: any[]) => void): void;
+    setPaused(paused: boolean): void;
+    render(dt: number): void;
+    tick(dt: number): void;
+    getTargetBlock(): unknown;
     setBlock(id: number, x: number, y: number, z: number): void;
-    globalToLocal(position: [number, number, number], store?: any, out?: number[]): number[];
-    localToGlobal(position: [number, number, number], store?: any, out?: number[]): number[];
+    registry: {
+      registerMaterial(name: string, options: Record<string, unknown>): number;
+      registerBlock(id: number, options: Record<string, unknown>): number;
+      getBlockID?(name: string): number | undefined;
+    };
+    world: {
+      on(event: string, handler: (...args: any[]) => void): void;
+      setChunkData(requestID: number, voxelData: any, voxelIDs?: any, fillID?: number): void;
+      setBlock(id: number, x: number, y: number, z: number): void;
+      _chunkSize: number;
+      setAddRemoveDistance(addDist: [number, number], removeDist?: [number, number]): void;
+    };
+    camera: {
+      zoomDistance: number;
+    };
+    container: {
+      setPointerLock(lock?: boolean): void;
+      on(event: string, handler: (...args: any[]) => void): void;
+      canvas: HTMLCanvasElement;
+      supportsPointerLock: boolean;
+    };
+    rendering: {
+      getScene(): any;
+      light: any;
+      camera: any;
+    };
+    inputs: {
+      bind(action: string, bindings: string | string[]): void;
+      down: { on(action: string, handler: (...args: any[]) => void): void };
+      pointerState: { scrolly: number };
+    };
+    playerEntity: number;
+    entities: {
+      getPositionData(id: number): { width: number; height: number };
+      getMovement(id: number): { maxSpeed: number; moveForce: number };
+      addComponent(id: number, name: string, data: Record<string, unknown>): void;
+      names: Record<string, string>;
+    };
+    version: string;
   }
 }

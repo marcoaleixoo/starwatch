@@ -1,59 +1,18 @@
 <!doctype html>
-<html lang="pt-br">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Starwatch — Prototype</title>
+    <title>Starwatch — Grid Prototype</title>
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
-    <div id="starwatch-ui">
-      <div class="crosshair" data-state="idle"></div>
-      <div class="hud-panel">
-        <div class="hud-panel__status">
-          <span id="status-position">POS 0 0 0</span>
-          <span id="status-selection">BLOCK ROCK</span>
-        </div>
-        <div class="hud-panel__metrics">
-          <span class="hud-panel__metrics-title">Performance</span>
-          <dl class="hud-metrics">
-            <div class="hud-metrics__row">
-              <dt>FPS</dt>
-              <dd id="metric-fps">--</dd>
-            </div>
-            <div class="hud-metrics__row">
-              <dt>Frame</dt>
-              <dd id="metric-frame">--</dd>
-            </div>
-            <div class="hud-metrics__row">
-              <dt>Chunks</dt>
-              <dd id="metric-chunks">--</dd>
-            </div>
-            <div class="hud-metrics__row">
-              <dt>Queues</dt>
-              <dd id="metric-queues">--</dd>
-            </div>
-            <div class="hud-metrics__row">
-              <dt>Meshes</dt>
-              <dd id="metric-meshes">--</dd>
-            </div>
-            <div class="hud-metrics__row">
-              <dt>Verts</dt>
-              <dd id="metric-vertices">--</dd>
-            </div>
-            <div class="hud-metrics__row">
-              <dt>Heap</dt>
-              <dd id="metric-memory">--</dd>
-            </div>
-            <div class="hud-metrics__row">
-              <dt>Asteroids</dt>
-              <dd id="metric-asteroids">--</dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-      <div class="toolbar" id="toolbar"></div>
-    </div>
+    <main id="app-root">
+      <div id="starwatch-canvas-host"></div>
+      <section id="boot-status" hidden>
+        <p>Inicializando Starwatch…</p>
+      </section>
+    </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

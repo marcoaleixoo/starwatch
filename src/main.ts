@@ -1,12 +1,15 @@
 import './styles.css';
-import { bootstrapStarwatch } from './core/bootstrap';
+import { bootstrapStarwatch } from './game/core/bootstrap';
 
-const context = bootstrapStarwatch();
+type BootstrapResult = ReturnType<typeof bootstrapStarwatch>;
 
 declare global {
   interface Window {
-    starwatch?: typeof context;
+    starwatch?: BootstrapResult;
   }
 }
 
+const context = bootstrapStarwatch();
 window.starwatch = context;
+
+console.log('[starwatch] bootstrap concluído');
