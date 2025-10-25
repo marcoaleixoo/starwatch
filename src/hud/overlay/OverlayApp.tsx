@@ -8,12 +8,15 @@ import type { EnergySystem } from '../../systems/energy';
 import { TerminalPanel } from './panels/terminal-panel';
 import type { LookAtTracker } from '../look-at-tracker';
 import { LookAtBadge } from '../components/look-at-badge';
+import type { RemovalHoldTracker } from '../removal-hold-tracker';
+import { Crosshair } from '../components/crosshair';
 
 interface OverlayAppProps {
   controller: OverlayController;
   hotbarController: HotbarController;
   energy: EnergySystem;
   lookAt: LookAtTracker;
+  removalHold: RemovalHoldTracker;
 }
 
 function useOverlayState(controller: OverlayController): OverlayState {
@@ -38,7 +41,13 @@ function renderModal(state: OverlayState, energy: EnergySystem): JSX.Element | n
   }
 }
 
-export function OverlayApp({ controller, hotbarController, energy, lookAt }: OverlayAppProps): JSX.Element {
+export function OverlayApp({
+  controller,
+  hotbarController,
+  energy,
+  lookAt,
+  removalHold,
+}: OverlayAppProps): JSX.Element {
   const state = useOverlayState(controller);
   const focusRef = useRef<HTMLDivElement>(null);
 
@@ -60,8 +69,9 @@ export function OverlayApp({ controller, hotbarController, energy, lookAt }: Ove
       state,
       energy,
       lookAt,
+      removal: removalHold,
     }),
-    [controller, state, energy, lookAt],
+    [controller, state, energy, lookAt, removalHold],
   );
 
   return (
@@ -73,6 +83,7 @@ export function OverlayApp({ controller, hotbarController, energy, lookAt }: Ove
         data-capture={state.captureInput ? 'true' : 'false'}
       >
         <div className="overlay-hud-layer" data-visible="true">
+          <Crosshair />
           <HotbarHud controller={hotbarController} />
           <LookAtBadge lookAt={lookAt} energy={energy} />
         </div>

@@ -16,7 +16,7 @@ export function initializeSector(noa: Engine): SectorResources {
   const materials = registerSectorMaterials(noa);
   const terrainBlocks = registerSectorBlocks(noa, materials);
   const starwatchBlocks = registerStarwatchBlocks(noa, materials, terrainBlocks.nextBlockId);
-  installChunkGenerator(noa, terrainBlocks);
+  installChunkGenerator(noa, terrainBlocks, starwatchBlocks);
 
   noa.world.setAddRemoveDistance(CHUNK_ADD_DISTANCE, CHUNK_REMOVE_DISTANCE);
   console.log('[starwatch] distâncias de chunk configuradas');

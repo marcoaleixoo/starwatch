@@ -6,6 +6,8 @@ export function generateStartingPlatform(ctx: ChunkGenerationContext): void {
     return;
   }
 
+  const deckBlockId = ctx.catalog.deck.id;
+
   const platformMinX = -PLATFORM_HALF_EXTENT;
   const platformMaxX = PLATFORM_HALF_EXTENT - 1;
   const platformMinZ = -PLATFORM_HALF_EXTENT;
@@ -19,7 +21,7 @@ export function generateStartingPlatform(ctx: ChunkGenerationContext): void {
       const worldZ = ctx.bounds.minZ + localZ;
       if (worldZ < platformMinZ || worldZ > platformMaxZ) continue;
 
-      ctx.writeBlock(worldX, PLATFORM_HEIGHT, worldZ, ctx.blocks.dirt);
+      ctx.writeBlock(worldX, PLATFORM_HEIGHT, worldZ, deckBlockId);
     }
   }
 }

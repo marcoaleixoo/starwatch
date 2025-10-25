@@ -233,6 +233,98 @@ canvas {
   color: rgba(168, 196, 238, 0.7);
 }
 
+.crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 48px;
+  height: 48px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  mix-blend-mode: screen;
+}
+
+.crosshair__progress {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+}
+
+.crosshair__progress-bg {
+  stroke: rgba(100, 140, 210, 0.25);
+  stroke-width: 2;
+  fill: none;
+}
+
+.crosshair__progress-ring {
+  stroke: rgba(122, 172, 255, 0.85);
+  stroke-width: 3;
+  stroke-linecap: round;
+  fill: none;
+  opacity: 0;
+  transition: opacity 120ms ease, stroke 120ms ease;
+}
+
+.crosshair[data-progress='true'] .crosshair__progress-ring {
+  opacity: 1;
+}
+
+.crosshair[data-removing='true'] .crosshair__progress-ring {
+  stroke: rgba(255, 125, 125, 0.95);
+}
+
+.crosshair__reticle {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+}
+
+.crosshair__line {
+  position: absolute;
+  background: rgba(173, 199, 255, 0.6);
+  transition: background 120ms ease;
+}
+
+.crosshair__line--horizontal {
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+.crosshair__line--vertical {
+  left: 50%;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+
+.crosshair__dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(205, 220, 255, 0.8);
+  transform: translate(-50%, -50%);
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.crosshair[data-removing='true'] .crosshair__line,
+.crosshair[data-removing='true'] .crosshair__dot {
+  background: rgba(255, 140, 140, 0.9);
+}
+
+.crosshair[data-removing='true'] .crosshair__dot {
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
 .terminal-panel {
   display: flex;
   flex-direction: column;

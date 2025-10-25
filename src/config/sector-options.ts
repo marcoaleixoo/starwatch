@@ -5,7 +5,7 @@ export const DEFAULT_SECTOR_ID = 'sector-lyra-z7';
 
 /**
  * Tamanho (meia extensão) da plataforma inicial onde o jogador nasce.
- * Consumido em `sector/chunk-generator.ts` para definir o platô 10×10.
+ * Consumido em `sector/chunk-generator.ts` para definir o deck condutivo 10×10.
  */
 export const PLATFORM_HALF_EXTENT = 5;
 

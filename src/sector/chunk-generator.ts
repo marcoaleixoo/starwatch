@@ -2,8 +2,9 @@ import type { Engine } from 'noa-engine';
 import type { SectorBlocks } from './blocks';
 import { runGenerationPipeline } from './generation';
 import type { ChunkGenerationContext } from './generation/types';
+import type { BlockCatalog } from '../blocks/types';
 
-export function installChunkGenerator(noa: Engine, blocks: SectorBlocks): void {
+export function installChunkGenerator(noa: Engine, blocks: SectorBlocks, catalog: BlockCatalog): void {
   console.log('[starwatch] chunk generator habilitado (pipeline modular)');
 
   noa.world.on('worldDataNeeded', (requestID: number, data: any, x: number, y: number, z: number) => {
@@ -32,6 +33,7 @@ export function installChunkGenerator(noa: Engine, blocks: SectorBlocks): void {
 
     const context: ChunkGenerationContext = {
       blocks,
+      catalog,
       bounds,
       dimensions: {
         sizeX,

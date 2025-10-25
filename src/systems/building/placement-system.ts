@@ -11,7 +11,7 @@ import { blockMetadataStore } from '../../blocks/metadata-store';
 import type { EnergySystem } from '../energy';
 
 const ORIENTATIONS: BlockOrientation[] = ['north', 'east', 'south', 'west'];
-const REMOVE_HOLD_DURATION_MS = 2000;
+const REMOVE_HOLD_DURATION_MS = 1000;
 
 interface PlacementSystemDependencies {
   noa: Engine;
@@ -130,9 +130,13 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
   let currentDefinition: BlockDefinition | null = null;
   const orientationByKind = new Map<BlockKind, BlockOrientation>();
   let lastHotbarIndex = hotbar.controller.getState().activeIndex;
-  let removeHoldTimeout: ReturnType<typeof setTimeout> | null = null;
   let removeHoldTarget: PlacementTarget | null = null;
   let removeHoldTriggered = false;
+  let removeHoldActive = false;
+  let removeHoldElapsed = 0;
+  let removalHoldResetTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  const removalHold = overlay.removalHold;
 
   const updateActiveDefinition = () => {
     currentDefinition = getActiveBlockDefinition(hotbar, sector.starwatchBlocks);
@@ -201,13 +205,24 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
     }
   };
 
-  const cancelRemoveHold = () => {
-    if (removeHoldTimeout !== null) {
-      clearTimeout(removeHoldTimeout);
-      removeHoldTimeout = null;
+  const clearRemovalHoldReset = () => {
+    if (removalHoldResetTimeout !== null) {
+      clearTimeout(removalHoldResetTimeout);
+      removalHoldResetTimeout = null;
     }
+  };
+
+  const cancelRemoveHold = (preserveTriggered = false, emitIdle = true) => {
+    removeHoldActive = false;
+    removeHoldElapsed = 0;
     removeHoldTarget = null;
-    removeHoldTriggered = false;
+    if (!preserveTriggered) {
+      removeHoldTriggered = false;
+    }
+    clearRemovalHoldReset();
+    if (emitIdle) {
+      removalHold.setState({ active: false, progress: 0 });
+    }
   };
 
   const scheduleRemoveHold = (target: PlacementTarget) => {
@@ -217,24 +232,10 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
       adjacent: [...target.adjacent],
     };
     removeHoldTriggered = false;
-    removeHoldTimeout = setTimeout(() => {
-      removeHoldTimeout = null;
-      removeHoldTriggered = true;
-      if (overlay.controller.getState().captureInput) {
-        removeHoldTarget = null;
-        return;
-      }
-      if (!removeHoldTarget) {
-        return;
-      }
-      const [x, y, z] = removeHoldTarget.position;
-      if (noa.world.getBlockID(x, y, z) === 0) {
-        removeHoldTarget = null;
-        return;
-      }
-      removeBlock(removeHoldTarget);
-      removeHoldTarget = null;
-    }, REMOVE_HOLD_DURATION_MS);
+    removeHoldActive = true;
+    removeHoldElapsed = 0;
+    clearRemovalHoldReset();
+    removalHold.setState({ active: true, progress: 0 });
   };
 
   const handleRemoveHoldStart = () => {
@@ -250,14 +251,10 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
   };
 
   const handleRemoveHoldEnd = () => {
-    if (removeHoldTimeout === null && !removeHoldTriggered) {
-      cancelRemoveHold();
-      return;
-    }
-    const triggered = removeHoldTriggered;
+    const wasTriggered = removeHoldTriggered;
     cancelRemoveHold();
-    if (!triggered) {
-      handlePlace();
+    if (!wasTriggered) {
+      return;
     }
   };
 
@@ -291,7 +288,7 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
     removeBlock(target);
   };
 
-  noa.inputs.bind('build-place', ['Mouse2']);
+  noa.inputs.bind('build-place', ['Mouse3']);
   noa.inputs.bind('build-place-alt', ['Enter']);
   noa.inputs.bind('build-remove-hold', ['Mouse1']);
   noa.inputs.bind('build-remove-alt', ['KeyX']);
@@ -348,5 +345,35 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
     mesh.isVisible = true;
     mesh.material = available ? ghost.materialValid : ghost.materialInvalid;
     setGhostTransform(mesh, target, orientation);
+  });
+
+  noa.on('tick', (dt: number) => {
+    // `dt` is provided in milliseconds by MicroGameShell's fixed tick loop.
+    if (!removeHoldActive || !removeHoldTarget) {
+      return;
+    }
+    if (overlay.controller.getState().captureInput) {
+      cancelRemoveHold();
+      return;
+    }
+    const [x, y, z] = removeHoldTarget.position;
+    if (noa.world.getBlockID(x, y, z) === 0) {
+      cancelRemoveHold();
+      return;
+    }
+    removeHoldElapsed += dt;
+    const progress = Math.min(1, removeHoldElapsed / REMOVE_HOLD_DURATION_MS);
+    removalHold.setState({ active: true, progress });
+    if (removeHoldElapsed < REMOVE_HOLD_DURATION_MS) {
+      return;
+    }
+    removeBlock(removeHoldTarget);
+    removeHoldTriggered = true;
+    cancelRemoveHold(true, false);
+    removalHold.setState({ active: false, progress: 1 });
+    removalHoldResetTimeout = setTimeout(() => {
+      removalHold.setState({ active: false, progress: 0 });
+      removalHoldResetTimeout = null;
+    }, 160);
   });
 }

@@ -15,6 +15,6 @@ Este diretório consolida todo o registro de blocos “de gameplay” do slice E
 1. Execute `pnpm dev` e entre no jogo.
 2. Use as teclas `1–4` ou scroll para selecionar um bloco da hotbar.
 3. Posicione o fantasma onde queira instanciar e clique para colocar.
-4. Remover blocos com `Mouse2`/`X` garante que o catálogo limpe as orientações registradas.
+4. Remover blocos com `Mouse1` (segurar) ou `X` garante que o catálogo limpe as orientações registradas.
 
 Qualquer novo bloco deve ser adicionado aqui, mantendo o registro centralizado e documentado.

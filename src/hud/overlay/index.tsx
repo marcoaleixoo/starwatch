@@ -7,9 +7,11 @@ import type { EnergySystem } from '../../systems/energy';
 import type { SectorResources } from '../../sector';
 import type { VoxelPosition } from '../../systems/energy/energy-network-manager';
 import { LookAtTracker } from '../look-at-tracker';
+import { RemovalHoldTracker } from '../removal-hold-tracker';
 
 export interface OverlayApi {
   controller: OverlayController;
+  removalHold: RemovalHoldTracker;
   destroy(): void;
 }
 
@@ -28,6 +30,7 @@ export function initializeOverlay(noa: Engine, deps: OverlayDependencies): Overl
   const controller = new OverlayController();
   const root: Root = createRoot(mountNode);
   const lookAt = new LookAtTracker();
+  const removalHold = new RemovalHoldTracker();
 
   controller.registerCaptureHandler((capture) => {
     const canvas = noa.container.canvas;
@@ -50,6 +53,7 @@ export function initializeOverlay(noa: Engine, deps: OverlayDependencies): Overl
       hotbarController={deps.hotbarController}
       energy={deps.energy}
       lookAt={lookAt}
+      removalHold={removalHold}
     />,
   );
 
@@ -136,6 +140,7 @@ export function initializeOverlay(noa: Engine, deps: OverlayDependencies): Overl
 
   const api: OverlayApi = {
     controller,
+    removalHold,
     destroy() {
       window.removeEventListener('keydown', handleKeyDown, true);
       noa.off('beforeRender', updateLookAt);

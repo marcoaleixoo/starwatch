@@ -117,6 +117,27 @@ export function initializeEnergySystem(noa: Engine, sector: SectorResources): En
 
   let tickAccumulator = 0;
 
+  const registerDecksInChunk = (chunk: any) => {
+    if (!chunk || typeof chunk.size !== 'number' || !chunk.voxels) {
+      return;
+    }
+    const size = chunk.size;
+    const voxels = chunk.voxels;
+    for (let i = 0; i < size; i += 1) {
+      for (let j = 0; j < size; j += 1) {
+        for (let k = 0; k < size; k += 1) {
+          if (voxels.get(i, j, k) !== deckBlockId) continue;
+          const worldX = chunk.x + i;
+          const worldY = chunk.y + j;
+          const worldZ = chunk.z + k;
+          networks.addDeck([worldX, worldY, worldZ]);
+        }
+      }
+    }
+  };
+
+  noa.world.on('chunkAdded', registerDecksInChunk);
+
   const emitUpdate = () => {
     version += 1;
     for (const listener of listeners) {
