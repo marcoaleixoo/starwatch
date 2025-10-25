@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://starwatch.dev/schemas/sector-snapshot.schema.json",
+  "title": "SectorSnapshot",
+  "type": "object",
+  "required": ["schemaVersion", "player", "sector", "construction", "hotbar"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "player": {
+      "type": "object",
+      "required": ["id", "lastSeenIso"],
+      "properties": {
+        "id": { "type": "string" },
+        "lastSeenIso": { "type": "string", "format": "date-time" }
+      }
+    },
+    "sector": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string" },
+        "seed": { "type": "integer" }
+      }
+    },
+    "construction": {
+      "type": "object",
+      "required": ["decks", "solarPanels", "batteries", "terminals"],
+      "properties": {
+        "decks": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/positionEntry" }
+        },
+        "solarPanels": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/orientedEntry" }
+        },
+        "batteries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["position", "storedMJ", "capacityMJ"],
+            "properties": {
+              "position": { "$ref": "#/definitions/voxelPosition" },
+              "storedMJ": { "type": "number" },
+              "capacityMJ": { "type": "number" }
+            }
+          }
+        },
+        "terminals": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/orientedEntry" }
+        }
+      }
+    },
+    "hotbar": {
+      "type": "object",
+      "required": ["activeIndex", "slotItemIds"],
+      "properties": {
+        "activeIndex": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "slotItemIds": {
+          "type": "array",
+          "items": { "type": ["string", "null"] },
+          "minItems": 9,
+          "maxItems": 9
+        }
+      }
+    }
+  },
+  "definitions": {
+    "voxelPosition": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "positionEntry": {
+      "type": "object",
+      "required": ["position"],
+      "properties": {
+        "position": { "$ref": "#/definitions/voxelPosition" }
+      }
+    },
+    "orientedEntry": {
+      "type": "object",
+      "required": ["position"],
+      "properties": {
+        "position": { "$ref": "#/definitions/voxelPosition" },
+        "orientation": { "type": "string" }
+      }
+    }
+  }
+}
