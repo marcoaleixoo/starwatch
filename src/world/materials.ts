@@ -3,7 +3,7 @@ import terrainAtlasUrl from './assets/terrain_atlas.png';
 
 export interface WorldMaterials {
   dirt: string;
-  cloud: string;
+  asteroid: string;
 }
 
 export function registerWorldMaterials(noa: Engine): WorldMaterials {
@@ -14,13 +14,12 @@ export function registerWorldMaterials(noa: Engine): WorldMaterials {
     atlasIndex: 2,
   });
 
-  noa.registry.registerMaterial('cloud', {
-    color: [1, 1, 1, 0.45],
-    transparent: true,
+  noa.registry.registerMaterial('asteroid', {
+    color: [0.58, 0.6, 0.62, 1],
   });
 
   return {
     dirt: 'dirt',
-    cloud: 'cloud',
+    asteroid: 'asteroid',
   };
 }

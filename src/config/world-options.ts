@@ -19,31 +19,87 @@ export const PLATFORM_HEIGHT = 0;
 export const PLAYER_SPAWN_POSITION: [number, number, number] = [0.5, 2.5, 0.5];
 
 /**
- * Altura média das nuvens/asteroides do anel distante.
- * Deve manter distância visível do jogador sem interferir na plataforma.
+ * Altura média das rochas (asteroides) do anel distante.
  */
-export const CLOUD_LAYER_ALTITUDE = 38;
+export const ASTEROID_LAYER_ALTITUDE = 46;
 
 /**
- * Espessura vertical do cinturão de nuvens (em blocos).
+ * Variação máxima (para cima/baixo) da altura dos asteroides.
  */
-export const CLOUD_LAYER_THICKNESS = 4;
+export const ASTEROID_HEIGHT_VARIATION = 8;
 
 /**
- * Raio interno a partir do qual começam as nuvens/asteroides.
+ * Raio interno a partir do qual começam os asteroides.
  */
-export const CLOUD_RING_INNER_RADIUS = 40;
+export const ASTEROID_RING_INNER_RADIUS = 60;
 
 /**
- * Densidade mínima (0–1) do ruído procedural para instanciar uma nuvem.
+ * Densidade mínima (0–1) do ruído procedural para instanciar um asteroide.
  */
-export const CLOUD_DENSITY_THRESHOLD = 0.72;
+export const ASTEROID_DENSITY_THRESHOLD = 0.38;
 
 /**
- * Raio externo do cinturão de nuvens, ajustado conforme o target de render.
- * Mantemos margem de 40 blocos para evitar pop-in no limite da draw distance.
+ * Probabilidade de spawn de um asteroide dentro de uma célula candidata.
  */
-export const CLOUD_RING_OUTER_RADIUS = Math.max(
-  CLOUD_RING_INNER_RADIUS + 20,
+export const ASTEROID_CENTER_PROBABILITY = 0.42;
+
+/**
+ * Tamanho da célula (em blocos) usada para amostrar centros de asteroides.
+ */
+export const ASTEROID_CELL_SIZE = 18;
+
+/**
+ * Margem extra usada ao calcular células vizinhas que podem afetar o chunk.
+ */
+export const ASTEROID_CELL_MARGIN = 10;
+
+/**
+ * Alcance máximo ao longo do eixo principal do asteroide.
+ */
+export const ASTEROID_MAJOR_RADIUS = 10;
+
+/**
+ * Alcance transversal (eixo curto) do asteroide.
+ */
+export const ASTEROID_MINOR_RADIUS = 6;
+
+/**
+ * Alcance vertical (meia altura) do asteroide.
+ */
+export const ASTEROID_VERTICAL_RADIUS = 7;
+
+/**
+ * Número de aglomerados (sub-porções) por asteroide.
+ */
+export const ASTEROID_CLUMP_COUNT = {
+  min: 4,
+  max: 6,
+} as const;
+
+/**
+ * Quantidade total de blocos por asteroide (12–18 blocos, quebrados em clumps).
+ */
+export const ASTEROID_BLOCK_COUNT = {
+  min: 12,
+  max: 18,
+} as const;
+
+/**
+ * Escalas de ruído usadas na decisão de spawn.
+ */
+export const ASTEROID_NOISE_PROFILE = {
+  scaleA: 160,
+  weightA: 0.6,
+  scaleB: 120,
+  weightB: 0.25,
+  scaleC: 90,
+  weightC: 0.15,
+} as const;
+
+/**
+ * Raio externo do cinturão de asteroides, ajustado conforme draw distance.
+ */
+export const ASTEROID_RING_OUTER_RADIUS = Math.max(
+  ASTEROID_RING_INNER_RADIUS + ASTEROID_MAJOR_RADIUS,
   TARGET_VIEW_DISTANCE_BLOCKS - 40,
 );

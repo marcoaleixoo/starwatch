@@ -3,7 +3,7 @@ import type { WorldMaterials } from './materials';
 
 export interface WorldBlocks {
   dirt: number;
-  cloud: number;
+  asteroid: number;
 }
 
 export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): WorldBlocks {
@@ -16,15 +16,15 @@ export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): Wor
     solid: true,
   });
 
-  const cloud = noa.registry.registerBlock(blockId++, {
-    material: materials.cloud,
-    solid: false,
-    opaque: false,
-    blockLight: false,
+  const asteroid = noa.registry.registerBlock(blockId++, {
+    material: materials.asteroid,
+    solid: true,
+    opaque: true,
+    blockLight: true,
   });
 
   return {
     dirt,
-    cloud,
+    asteroid,
   };
 }
