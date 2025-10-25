@@ -2,9 +2,15 @@ import type { Engine } from 'noa-engine';
 import terrainAtlasUrl from './assets/terrain_atlas.png';
 import { ASTEROID_VARIANTS } from '../config/world-options';
 
+export interface AsteroidMaterialDescriptor {
+  id: string;
+  weight: number;
+  materialName: string;
+}
+
 export interface WorldMaterials {
   dirt: string;
-  asteroidVariants: string[];
+  asteroidVariants: AsteroidMaterialDescriptor[];
 }
 
 export function registerWorldMaterials(noa: Engine): WorldMaterials {
@@ -20,7 +26,11 @@ export function registerWorldMaterials(noa: Engine): WorldMaterials {
     noa.registry.registerMaterial(materialName, {
       color: variant.color,
     });
-    return materialName;
+    return {
+      id: variant.id,
+      weight: variant.weight,
+      materialName,
+    };
   });
 
   return {

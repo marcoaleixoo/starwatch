@@ -1,32 +1,44 @@
 import type { Engine } from 'noa-engine';
 import type { WorldMaterials } from './materials';
-import { ASTEROID_VARIANTS } from '../config/world-options';
+
+export interface AsteroidBlockDescriptor {
+  id: string;
+  weight: number;
+  materialName: string;
+  blockId: number;
+}
 
 export interface WorldBlocks {
   dirt: number;
-  asteroidVariants: number[];
+  asteroidVariants: AsteroidBlockDescriptor[];
 }
 
 export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): WorldBlocks {
   console.log('[starwatch] registrando blocos do mundo');
 
-  let blockId = 1;
-
-  const dirt = noa.registry.registerBlock(blockId++, {
+  const dirt = noa.registry.registerBlock(1, {
     material: materials.dirt,
     solid: true,
   });
 
-  const asteroidVariantBlocks = materials.asteroidVariants.map((materialName, index) => {
-    const blockName = `asteroid-${ASTEROID_VARIANTS[index]?.id ?? index}`;
-    return noa.registry.registerBlock(blockId++, {
-      material: materialName,
+  let nextBlockId = 2;
+
+  const asteroidVariantBlocks = materials.asteroidVariants.map((variant) => {
+    const blockId = noa.registry.registerBlock(nextBlockId, {
+      material: variant.materialName,
       solid: true,
       opaque: true,
       blockLight: true,
       hardness: 3,
-      displayName: blockName,
+      displayName: `asteroid-${variant.id}`,
     });
+    nextBlockId += 1;
+    return {
+      id: variant.id,
+      weight: variant.weight,
+      materialName: variant.materialName,
+      blockId,
+    };
   });
 
   return {
