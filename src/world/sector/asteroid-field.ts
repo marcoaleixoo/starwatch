@@ -139,6 +139,8 @@ export class AsteroidField {
 
   private readonly meshController: AsteroidMeshController;
 
+  private readonly cellClusterCache = new Map<string, AsteroidCluster[]>();
+
   constructor(noa: Engine, materialIds: AsteroidMaterialIds, options?: { sectorSeed?: string }) {
     this.noa = noa;
     this.materialIds = materialIds;
@@ -213,7 +215,7 @@ export class AsteroidField {
   }
 
   getCacheStats(): { cachedChunks: number; queueSize: number } {
-    return { cachedChunks: 0, queueSize: 0 };
+    return { cachedChunks: this.cellClusterCache.size, queueSize: 0 };
   }
 
   getClustersWithinRadius(center: Vector3, radius: number): AsteroidCluster[] {
@@ -357,21 +359,57 @@ export class AsteroidField {
 
     for (let cx = cellMinX; cx <= cellMaxX; cx += 1) {
       for (let cz = cellMinZ; cz <= cellMaxZ; cz += 1) {
-        this.tryAddClusterForCell(cx, cz, min, max, clusters, seen);
+        const cellClusters = this.getClustersForCell(cx, cz);
+        for (let i = 0; i < cellClusters.length; i += 1) {
+          const cluster = cellClusters[i];
+          if (seen.has(cluster.hash)) {
+            continue;
+          }
+          if (!this.clusterIntersectsBounds(cluster, min, max)) {
+            continue;
+          }
+          const storedMode = this.clusterModes.get(cluster.hash);
+          cluster.mode = storedMode ?? cluster.mode;
+          seen.add(cluster.hash);
+          clusters.push(cluster);
+        }
       }
     }
 
     return clusters;
   }
 
-  private tryAddClusterForCell(
-    cellX: number,
-    cellZ: number,
-    boundsMin: Vector3,
-    boundsMax: Vector3,
-    clusters: AsteroidCluster[],
-    seen: Set<string>,
-  ) {
+  private getClustersForCell(cellX: number, cellZ: number): AsteroidCluster[] {
+    const key = `${cellX}:${cellZ}`;
+    const cached = this.cellClusterCache.get(key);
+    if (cached) {
+      return cached;
+    }
+    const generated = this.buildClustersForCell(cellX, cellZ);
+    this.cellClusterCache.set(key, generated);
+    return generated;
+  }
+
+  private clusterIntersectsBounds(cluster: AsteroidCluster, min: Vector3, max: Vector3): boolean {
+    const maxSurfaceRadius = cluster.maxSurfaceRadius;
+    const minX = cluster.center.x - maxSurfaceRadius;
+    const maxX = cluster.center.x + maxSurfaceRadius;
+    const minY = cluster.center.y - maxSurfaceRadius;
+    const maxY = cluster.center.y + maxSurfaceRadius;
+    const minZ = cluster.center.z - maxSurfaceRadius;
+    const maxZ = cluster.center.z + maxSurfaceRadius;
+    return !(
+      maxX < min.x ||
+      minX > max.x ||
+      maxY < min.y ||
+      minY > max.y ||
+      maxZ < min.z ||
+      minZ > max.z
+    );
+  }
+
+  private buildClustersForCell(cellX: number, cellZ: number): AsteroidCluster[] {
+    const clusters: AsteroidCluster[] = [];
     const cellSeed = `${this.sectorSeed}:${cellX}:${cellZ}`;
     const random = new SeededRandom(cellSeed);
     const cellOriginX = cellX * CLUSTER_CELL_SIZE;
@@ -381,10 +419,10 @@ export class AsteroidField {
     const horizontalDistance = Math.sqrt(candidateX * candidateX + candidateZ * candidateZ);
     const zone = this.resolveZone(horizontalDistance);
     if (!zone) {
-      return;
+      return clusters;
     }
     if (random.next() > zone.spawnProbability) {
-      return;
+      return clusters;
     }
 
     const attempts = 1;
@@ -398,29 +436,6 @@ export class AsteroidField {
       );
       const candidate = this.createCluster(cellSeed, attempt, center, radius, zone, random);
       if (!candidate) {
-        continue;
-      }
-
-      const maxSurfaceRadius = candidate.maxSurfaceRadius;
-      const minX = candidate.center.x - maxSurfaceRadius;
-      const maxX = candidate.center.x + maxSurfaceRadius;
-      const minY = candidate.center.y - maxSurfaceRadius;
-      const maxY = candidate.center.y + maxSurfaceRadius;
-      const minZ = candidate.center.z - maxSurfaceRadius;
-      const maxZ = candidate.center.z + maxSurfaceRadius;
-
-      if (
-        maxX < boundsMin.x ||
-        minX > boundsMax.x ||
-        maxY < boundsMin.y ||
-        minY > boundsMax.y ||
-        maxZ < boundsMin.z ||
-        minZ > boundsMax.z
-      ) {
-        continue;
-      }
-
-      if (seen.has(candidate.hash)) {
         continue;
       }
 
@@ -440,9 +455,10 @@ export class AsteroidField {
         continue;
       }
 
-      seen.add(candidate.hash);
       clusters.push(candidate);
     }
+
+    return clusters;
   }
 
   private resolveZone(distance: number): ZoneConfig | null {

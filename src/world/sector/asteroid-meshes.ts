@@ -15,12 +15,17 @@ interface ClusterMeshData {
   phases: number[];
   speeds: number[];
   amplitudes: number[];
+  globalCenter: Vector3;
 }
 
 export class AsteroidMeshController {
   private readonly baseMesh: Mesh;
 
   private readonly clusters = new Map<string, ClusterMeshData>();
+
+  private readonly globalScratch: [number, number, number] = [0, 0, 0];
+
+  private readonly localScratch: [number, number, number] = [0, 0, 0];
 
   constructor(private readonly noa: Engine) {
     const scene = noa.rendering.getScene();
@@ -42,7 +47,7 @@ export class AsteroidMeshController {
 
     const scene = this.noa.rendering.getScene();
     const parent = new TransformNode(`cluster-mesh-${cluster.hash}`, scene);
-    parent.position = cluster.center.clone();
+    parent.position.set(0, 0, 0);
 
     const random = new SeededRandom(cluster.hash);
     const instances: AbstractMesh[] = [];
@@ -79,6 +84,7 @@ export class AsteroidMeshController {
       phases,
       speeds,
       amplitudes,
+      globalCenter: cluster.center.clone(),
     });
   }
 
@@ -98,6 +104,17 @@ export class AsteroidMeshController {
     }
     const delta = dt / 1000;
     for (const entry of this.clusters.values()) {
+      this.globalScratch[0] = entry.globalCenter.x;
+      this.globalScratch[1] = entry.globalCenter.y;
+      this.globalScratch[2] = entry.globalCenter.z;
+      const local = this.noa.globalToLocal(
+        this.globalScratch,
+        null,
+        this.localScratch,
+      ) as [number, number, number];
+      entry.parent.position.x = local[0];
+      entry.parent.position.y = local[1];
+      entry.parent.position.z = local[2];
       for (let i = 0; i < entry.instances.length; i += 1) {
         entry.phases[i] += entry.speeds[i] * delta;
         const base = entry.baseOffsets[i];

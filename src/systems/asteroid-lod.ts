@@ -1,7 +1,7 @@
 import { Engine } from 'noa-engine';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { TickSystem } from '../core/loop';
-import type { AsteroidField } from '../world/sector/asteroid-field';
+import type { AsteroidCluster, AsteroidField } from '../world/sector/asteroid-field';
 import {
   getRenderSettings,
   subscribeRenderSettings,
@@ -12,6 +12,7 @@ interface LODCluster {
   hash: string;
   mode: 'mesh' | 'voxel';
   center: Vector3;
+  cluster: AsteroidCluster;
 }
 
 export function initializeAsteroidLOD(
@@ -65,21 +66,27 @@ export function initializeAsteroidLOD(
         if (!state) {
           const mode = distance <= voxelRadiusBlocks ? 'voxel' : 'mesh';
           field.setClusterMode(cluster, mode);
-          lodState.set(hash, { hash, mode, center: cluster.center.clone() });
+          lodState.set(hash, { hash, mode, center: cluster.center.clone(), cluster });
           continue;
         }
 
+        state.cluster = cluster;
+        state.center.copyFrom(cluster.center);
+
         if (state.mode === 'mesh' && distance <= voxelRadiusBlocks) {
           field.setClusterMode(cluster, 'voxel');
-          lodState.set(hash, { hash, mode: 'voxel', center: cluster.center.clone() });
+          state.mode = 'voxel';
+          state.center.copyFrom(cluster.center);
         } else if (state.mode === 'voxel' && distance >= meshRadiusBlocks) {
           field.setClusterMode(cluster, 'mesh');
-          lodState.set(hash, { hash, mode: 'mesh', center: cluster.center.clone() });
+          state.mode = 'mesh';
+          state.center.copyFrom(cluster.center);
         }
       }
 
-      for (const [hash] of Array.from(lodState.entries())) {
+      for (const [hash, state] of Array.from(lodState.entries())) {
         if (!seen.has(hash)) {
+          field.setClusterMode(state.cluster, 'voxel');
           lodState.delete(hash);
         }
       }
