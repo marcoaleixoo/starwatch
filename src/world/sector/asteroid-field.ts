@@ -2,6 +2,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Engine } from 'noa-engine';
 import { SeededRandom } from '../../utils/seeded-random';
 import { GRID_UNIT_METERS } from '../../config/constants';
+import { RENDER_SETTINGS_DEFAULTS } from '../../config/render-settings';
 
 export interface AsteroidMaterialIds {
   stone: number;
@@ -48,75 +49,92 @@ export interface AsteroidCluster {
 
 const CHUNK_SIZE = 32;
 const BLOCKS_PER_KM = 1000 / GRID_UNIT_METERS;
-const PROTOTYPE_DISTANCE_SCALE = 0.00075; // compress orbital rings so inner belt stays inside default render range
-const PROTOTYPE_SIZE_SCALE = 0.005; // shrink prototype asteroid radius further to curb chunk budgets
-const MIN_CLUSTER_CELL_SIZE = CHUNK_SIZE * 8;
-const BASE_CLUSTER_CELL_SIZE = 4096;
-const CLUSTER_CELL_SIZE = Math.max(
-  MIN_CLUSTER_CELL_SIZE,
-  Math.round(BASE_CLUSTER_CELL_SIZE * PROTOTYPE_DISTANCE_SCALE * 1.6),
-);
+const CLUSTER_CELL_SIZE = 4096; // 4 km cells for cluster sampling
 const CLUSTER_SEPARATION_RATIO = 0.62; // express desired clearance relative to blob envelopes
-const CLUSTER_SEPARATION_PADDING = 28; // blocks; ensures a visible gap even for small asteroids
+const CLUSTER_SEPARATION_PADDING = 40; // blocks; ensures a visible gap even for small asteroids
 
-const kmToBlocksDistance = (km: number) =>
-  Math.max(1, Math.round(km * BLOCKS_PER_KM * PROTOTYPE_DISTANCE_SCALE));
-const kmToBlocksSize = (km: number) =>
-  Math.max(1, Math.round(km * BLOCKS_PER_KM * PROTOTYPE_SIZE_SCALE));
+const kmToBlocksDistance = (km: number) => Math.max(1, Math.round(km * BLOCKS_PER_KM));
+const kmToBlocksSize = (km: number) => Math.max(1, Math.round(km * BLOCKS_PER_KM));
+const kmToBlocksSigned = (km: number) => Math.round(km * BLOCKS_PER_KM);
 
-const ZONES: ZoneConfig[] = [
+const DEFAULT_ZONE_SETTINGS = [
   {
     id: 'inner',
-    minDistance: kmToBlocksDistance(100),
-    maxDistance: kmToBlocksDistance(400),
+    minDistanceKm: 2,
+    maxDistanceKm: 10,
     spawnProbability: 0.58,
-    radiusRange: [kmToBlocksSize(0.6), kmToBlocksSize(1.6)],
-    verticalRange: [-kmToBlocksDistance(25), kmToBlocksDistance(25)],
+    radiusRangeKm: [0.008, 0.02],
+    verticalRangeKm: [-3, 3],
     materials: [
       { key: 'stone', weight: 0.6 },
       { key: 'copper', weight: 0.25 },
       { key: 'iron', weight: 0.15 },
     ],
     asteroidCountRange: [8, 14],
-    asteroidRadiusScale: [0.22, 0.38],
+    asteroidRadiusScale: [0.25, 0.42],
     voidCountRange: [0, 1],
-    voidRadiusScale: [0.2, 0.45],
+    voidRadiusScale: [0.18, 0.35],
   },
   {
     id: 'mid',
-    minDistance: kmToBlocksDistance(400),
-    maxDistance: kmToBlocksDistance(1200),
+    minDistanceKm: 10,
+    maxDistanceKm: 25,
     spawnProbability: 0.46,
-    radiusRange: [kmToBlocksSize(1.2), kmToBlocksSize(3.2)],
-    verticalRange: [-kmToBlocksDistance(45), kmToBlocksDistance(45)],
+    radiusRangeKm: [0.02, 0.05],
+    verticalRangeKm: [-5, 5],
     materials: [
       { key: 'stone', weight: 0.5 },
       { key: 'iron', weight: 0.3 },
       { key: 'copper', weight: 0.2 },
     ],
     asteroidCountRange: [10, 18],
-    asteroidRadiusScale: [0.26, 0.42],
+    asteroidRadiusScale: [0.3, 0.48],
     voidCountRange: [0, 2],
     voidRadiusScale: [0.25, 0.4],
   },
   {
     id: 'outer',
-    minDistance: kmToBlocksDistance(1200),
-    maxDistance: kmToBlocksDistance(2000),
+    minDistanceKm: 25,
+    maxDistanceKm: 50,
     spawnProbability: 0.32,
-    radiusRange: [kmToBlocksSize(2.0), kmToBlocksSize(5.0)],
-    verticalRange: [-kmToBlocksDistance(65), kmToBlocksDistance(65)],
+    radiusRangeKm: [0.04, 0.09],
+    verticalRangeKm: [-8, 8],
     materials: [
       { key: 'stone', weight: 0.4 },
       { key: 'iron', weight: 0.35 },
       { key: 'copper', weight: 0.25 },
     ],
     asteroidCountRange: [14, 24],
-    asteroidRadiusScale: [0.28, 0.45],
+    asteroidRadiusScale: [0.32, 0.5],
     voidCountRange: [1, 3],
     voidRadiusScale: [0.25, 0.45],
   },
-];
+] as const;
+
+const zoneSettings = RENDER_SETTINGS_DEFAULTS.asteroidZones ?? DEFAULT_ZONE_SETTINGS;
+
+const ZONES: ZoneConfig[] = zoneSettings.map((zone) => ({
+  id: zone.id,
+  minDistance: kmToBlocksDistance(zone.minDistanceKm),
+  maxDistance: kmToBlocksDistance(zone.maxDistanceKm),
+  spawnProbability: zone.spawnProbability,
+  radiusRange: [
+    kmToBlocksSize(zone.radiusRangeKm[0]),
+    kmToBlocksSize(zone.radiusRangeKm[1]),
+  ],
+  verticalRange: [
+    kmToBlocksSigned(zone.verticalRangeKm[0]),
+    kmToBlocksSigned(zone.verticalRangeKm[1]),
+  ],
+  materials: (zone.materials ?? []).map((mat) => ({
+    key: mat.key as keyof AsteroidMaterialIds,
+    weight: mat.weight,
+  })),
+  asteroidCountRange: [zone.asteroidCountRange[0], zone.asteroidCountRange[1]],
+  asteroidRadiusScale: [zone.asteroidRadiusScale[0], zone.asteroidRadiusScale[1]],
+  voidCountRange: [zone.voidCountRange[0], zone.voidCountRange[1]],
+  voidRadiusScale: [zone.voidRadiusScale[0], zone.voidRadiusScale[1]],
+}));
 
 const MAX_CLUSTER_RADIUS = Math.ceil(
   Math.max(...ZONES.map((zone) => zone.radiusRange[1] * 2.1)),
