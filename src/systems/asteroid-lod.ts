@@ -2,10 +2,11 @@ import { Engine } from 'noa-engine';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { TickSystem } from '../core/loop';
 import type { AsteroidField } from '../world/sector/asteroid-field';
-
-const VOXEL_LOD_RADIUS = 24 * 32; // blocks (≈12 chunks)
-const MESH_LOD_RADIUS = 32 * 32; // blocks (≈18 chunks)
-const LOD_SEARCH_RADIUS = MESH_LOD_RADIUS + 4096;
+import {
+  getRenderSettings,
+  subscribeRenderSettings,
+  type RenderSettingsState,
+} from '../config/render-settings';
 
 interface LODCluster {
   hash: string;
@@ -16,8 +17,30 @@ interface LODCluster {
 export function initializeAsteroidLOD(
   noa: Engine,
   field: AsteroidField,
+  options?: { chunkSize?: number },
 ): TickSystem {
   const lodState = new Map<string, LODCluster>();
+  const chunkSize =
+    options?.chunkSize ??
+    ((noa.world as unknown as { _chunkSize?: number })._chunkSize ?? 32);
+
+  let voxelRadiusBlocks = 0;
+  let meshRadiusBlocks = 0;
+  let searchRadiusBlocks = 0;
+
+  const applySettings = (settings: RenderSettingsState) => {
+    voxelRadiusBlocks = settings.asteroidVoxelLodChunks * chunkSize;
+    meshRadiusBlocks = settings.asteroidMeshLodChunks * chunkSize;
+    searchRadiusBlocks = meshRadiusBlocks + settings.asteroidSearchMarginChunks * chunkSize;
+    console.log(
+      `[AsteroidLOD] thresholds -> voxel:${settings.asteroidVoxelLodChunks.toFixed(0)}c mesh:${settings.asteroidMeshLodChunks.toFixed(
+        0,
+      )}c search margin:${settings.asteroidSearchMarginChunks.toFixed(0)}c`,
+    );
+  };
+
+  applySettings(getRenderSettings());
+  subscribeRenderSettings(applySettings);
 
   const getPlayerPosition = () => {
     const pos = noa.entities.getPositionData(noa.playerEntity).position;
@@ -29,7 +52,7 @@ export function initializeAsteroidLOD(
     update: (dt: number) => {
       field.updateMeshes(dt);
       const playerPos = getPlayerPosition();
-      const clusters = field.getClustersWithinRadius(playerPos, LOD_SEARCH_RADIUS);
+      const clusters = field.getClustersWithinRadius(playerPos, searchRadiusBlocks);
       const seen = new Set<string>();
 
       for (let i = 0; i < clusters.length; i += 1) {
@@ -40,16 +63,16 @@ export function initializeAsteroidLOD(
         const distance = Vector3.Distance(cluster.center, playerPos);
 
         if (!state) {
-          const mode = distance <= VOXEL_LOD_RADIUS ? 'voxel' : 'mesh';
+          const mode = distance <= voxelRadiusBlocks ? 'voxel' : 'mesh';
           field.setClusterMode(cluster, mode);
           lodState.set(hash, { hash, mode, center: cluster.center.clone() });
           continue;
         }
 
-        if (state.mode === 'mesh' && distance <= VOXEL_LOD_RADIUS) {
+        if (state.mode === 'mesh' && distance <= voxelRadiusBlocks) {
           field.setClusterMode(cluster, 'voxel');
           lodState.set(hash, { hash, mode: 'voxel', center: cluster.center.clone() });
-        } else if (state.mode === 'voxel' && distance >= MESH_LOD_RADIUS) {
+        } else if (state.mode === 'voxel' && distance >= meshRadiusBlocks) {
           field.setClusterMode(cluster, 'mesh');
           lodState.set(hash, { hash, mode: 'mesh', center: cluster.center.clone() });
         }

@@ -65,21 +65,436 @@
       </button>
       <div id="render-settings" class="drawer" aria-hidden="true">
         <header class="drawer__header">
-          <span>Render Distance</span>
-          <span id="render-settings-distance-readout" class="drawer__value">0.0 chunks</span>
+          <span>Streaming</span>
+          <span id="render-settings-summary" class="drawer__value">H -- • V --</span>
         </header>
-        <label class="drawer__field" for="render-settings-distance">
-          <span>Horizonte</span>
+        <header class="drawer__section">
+          <span>Chunk Streaming</span>
+        </header>
+        <label class="drawer__field" for="render-settings-horizontal">
+          <div class="drawer__label">
+            <span>Horizonte (Add)</span>
+            <button
+              type="button"
+              class="drawer__info"
+              aria-label="Explicar horizonte (add)"
+              aria-expanded="false"
+              aria-controls="render-popover-horizontal"
+              data-popover-target="render-popover-horizontal"
+            >
+              ?
+            </button>
+          </div>
+          <div
+            class="drawer__popover"
+            id="render-popover-horizontal"
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p>Quantidade de colunas horizontais de chunks carregadas em volta do jogador. Valores maiores reduzem o pop-in quando você avança.</p>
+          </div>
           <input
-            id="render-settings-distance"
+            id="render-settings-horizontal"
             type="range"
             min="1"
-            max="40"
+            max="96"
+            step="1"
+            value="20"
+          />
+        </label>
+        <p id="render-settings-horizontal-readout" class="drawer__hint"></p>
+        <label class="drawer__field" for="render-settings-vertical">
+          <div class="drawer__label">
+            <span>Vertical (Add)</span>
+            <button
+              type="button"
+              class="drawer__info"
+              aria-label="Explicar vertical (add)"
+              aria-expanded="false"
+              aria-controls="render-popover-vertical"
+              data-popover-target="render-popover-vertical"
+            >
+              ?
+            </button>
+          </div>
+          <div
+            class="drawer__popover"
+            id="render-popover-vertical"
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p>Número de camadas de chunks acima e abaixo do jogador. Aumente para ver estruturas altas ou asteroides suspensos sem precisar encostar.</p>
+          </div>
+          <input
+            id="render-settings-vertical"
+            type="range"
+            min="1"
+            max="96"
             step="1"
             value="16"
           />
         </label>
-        <p id="render-settings-hint" class="drawer__hint"></p>
+        <p id="render-settings-vertical-readout" class="drawer__hint"></p>
+        <label class="drawer__field" for="render-settings-remove-horizontal">
+          <div class="drawer__label">
+            <span>Margem Remoção H</span>
+            <button
+              type="button"
+              class="drawer__info"
+              aria-label="Explicar margem remoção horizontal"
+              aria-expanded="false"
+              aria-controls="render-popover-remove-horizontal"
+              data-popover-target="render-popover-remove-horizontal"
+            >
+              ?
+            </button>
+          </div>
+          <div
+            class="drawer__popover"
+            id="render-popover-remove-horizontal"
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p>Folga adicional antes de descartar chunks horizontais. Evita que o streaming feche atrás de você quando desacelera ou faz curvas.</p>
+          </div>
+          <input
+            id="render-settings-remove-horizontal"
+            type="range"
+            min="0"
+            max="12"
+            step="0.5"
+            value="2"
+          />
+        </label>
+        <p id="render-settings-remove-horizontal-readout" class="drawer__hint"></p>
+        <label class="drawer__field" for="render-settings-remove-vertical">
+          <div class="drawer__label">
+            <span>Margem Remoção V</span>
+            <button
+              type="button"
+              class="drawer__info"
+              aria-label="Explicar margem remoção vertical"
+              aria-expanded="false"
+              aria-controls="render-popover-remove-vertical"
+              data-popover-target="render-popover-remove-vertical"
+            >
+              ?
+            </button>
+          </div>
+          <div
+            class="drawer__popover"
+            id="render-popover-remove-vertical"
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p>Altura extra antes de liberar camadas verticais. Mantém asteroides superiores/inferiores visíveis enquanto você sobe ou desce.</p>
+          </div>
+          <input
+            id="render-settings-remove-vertical"
+            type="range"
+            min="0"
+            max="12"
+            step="0.5"
+            value="2"
+          />
+        </label>
+        <p id="render-settings-remove-vertical-readout" class="drawer__hint"></p>
+        <div class="drawer__divider"></div>
+        <header class="drawer__section">
+          <span>Asteroid LOD</span>
+        </header>
+        <label class="drawer__field" for="render-settings-voxel">
+          <div class="drawer__label">
+            <span>Voxel Distance</span>
+            <button
+              type="button"
+              class="drawer__info"
+              aria-label="Explicar voxel distance"
+              aria-expanded="false"
+              aria-controls="render-popover-voxel"
+              data-popover-target="render-popover-voxel"
+            >
+              ?
+            </button>
+          </div>
+          <div
+            class="drawer__popover"
+            id="render-popover-voxel"
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p>Raio em que cada asteroide alterna para voxels completos. Dentro dele você pode minerar superfícies detalhadas.</p>
+          </div>
+          <input
+            id="render-settings-voxel"
+            type="range"
+            min="4"
+            max="96"
+            step="1"
+            value="20"
+          />
+        </label>
+        <p id="render-settings-voxel-readout" class="drawer__hint"></p>
+        <label class="drawer__field" for="render-settings-mesh">
+          <div class="drawer__label">
+            <span>Mesh Distance</span>
+            <button
+              type="button"
+              class="drawer__info"
+              aria-label="Explicar mesh distance"
+              aria-expanded="false"
+              aria-controls="render-popover-mesh"
+              data-popover-target="render-popover-mesh"
+            >
+              ?
+            </button>
+          </div>
+          <div
+            class="drawer__popover"
+            id="render-popover-mesh"
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p>Limite máximo para manter voxels ativos. Acima desse raio os asteroides viram malhas simplificadas para economizar CPU.</p>
+          </div>
+          <input
+            id="render-settings-mesh"
+            type="range"
+            min="4"
+            max="128"
+            step="1"
+            value="28"
+          />
+        </label>
+        <p id="render-settings-mesh-readout" class="drawer__hint"></p>
+        <label class="drawer__field" for="render-settings-search-margin">
+          <div class="drawer__label">
+            <span>Busca Extra</span>
+            <button
+              type="button"
+              class="drawer__info"
+              aria-label="Explicar busca extra"
+              aria-expanded="false"
+              aria-controls="render-popover-search"
+              data-popover-target="render-popover-search"
+            >
+              ?
+            </button>
+          </div>
+          <div
+            class="drawer__popover"
+            id="render-popover-search"
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p>Margem adicional além do Mesh Distance usada para pré-buscar e cachear clusters. Aumente se notar asteroides aparecendo atrasados.</p>
+          </div>
+          <input
+            id="render-settings-search-margin"
+            type="range"
+            min="4"
+            max="256"
+            step="4"
+            value="128"
+          />
+        </label>
+        <p id="render-settings-search-margin-readout" class="drawer__hint"></p>
+        <div class="drawer__divider"></div>
+        <header class="drawer__section">
+          <span>Pipeline</span>
+        </header>
+        <label class="drawer__field" for="render-settings-processing-tick">
+          <div class="drawer__label">
+            <span>Tick Budget</span>
+            <button
+              type="button"
+              class="drawer__info"
+              aria-label="Explicar tick budget"
+              aria-expanded="false"
+              aria-controls="render-popover-processing-tick"
+              data-popover-target="render-popover-processing-tick"
+            >
+              ?
+            </button>
+          </div>
+          <div
+            class="drawer__popover"
+            id="render-popover-processing-tick"
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p>Tempo máximo (em ms) que o NOA pode gastar por tick processando geração/meshing. Aumente até começar a sentir queda de FPS.</p>
+          </div>
+          <input
+            id="render-settings-processing-tick"
+            type="range"
+            min="1"
+            max="32"
+            step="1"
+            value="18"
+          />
+        </label>
+        <p id="render-settings-processing-tick-readout" class="drawer__hint"></p>
+        <label class="drawer__field" for="render-settings-processing-render">
+          <div class="drawer__label">
+            <span>Render Budget</span>
+            <button
+              type="button"
+              class="drawer__info"
+              aria-label="Explicar render budget"
+              aria-expanded="false"
+              aria-controls="render-popover-processing-render"
+              data-popover-target="render-popover-processing-render"
+            >
+              ?
+            </button>
+          </div>
+          <div
+            class="drawer__popover"
+            id="render-popover-processing-render"
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p>Tempo extra reservado a cada frame para finalizar malhas prioritárias. Mantém tudo fluido enquanto você gira a câmera.</p>
+          </div>
+          <input
+            id="render-settings-processing-render"
+            type="range"
+            min="1"
+            max="16"
+            step="1"
+            value="8"
+          />
+        </label>
+        <p id="render-settings-processing-render-readout" class="drawer__hint"></p>
+        <label class="drawer__field" for="render-settings-creation-limit">
+          <div class="drawer__label">
+            <span>Chunks em Criação</span>
+            <button
+              type="button"
+              class="drawer__info"
+              aria-label="Explicar limite criação"
+              aria-expanded="false"
+              aria-controls="render-popover-creation-limit"
+              data-popover-target="render-popover-creation-limit"
+            >
+              ?
+            </button>
+          </div>
+          <div
+            class="drawer__popover"
+            id="render-popover-creation-limit"
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p>Número máximo de chunks esperando geração de dados. Suba para antecipar ainda mais o pré-carregamento.</p>
+          </div>
+          <input
+            id="render-settings-creation-limit"
+            type="range"
+            min="20"
+            max="400"
+            step="10"
+            value="160"
+          />
+        </label>
+        <p id="render-settings-creation-limit-readout" class="drawer__hint"></p>
+        <label class="drawer__field" for="render-settings-meshing-limit">
+          <div class="drawer__label">
+            <span>Chunks para Mesh</span>
+            <button
+              type="button"
+              class="drawer__info"
+              aria-label="Explicar limite mesh"
+              aria-expanded="false"
+              aria-controls="render-popover-meshing-limit"
+              data-popover-target="render-popover-meshing-limit"
+            >
+              ?
+            </button>
+          </div>
+          <div
+            class="drawer__popover"
+            id="render-popover-meshing-limit"
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p>Fila máxima de chunks aguardando meshing. Ajuste junto com o Tick Budget para controlar a cadência.</p>
+          </div>
+          <input
+            id="render-settings-meshing-limit"
+            type="range"
+            min="20"
+            max="400"
+            step="10"
+            value="160"
+          />
+        </label>
+        <p id="render-settings-meshing-limit-readout" class="drawer__hint"></p>
+        <label class="drawer__field" for="render-settings-neighbors">
+          <div class="drawer__label">
+            <span>Vizinhos p/ Mesh</span>
+            <button
+              type="button"
+              class="drawer__info"
+              aria-label="Explicar vizinhos"
+              aria-expanded="false"
+              aria-controls="render-popover-neighbors"
+              data-popover-target="render-popover-neighbors"
+            >
+              ?
+            </button>
+          </div>
+          <div
+            class="drawer__popover"
+            id="render-popover-neighbors"
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p>Quantidade mínima de chunks vizinhos antes de liberar o mesh. Zero = libera imediatamente (mais pop-in nas bordas, mas ultra-rápido).</p>
+          </div>
+          <input
+            id="render-settings-neighbors"
+            type="range"
+            min="0"
+            max="26"
+            step="1"
+            value="1"
+          />
+        </label>
+        <p id="render-settings-neighbors-readout" class="drawer__hint"></p>
+        <label class="drawer__field" for="render-settings-render-fps">
+          <div class="drawer__label">
+            <span>Render FPS Cap</span>
+            <button
+              type="button"
+              class="drawer__info"
+              aria-label="Explicar render FPS cap"
+              aria-expanded="false"
+              aria-controls="render-popover-render-fps"
+              data-popover-target="render-popover-render-fps"
+            >
+              ?
+            </button>
+          </div>
+          <div
+            class="drawer__popover"
+            id="render-popover-render-fps"
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p>Limite superior da taxa de renderização. Use 0 para seguir o VSync do navegador ou um valor alto (ex.: 1000) para liberar tudo.</p>
+          </div>
+          <input
+            id="render-settings-render-fps"
+            type="range"
+            min="0"
+            max="1000"
+            step="10"
+            value="1000"
+          />
+        </label>
+        <p id="render-settings-render-fps-readout" class="drawer__hint"></p>
         <div class="drawer__divider"></div>
         <header class="drawer__section">
           <span>Solar Controls</span>
@@ -109,7 +524,7 @@
         </label>
         <p id="render-settings-sun-size-readout" class="drawer__hint"></p>
         <p class="drawer__support">
-          Distâncias maiores mostram clusters mais distantes, mas podem custar FPS.
+          Distâncias maiores reduzem pop-in, mas aumentam custo de memória e mesh. Ajuste com carinho.
         </p>
       </div>
     </div>

@@ -7,6 +7,7 @@ import { SunEntity, DEFAULT_SUN_DISTANCE_BLOCKS } from './sun';
 import { AsteroidField, AsteroidMaterialIds } from './asteroid-field';
 import { SECTOR_SKYBOX_SYSTEM_ID, SECTOR_SUN_SYSTEM_ID } from '../../core/constants';
 import { initializeAsteroidLOD } from '../../systems/asteroid-lod';
+import { ENGINE_OPTIONS } from '../../config/constants';
 
 export interface SectorTickSystem {
   id: string;
@@ -109,7 +110,7 @@ export function initializeSector(
         solarRadiation.update();
       },
     },
-    initializeAsteroidLOD(noa, field),
+    initializeAsteroidLOD(noa, field, { chunkSize: ENGINE_OPTIONS.chunkSize ?? 32 }),
   ];
 
   return {

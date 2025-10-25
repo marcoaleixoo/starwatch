@@ -16,6 +16,11 @@ import { PersistenceManager } from '../persistence/manager';
 import { initializeRenderSettingsDrawer } from '../hud/render-settings';
 import { createPerformancePanel } from '../hud/performance-panel';
 import { initializePerformanceMonitor } from '../systems/performance-monitor';
+import {
+  initializeRenderSettings as initializeRenderSettingsState,
+  parseRenderSettings,
+  RENDER_SETTINGS_STORAGE_KEY,
+} from '../config/render-settings';
 
 export interface StarwatchContext {
   noa: Engine;
@@ -25,6 +30,14 @@ export interface StarwatchContext {
 }
 
 export function bootstrapStarwatch(): StarwatchContext {
+  if (typeof window !== 'undefined') {
+    const storedSettingsRaw = window.localStorage?.getItem(RENDER_SETTINGS_STORAGE_KEY) ?? null;
+    const storedSettings = parseRenderSettings(storedSettingsRaw);
+    initializeRenderSettingsState(storedSettings ?? undefined);
+  } else {
+    initializeRenderSettingsState();
+  }
+
   const noa = new Engine(ENGINE_OPTIONS);
   const persistence = new PersistenceManager(noa, 'sector.001');
 
@@ -59,13 +72,7 @@ export function bootstrapStarwatch(): StarwatchContext {
   });
 
   const chunkSize = ENGINE_OPTIONS.chunkSize ?? 32;
-  const horizontalDefault =
-    typeof ENGINE_OPTIONS.chunkAddDistance === 'number'
-      ? ENGINE_OPTIONS.chunkAddDistance
-      : Array.isArray(ENGINE_OPTIONS.chunkAddDistance)
-        ? ENGINE_OPTIONS.chunkAddDistance[0]
-        : 2.5;
-  initializeRenderSettingsDrawer(noa, chunkSize, { horizontal: horizontalDefault }, worldContext.sun);
+  initializeRenderSettingsDrawer(noa, chunkSize, worldContext.sun);
 
   const flightSystem = initializeFlightControls(noa);
   const performancePanel = createPerformancePanel();
