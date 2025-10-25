@@ -46,8 +46,11 @@ src/
   blocks/
     README.md
   config/
-    constants.ts
     engine-options.ts
+    player-options.ts
+    README.md
+    render-options.ts
+    world-options.ts
   core/
     bootstrap.ts
   engine/
@@ -106,9 +109,9 @@ src/
   utils/
     README.md
   world/
+    asteroid-noise.ts
     blocks.ts
     chunk-generator.ts
-    cloud-noise.ts
     index.ts
     materials.ts
   main.ts
@@ -141,24 +144,62 @@ Keep block definitions focused (one file per block family) and export factory fu
 the world initializer can call.
 </file>
 
-<file path="src/config/engine-options.ts">
-import type { Engine } from 'noa-engine';
+<file path="src/config/player-options.ts">
+/**
+ * Limites de zoom da câmera FPS. Consumido em `player/index.ts`.
+ */
+export const CAMERA_ZOOM_LIMITS = {
+  min: 0,
+  max: 10,
+  step: 0.5,
+} as const;
 
-export type EngineOptions = ConstructorParameters<typeof Engine>[0];
+/**
+ * Ajustes de movimentação básica do jogador (velocidade máxima, força de movimento).
+ */
+export const PLAYER_MOVEMENT = {
+  maxSpeed: 8,
+  moveForce: 35,
+} as const;
+</file>
 
-export const ENGINE_OPTIONS: EngineOptions = {
-  inverseY: false,
-  chunkSize: 32,
-  chunkAddDistance: [2.5, 2],
-  playerStart: [0.5, 2.5, 0.5],
-  playerAutoStep: true,
-  playerShadowComponent: false,
-  originRebaseDistance: 32,
-  stickyPointerLock: true,
-  dragCameraOutsidePointerLock: false,
-  maxRenderRate: 0,
-  blockTestDistance: 16,
-};
+<file path="src/config/README.md">
+# Config Options
+
+Todos os parâmetros ajustáveis do jogo vivem em arquivos `*-options.ts` neste diretório. Cada arquivo documenta onde os valores são consumidos:
+
+- `engine-options.ts`: opções passadas diretamente ao `noa-engine` durante o bootstrap (spawn, pointer lock, chunk size, etc.).
+- `render-options.ts`: draw distance, tamanho de chunk e distâncias de add/remove.
+- `world-options.ts`: plataforma inicial e cinturão de nuvens/asteroides.
+- `player-options.ts`: limites de zoom e parâmetros de movimentação do jogador.
+
+Novas features devem introduzir seu próprio arquivo `foo-options.ts` e importar as constantes correspondentes a partir dele.
+</file>
+
+<file path="src/config/render-options.ts">
+/**
+ * Distância alvo de renderização em blocos. Altere este valor para expandir
+ * ou reduzir o horizonte visual (chunk distance é recalculada automaticamente).
+ */
+export const TARGET_VIEW_DISTANCE_BLOCKS = 812;
+
+/**
+ * Tamanho base de cada chunk NOA (em blocos). Mantemos 32 como padrão do engine.
+ */
+export const CHUNK_SIZE = 32;
+
+const horizontalAdd = Math.max(2.5, TARGET_VIEW_DISTANCE_BLOCKS / CHUNK_SIZE);
+const verticalAdd = Math.max(2, horizontalAdd * 0.6);
+
+/**
+ * Distância de adição de chunks (horizontal, vertical) consumida pelo engine.
+ */
+export const CHUNK_ADD_DISTANCE: [number, number] = [horizontalAdd, verticalAdd];
+
+/**
+ * Distância de remoção (hysterese) para descarregar chunks fora de vista.
+ */
+export const CHUNK_REMOVE_DISTANCE: [number, number] = [horizontalAdd + 1, verticalAdd + 0.5];
 </file>
 
 <file path="src/engine/components/collideEntities.js">
@@ -7712,33 +7753,6 @@ Future save/load routines, snapshot sync and backend adapters belong here.
 Design APIs around async operations returning plain data so they can be unit tested easily.
 </file>
 
-<file path="src/player/index.ts">
-import type { Engine } from 'noa-engine';
-import { CAMERA_ZOOM_LIMITS, PLAYER_MOVEMENT } from '../config/constants';
-
-export function initializePlayer(noa: Engine): void {
-  const movement = noa.entities.getMovement(noa.playerEntity);
-  movement.maxSpeed = PLAYER_MOVEMENT.maxSpeed;
-  movement.moveForce = PLAYER_MOVEMENT.moveForce;
-
-  noa.inputs.bind('pause', 'KeyP');
-  let paused = false;
-  noa.inputs.down.on('pause', () => {
-    paused = !paused;
-    noa.setPaused(paused);
-    console.log('[starwatch] jogo %s', paused ? 'pausado' : 'retomado');
-  });
-
-  noa.on('tick', () => {
-    const scroll = noa.inputs.pointerState.scrolly;
-    if (scroll !== 0) {
-      noa.camera.zoomDistance += scroll > 0 ? CAMERA_ZOOM_LIMITS.step : -CAMERA_ZOOM_LIMITS.step;
-      noa.camera.zoomDistance = Math.min(Math.max(noa.camera.zoomDistance, CAMERA_ZOOM_LIMITS.min), CAMERA_ZOOM_LIMITS.max);
-    }
-  });
-}
-</file>
-
 <file path="src/scripts/README.md">
 # Gameplay Scripts
 
@@ -7768,104 +7782,9 @@ Utility helpers shared across modules should live here.
 Favor small, pure functions and keep engine-specific code in the module that owns it.
 </file>
 
-<file path="src/world/blocks.ts">
-import type { Engine } from 'noa-engine';
-import type { WorldMaterials } from './materials';
-
-export interface WorldBlocks {
-  dirt: number;
-  cloud: number;
-}
-
-export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): WorldBlocks {
-  console.log('[starwatch] registrando blocos do mundo');
-
-  let blockId = 1;
-
-  const dirt = noa.registry.registerBlock(blockId++, {
-    material: materials.dirt,
-    solid: true,
-  });
-
-  const cloud = noa.registry.registerBlock(blockId++, {
-    material: materials.cloud,
-    solid: false,
-    opaque: false,
-    blockLight: false,
-  });
-
-  return {
-    dirt,
-    cloud,
-  };
-}
-</file>
-
-<file path="src/world/chunk-generator.ts">
-import type { Engine } from 'noa-engine';
-import type { WorldBlocks } from './blocks';
-import { sampleCloudNoise } from './cloud-noise';
-import {
-  PLATFORM_HALF_EXTENT,
-  PLATFORM_HEIGHT,
-  CLOUD_LAYER_ALTITUDE,
-  CLOUD_LAYER_THICKNESS,
-  CLOUD_RING_INNER_RADIUS,
-  CLOUD_RING_OUTER_RADIUS,
-  CLOUD_DENSITY_THRESHOLD,
-} from '../config/constants';
-
-export function installChunkGenerator(noa: Engine, blocks: WorldBlocks): void {
-  console.log('[starwatch] chunk generator habilitado');
-
-  noa.world.on('worldDataNeeded', (requestID: number, data: any, x: number, y: number, z: number) => {
-    const sizeX = data.shape[0];
-    const sizeY = data.shape[1];
-    const sizeZ = data.shape[2];
-
-    for (let ix = 0; ix < sizeX; ix += 1) {
-      const worldX = x + ix;
-      for (let iz = 0; iz < sizeZ; iz += 1) {
-        const worldZ = z + iz;
-        const radialDistance = Math.hypot(worldX, worldZ);
-
-        for (let iy = 0; iy < sizeY; iy += 1) {
-          const worldY = y + iy;
-          let blockId = 0;
-
-          const onPlatformLayer = worldY === PLATFORM_HEIGHT;
-          const withinPlatformBounds = onPlatformLayer &&
-            worldX >= -PLATFORM_HALF_EXTENT && worldX < PLATFORM_HALF_EXTENT &&
-            worldZ >= -PLATFORM_HALF_EXTENT && worldZ < PLATFORM_HALF_EXTENT;
-
-          if (withinPlatformBounds) {
-            blockId = blocks.dirt;
-          } else if (radialDistance >= CLOUD_RING_INNER_RADIUS && radialDistance <= CLOUD_RING_OUTER_RADIUS) {
-            const altitudeOffset = Math.abs(worldY - CLOUD_LAYER_ALTITUDE);
-            if (altitudeOffset <= CLOUD_LAYER_THICKNESS) {
-              const density =
-                0.55 * sampleCloudNoise(worldX + worldZ, 140) +
-                0.45 * sampleCloudNoise(worldX - worldZ * 0.5, 90);
-              const heightBias = 1 - (altitudeOffset / CLOUD_LAYER_THICKNESS);
-              if (density * heightBias > CLOUD_DENSITY_THRESHOLD) {
-                blockId = blocks.cloud;
-              }
-            }
-          }
-
-          data.set(ix, iy, iz, blockId);
-        }
-      }
-    }
-
-    noa.world.setChunkData(requestID, data);
-  });
-}
-</file>
-
-<file path="src/world/cloud-noise.ts">
+<file path="src/world/asteroid-noise.ts">
 const SEED = [0.137, 0.273, 0.419];
-const LOOKUP_SIZE = 1000;
+const LOOKUP_SIZE = 100;
 
 const noiseValues = Array.from({ length: LOOKUP_SIZE }, (_, i) => {
   const a = Math.cos(Math.PI * 2 * (i / 1000 + SEED[0]));
@@ -7874,56 +7793,11 @@ const noiseValues = Array.from({ length: LOOKUP_SIZE }, (_, i) => {
   return a + b + c;
 });
 
-export function sampleCloudNoise(x: number, scale: number): number {
+export function sampleAsteroidNoise(x: number, scale: number): number {
   const nx = x / scale;
   const ix = nx - Math.floor(nx);
   const lookupIndex = Math.floor(ix * LOOKUP_SIZE) % LOOKUP_SIZE;
   return noiseValues[lookupIndex];
-}
-</file>
-
-<file path="src/world/index.ts">
-import type { Engine } from 'noa-engine';
-import { registerWorldMaterials } from './materials';
-import { registerWorldBlocks } from './blocks';
-import { installChunkGenerator } from './chunk-generator';
-
-export function initializeWorld(noa: Engine): void {
-  const materials = registerWorldMaterials(noa);
-  const blocks = registerWorldBlocks(noa, materials);
-  installChunkGenerator(noa, blocks);
-
-  noa.world.setAddRemoveDistance([3, 2], [3.5, 2.5]);
-  console.log('[starwatch] distâncias de chunk configuradas');
-}
-</file>
-
-<file path="src/world/materials.ts">
-import type { Engine } from 'noa-engine';
-import terrainAtlasUrl from './assets/terrain_atlas.png';
-
-export interface WorldMaterials {
-  dirt: string;
-  cloud: string;
-}
-
-export function registerWorldMaterials(noa: Engine): WorldMaterials {
-  console.log('[starwatch] registrando materiais base do mundo');
-
-  noa.registry.registerMaterial('dirt', {
-    textureURL: terrainAtlasUrl,
-    atlasIndex: 2,
-  });
-
-  noa.registry.registerMaterial('cloud', {
-    color: [1, 1, 1, 0.45],
-    transparent: true,
-  });
-
-  return {
-    dirt: 'dirt',
-    cloud: 'cloud',
-  };
 }
 </file>
 
@@ -7953,6 +7827,136 @@ This mirrors the structure defined in `AGENTS.md`/`MANIFESTO.md` and keeps featu
 <file path=".repomixignore">
 MANIFESTO.md
 AGENTS.md
+</file>
+
+<file path="src/config/engine-options.ts">
+import type { Engine } from 'noa-engine';
+import { CHUNK_ADD_DISTANCE, CHUNK_SIZE } from './render-options';
+import { PLAYER_SPAWN_POSITION } from './world-options';
+
+export type EngineOptions = ConstructorParameters<typeof Engine>[0];
+
+export const ENGINE_OPTIONS: EngineOptions = {
+  inverseY: false,
+  chunkSize: CHUNK_SIZE,
+  chunkAddDistance: CHUNK_ADD_DISTANCE,
+  playerStart: PLAYER_SPAWN_POSITION,
+  playerAutoStep: true,
+  playerShadowComponent: false,
+  originRebaseDistance: 32,
+  stickyPointerLock: true,
+  dragCameraOutsidePointerLock: false,
+  maxRenderRate: 0,
+  blockTestDistance: 16,
+};
+</file>
+
+<file path="src/config/world-options.ts">
+import { TARGET_VIEW_DISTANCE_BLOCKS } from './render-options';
+
+/**
+ * Tamanho (meia extensão) da plataforma inicial onde o jogador nasce.
+ * Consumido em `world/chunk-generator.ts` para definir o platô 10×10.
+ */
+export const PLATFORM_HALF_EXTENT = 5;
+
+/**
+ * Altura absoluta (eixo Y) da plataforma inicial.
+ * Utilizado pelo worldgen para colocar o grid no nível correto.
+ */
+export const PLATFORM_HEIGHT = 0;
+
+/**
+ * Posição inicial do jogador (usada pelo engine bootstrap).
+ * A altura deve manter o jogador levemente acima da plataforma.
+ */
+export const PLAYER_SPAWN_POSITION: [number, number, number] = [0.5, 2.5, 0.5];
+
+/**
+ * Altura média das rochas (asteroides) do anel distante.
+ */
+export const ASTEROID_LAYER_ALTITUDE = 46;
+
+/**
+ * Variação máxima (para cima/baixo) da altura dos asteroides.
+ */
+export const ASTEROID_HEIGHT_VARIATION = 8;
+
+/**
+ * Raio interno a partir do qual começam os asteroides.
+ */
+export const ASTEROID_RING_INNER_RADIUS = 60;
+
+/**
+ * Densidade mínima (0–1) do ruído procedural para instanciar um asteroide.
+ */
+export const ASTEROID_DENSITY_THRESHOLD = 0.38;
+
+/**
+ * Probabilidade de spawn de um asteroide dentro de uma célula candidata.
+ */
+export const ASTEROID_CENTER_PROBABILITY = 0.42;
+
+/**
+ * Tamanho da célula (em blocos) usada para amostrar centros de asteroides.
+ */
+export const ASTEROID_CELL_SIZE = 18;
+
+/**
+ * Margem extra usada ao calcular células vizinhas que podem afetar o chunk.
+ */
+export const ASTEROID_CELL_MARGIN = 10;
+
+/**
+ * Alcance máximo ao longo do eixo principal do asteroide.
+ */
+export const ASTEROID_MAJOR_RADIUS = 10;
+
+/**
+ * Alcance transversal (eixo curto) do asteroide.
+ */
+export const ASTEROID_MINOR_RADIUS = 6;
+
+/**
+ * Alcance vertical (meia altura) do asteroide.
+ */
+export const ASTEROID_VERTICAL_RADIUS = 7;
+
+/**
+ * Número de aglomerados (sub-porções) por asteroide.
+ */
+export const ASTEROID_CLUMP_COUNT = {
+  min: 4,
+  max: 6,
+} as const;
+
+/**
+ * Quantidade total de blocos por asteroide (12–18 blocos, quebrados em clumps).
+ */
+export const ASTEROID_BLOCK_COUNT = {
+  min: 12,
+  max: 18,
+} as const;
+
+/**
+ * Escalas de ruído usadas na decisão de spawn.
+ */
+export const ASTEROID_NOISE_PROFILE = {
+  scaleA: 160,
+  weightA: 0.6,
+  scaleB: 120,
+  weightB: 0.25,
+  scaleC: 90,
+  weightC: 0.15,
+} as const;
+
+/**
+ * Raio externo do cinturão de asteroides, ajustado conforme draw distance.
+ */
+export const ASTEROID_RING_OUTER_RADIUS = Math.max(
+  ASTEROID_RING_INNER_RADIUS + ASTEROID_MAJOR_RADIUS,
+  TARGET_VIEW_DISTANCE_BLOCKS - 40,
+);
 </file>
 
 <file path="src/engine/index.js">
@@ -8693,6 +8697,359 @@ var profile_hook_render = (PROFILE_RENDER > 0) ?
     makeProfileHook(PROFILE_RENDER, 'render ') : () => { }
 </file>
 
+<file path="src/player/index.ts">
+import type { Engine } from 'noa-engine';
+import { CAMERA_ZOOM_LIMITS, PLAYER_MOVEMENT } from '../config/player-options';
+
+export function initializePlayer(noa: Engine): void {
+  const movement = noa.entities.getMovement(noa.playerEntity);
+  movement.maxSpeed = PLAYER_MOVEMENT.maxSpeed;
+  movement.moveForce = PLAYER_MOVEMENT.moveForce;
+
+  noa.inputs.bind('pause', 'KeyP');
+  let paused = false;
+  noa.inputs.down.on('pause', () => {
+    paused = !paused;
+    noa.setPaused(paused);
+    console.log('[starwatch] jogo %s', paused ? 'pausado' : 'retomado');
+  });
+
+  noa.on('tick', () => {
+    const scroll = noa.inputs.pointerState.scrolly;
+    if (scroll !== 0) {
+      noa.camera.zoomDistance += scroll > 0 ? CAMERA_ZOOM_LIMITS.step : -CAMERA_ZOOM_LIMITS.step;
+      noa.camera.zoomDistance = Math.min(Math.max(noa.camera.zoomDistance, CAMERA_ZOOM_LIMITS.min), CAMERA_ZOOM_LIMITS.max);
+    }
+  });
+}
+</file>
+
+<file path="src/world/blocks.ts">
+import type { Engine } from 'noa-engine';
+import type { WorldMaterials } from './materials';
+
+export interface WorldBlocks {
+  dirt: number;
+  asteroid: number;
+}
+
+export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): WorldBlocks {
+  console.log('[starwatch] registrando blocos do mundo');
+
+  let blockId = 1;
+
+  const dirt = noa.registry.registerBlock(blockId++, {
+    material: materials.dirt,
+    solid: true,
+  });
+
+  const asteroid = noa.registry.registerBlock(blockId++, {
+    material: materials.asteroid,
+    solid: true,
+    opaque: true,
+    blockLight: true,
+  });
+
+  return {
+    dirt,
+    asteroid,
+  };
+}
+</file>
+
+<file path="src/world/index.ts">
+import type { Engine } from 'noa-engine';
+import { registerWorldMaterials } from './materials';
+import { registerWorldBlocks } from './blocks';
+import { installChunkGenerator } from './chunk-generator';
+import { CHUNK_ADD_DISTANCE, CHUNK_REMOVE_DISTANCE } from '../config/render-options';
+
+export function initializeWorld(noa: Engine): void {
+  const materials = registerWorldMaterials(noa);
+  const blocks = registerWorldBlocks(noa, materials);
+  installChunkGenerator(noa, blocks);
+
+  noa.world.setAddRemoveDistance(CHUNK_ADD_DISTANCE, CHUNK_REMOVE_DISTANCE);
+  console.log('[starwatch] distâncias de chunk configuradas');
+}
+</file>
+
+<file path="src/world/materials.ts">
+import type { Engine } from 'noa-engine';
+import terrainAtlasUrl from './assets/terrain_atlas.png';
+
+export interface WorldMaterials {
+  dirt: string;
+  asteroid: string;
+}
+
+export function registerWorldMaterials(noa: Engine): WorldMaterials {
+  console.log('[starwatch] registrando materiais base do mundo');
+
+  noa.registry.registerMaterial('dirt', {
+    textureURL: terrainAtlasUrl,
+    atlasIndex: 2,
+  });
+
+  noa.registry.registerMaterial('asteroid', {
+    color: [0.58, 0.6, 0.62, 1],
+  });
+
+  return {
+    dirt: 'dirt',
+    asteroid: 'asteroid',
+  };
+}
+</file>
+
+<file path="src/world/chunk-generator.ts">
+import type { Engine } from 'noa-engine';
+import type { WorldBlocks } from './blocks';
+import { sampleAsteroidNoise } from './asteroid-noise';
+import {
+  PLATFORM_HALF_EXTENT,
+  PLATFORM_HEIGHT,
+  ASTEROID_LAYER_ALTITUDE,
+  ASTEROID_HEIGHT_VARIATION,
+  ASTEROID_RING_INNER_RADIUS,
+  ASTEROID_RING_OUTER_RADIUS,
+  ASTEROID_DENSITY_THRESHOLD,
+  ASTEROID_CENTER_PROBABILITY,
+  ASTEROID_CELL_SIZE,
+  ASTEROID_CELL_MARGIN,
+  ASTEROID_MAJOR_RADIUS,
+  ASTEROID_MINOR_RADIUS,
+  ASTEROID_VERTICAL_RADIUS,
+  ASTEROID_CLUMP_COUNT,
+  ASTEROID_BLOCK_COUNT,
+  ASTEROID_NOISE_PROFILE,
+} from '../config/world-options';
+
+const CLUMP_DELTAS: Array<[number, number, number]> = [
+  [0, 0, 0],
+  [1, 0, 0],
+  [-1, 0, 0],
+  [0, 0, 1],
+  [0, 0, -1],
+  [0, 1, 0],
+  [0, -1, 0],
+  [1, 0, 1],
+  [-1, 0, 1],
+  [1, 0, -1],
+  [-1, 0, -1],
+  [0, 1, 1],
+  [0, 1, -1],
+  [0, -1, 1],
+  [0, -1, -1],
+  [1, 1, 0],
+  [-1, 1, 0],
+  [1, -1, 0],
+  [-1, -1, 0],
+];
+
+export function installChunkGenerator(noa: Engine, blocks: WorldBlocks): void {
+  console.log('[starwatch] chunk generator habilitado (plataforma + campo de asteroides)');
+
+  noa.world.on('worldDataNeeded', (requestID: number, data: any, x: number, y: number, z: number) => {
+    const sizeX = data.shape[0];
+    const sizeY = data.shape[1];
+    const sizeZ = data.shape[2];
+
+    const chunkMinX = x;
+    const chunkMaxX = x + sizeX - 1;
+    const chunkMinY = y;
+    const chunkMaxY = y + sizeY - 1;
+    const chunkMinZ = z;
+    const chunkMaxZ = z + sizeZ - 1;
+
+    const writeBlock = (wx: number, wy: number, wz: number, blockId: number) => {
+      if (wy < chunkMinY || wy > chunkMaxY) return;
+      if (wx < chunkMinX || wx > chunkMaxX) return;
+      if (wz < chunkMinZ || wz > chunkMaxZ) return;
+      const ix = wx - x;
+      const iy = wy - y;
+      const iz = wz - z;
+      data.set(ix, iy, iz, blockId);
+    };
+
+    // Plataforma inicial 10x10 (1 bloco de profundidade)
+    for (let ix = 0; ix < sizeX; ix += 1) {
+      const worldX = x + ix;
+      for (let iz = 0; iz < sizeZ; iz += 1) {
+        const worldZ = z + iz;
+        if (
+          worldX >= -PLATFORM_HALF_EXTENT && worldX < PLATFORM_HALF_EXTENT &&
+          worldZ >= -PLATFORM_HALF_EXTENT && worldZ < PLATFORM_HALF_EXTENT
+        ) {
+          const iy = PLATFORM_HEIGHT - y;
+          if (iy >= 0 && iy < sizeY) {
+            data.set(ix, iy, iz, blocks.dirt);
+          }
+        }
+      }
+    }
+
+    generateAsteroidsForChunk({
+      data,
+      blocks,
+      chunkMinX,
+      chunkMaxX,
+      chunkMinY,
+      chunkMaxY,
+      chunkMinZ,
+      chunkMaxZ,
+      writeBlock,
+    });
+
+    noa.world.setChunkData(requestID, data);
+  });
+}
+
+interface ChunkContext {
+  data: any;
+  blocks: WorldBlocks;
+  chunkMinX: number;
+  chunkMaxX: number;
+  chunkMinY: number;
+  chunkMaxY: number;
+  chunkMinZ: number;
+  chunkMaxZ: number;
+  writeBlock: (wx: number, wy: number, wz: number, blockId: number) => void;
+}
+
+function generateAsteroidsForChunk(ctx: ChunkContext): void {
+  const {
+    chunkMinX,
+    chunkMaxX,
+    chunkMinZ,
+    chunkMaxZ,
+    writeBlock,
+    blocks,
+  } = ctx;
+
+  const margin = ASTEROID_CELL_MARGIN + ASTEROID_MAJOR_RADIUS;
+  const minCellX = Math.floor((chunkMinX - margin) / ASTEROID_CELL_SIZE);
+  const maxCellX = Math.floor((chunkMaxX + margin) / ASTEROID_CELL_SIZE);
+  const minCellZ = Math.floor((chunkMinZ - margin) / ASTEROID_CELL_SIZE);
+  const maxCellZ = Math.floor((chunkMaxZ + margin) / ASTEROID_CELL_SIZE);
+
+  for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+    for (let cellZ = minCellZ; cellZ <= maxCellZ; cellZ += 1) {
+      const seed = hash2D(cellX, cellZ);
+      const rand = createRandom(seed);
+
+      const offsetX = Math.round((rand() - 0.5) * (ASTEROID_CELL_SIZE - 1));
+      const offsetZ = Math.round((rand() - 0.5) * (ASTEROID_CELL_SIZE - 1));
+
+      const centerX = cellX * ASTEROID_CELL_SIZE + offsetX;
+      const centerZ = cellZ * ASTEROID_CELL_SIZE + offsetZ;
+      const radialDistance = Math.hypot(centerX, centerZ);
+
+      if (
+        radialDistance < ASTEROID_RING_INNER_RADIUS ||
+        radialDistance > ASTEROID_RING_OUTER_RADIUS
+      ) {
+        continue;
+      }
+
+      const density = sampleAsteroidDensity(centerX, centerZ);
+      const normalizedDensity = (density + 1) * 0.5; // map [-1, 1] → [0, 1]
+      if (normalizedDensity < ASTEROID_DENSITY_THRESHOLD) {
+        continue;
+      }
+
+      if (rand() > ASTEROID_CENTER_PROBABILITY) {
+        continue;
+      }
+
+      const centerY = ASTEROID_LAYER_ALTITUDE + Math.round((rand() - 0.5) * 2 * ASTEROID_HEIGHT_VARIATION);
+      const offsets = buildAsteroidOffsets(rand);
+
+      offsets.forEach(([ox, oy, oz]) => {
+        const wx = centerX + ox;
+        const wy = centerY + oy;
+        const wz = centerZ + oz;
+        writeBlock(wx, wy, wz, blocks.asteroid);
+      });
+    }
+  }
+}
+
+function sampleAsteroidDensity(x: number, z: number): number {
+  const a = sampleAsteroidNoise(x, ASTEROID_NOISE_PROFILE.scaleA) * ASTEROID_NOISE_PROFILE.weightA;
+  const b = sampleAsteroidNoise(z + 51.37, ASTEROID_NOISE_PROFILE.scaleB) * ASTEROID_NOISE_PROFILE.weightB;
+  const c = sampleAsteroidNoise(x - z - 97.53, ASTEROID_NOISE_PROFILE.scaleC) * ASTEROID_NOISE_PROFILE.weightC;
+  return a + b + c;
+}
+
+function buildAsteroidOffsets(rand: () => number): Array<[number, number, number]> {
+  const totalBlocks = randomInt(rand, ASTEROID_BLOCK_COUNT.min, ASTEROID_BLOCK_COUNT.max);
+  const clumpTarget = randomInt(rand, ASTEROID_CLUMP_COUNT.min, ASTEROID_CLUMP_COUNT.max);
+  const majorRadius = ASTEROID_MAJOR_RADIUS * (0.85 + rand() * 0.3);
+  const minorRadius = ASTEROID_MINOR_RADIUS * (0.85 + rand() * 0.3);
+  const verticalRadius = ASTEROID_VERTICAL_RADIUS;
+  const orientation = rand() * Math.PI * 2;
+
+  const offsets: Array<[number, number, number]> = [];
+  const used = new Set<string>();
+
+  const addOffset = (ox: number, oy: number, oz: number) => {
+    const key = `${ox},${oy},${oz}`;
+    if (!used.has(key)) {
+      used.add(key);
+      offsets.push([ox, oy, oz]);
+    }
+  };
+
+  for (let i = 0; i < clumpTarget && offsets.length < totalBlocks; i += 1) {
+    const t = clumpTarget > 1 ? (i / (clumpTarget - 1)) * 2 - 1 : 0;
+    const jitter = (rand() - 0.5) * 0.6;
+    const along = (t + jitter) * majorRadius * 0.6;
+    const lateral = (rand() - 0.5) * minorRadius;
+
+    const baseX = Math.round(Math.cos(orientation) * along - Math.sin(orientation) * lateral);
+    const baseZ = Math.round(Math.sin(orientation) * along + Math.cos(orientation) * lateral);
+    const baseY = Math.round((rand() - 0.5) * 2 * verticalRadius);
+
+    addOffset(baseX, baseY, baseZ);
+
+    const clumpSize = Math.min(randomInt(rand, 2, 4), totalBlocks - offsets.length);
+    for (let j = 0; j < clumpSize && offsets.length < totalBlocks; j += 1) {
+      const [dx, dy, dz] = CLUMP_DELTAS[Math.floor(rand() * CLUMP_DELTAS.length)];
+      addOffset(baseX + dx, baseY + dy, baseZ + dz);
+    }
+  }
+
+  while (offsets.length < totalBlocks) {
+    const [cx, cy, cz] = offsets[Math.floor(rand() * offsets.length)] || [0, 0, 0];
+    const [dx, dy, dz] = CLUMP_DELTAS[Math.floor(rand() * CLUMP_DELTAS.length)];
+    addOffset(cx + dx, cy + dy, cz + dz);
+  }
+
+  return offsets;
+}
+
+function hash2D(x: number, z: number): number {
+  let h = x * 374761393 + z * 668265263;
+  h = (h ^ (h >> 13)) * 1274126177;
+  h = h ^ (h >> 16);
+  return h >>> 0;
+}
+
+function createRandom(seed: number): () => number {
+  let state = seed || 1;
+  return () => {
+    state = Math.imul(state ^ (state >>> 15), 2246822519) + 0x9e3779b9;
+    state = state >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function randomInt(rand: () => number, min: number, max: number): number {
+  return min + Math.floor(rand() * (max - min + 1));
+}
+</file>
+
 <file path=".gitignore">
 node_modules/
 dist/
@@ -8858,28 +9215,6 @@ canvas {
 }
 </file>
 
-<file path="src/config/constants.ts">
-export const PLATFORM_HALF_EXTENT = 5; // 10x10 surface
-export const PLATFORM_HEIGHT = 0;
-
-export const CLOUD_LAYER_ALTITUDE = 38;
-export const CLOUD_LAYER_THICKNESS = 4;
-export const CLOUD_RING_INNER_RADIUS = 40;
-export const CLOUD_RING_OUTER_RADIUS = 180;
-export const CLOUD_DENSITY_THRESHOLD = 0.72;
-
-export const CAMERA_ZOOM_LIMITS = {
-  min: 0,
-  max: 10,
-  step: 0.5,
-} as const;
-
-export const PLAYER_MOVEMENT = {
-  maxSpeed: 8,
-  moveForce: 35,
-} as const;
-</file>
-
 <file path="src/core/bootstrap.ts">
 import { Engine } from 'noa-engine';
 import { initializeWorld } from '../world';
@@ -8918,28 +9253,6 @@ export function bootstrapStarwatch(): StarwatchContext {
 }
 </file>
 
-<file path="package.json">
-{
-  "name": "starwatch",
-  "version": "0.2.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "start": "vite",
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@babylonjs/core": "^6.1.0"
-  },
-  "devDependencies": {
-    "typescript": "^5.6.3",
-    "vite": "^5.4.8"
-  }
-}
-</file>
-
 <file path="index.html">
 <!doctype html>
 <html lang="pt-BR">
@@ -8959,6 +9272,40 @@ export function bootstrapStarwatch(): StarwatchContext {
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
+</file>
+
+<file path="package.json">
+{
+  "name": "starwatch",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "vite",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit && vite build --emptyOutDir false"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^6.1.0",
+    "aabb-3d": "github:fenomas/aabb-3d",
+    "box-intersect": "github:fenomas/box-intersect",
+    "ent-comp": "^0.11.0",
+    "events": "^3.3.0",
+    "fast-voxel-raycast": "^0.1.1",
+    "game-inputs": "^0.8.0",
+    "gl-vec3": "^1.1.3",
+    "micro-game-shell": "^0.9.0",
+    "ndarray": "^1.0.19",
+    "voxel-aabb-sweep": "^0.5.0",
+    "voxel-physics-engine": "^0.13.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.8"
+  }
+}
 </file>
 
 </files>
