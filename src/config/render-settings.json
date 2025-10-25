@@ -1,0 +1,15 @@
+{
+  "chunkHorizontalAddChunks": 20,
+  "chunkVerticalAddChunks": 20,
+  "chunkRemoveHorizontalOffsetChunks": 2,
+  "chunkRemoveVerticalOffsetChunks": 2,
+  "asteroidVoxelLodChunks": 20,
+  "asteroidMeshLodChunks": 28,
+  "asteroidSearchMarginChunks": 128,
+  "chunkProcessingMaxTickMs": 18,
+  "chunkProcessingMaxRenderMs": 8,
+  "chunkPendingCreationLimit": 160,
+  "chunkPendingMeshingLimit": 160,
+  "chunkMinNeighborsToMesh": 1,
+  "renderMaxFps": 1000
+}

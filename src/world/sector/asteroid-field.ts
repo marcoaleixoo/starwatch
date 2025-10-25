@@ -1,7 +1,6 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Engine } from 'noa-engine';
 import { SeededRandom } from '../../utils/seeded-random';
-import { AsteroidMeshController } from './asteroid-meshes';
 import { GRID_UNIT_METERS } from '../../config/constants';
 
 export interface AsteroidMaterialIds {
@@ -35,8 +34,6 @@ interface ClusterBlob {
   radiusSquared: number;
 }
 
-type ClusterMode = 'mesh' | 'voxel';
-
 export interface AsteroidCluster {
   hash: string;
   center: Vector3;
@@ -47,7 +44,6 @@ export interface AsteroidCluster {
   maxSurfaceRadiusSquared: number;
   blobs: ClusterBlob[];
   voids: ClusterBlob[];
-  mode: ClusterMode;
 }
 
 const CHUNK_SIZE = 32;
@@ -135,17 +131,10 @@ export class AsteroidField {
 
   private readonly materialIds: AsteroidMaterialIds;
 
-  private readonly clusterModes = new Map<string, ClusterMode>();
-
-  private readonly meshController: AsteroidMeshController;
-
-  private readonly cellClusterCache = new Map<string, AsteroidCluster[]>();
-
   constructor(noa: Engine, materialIds: AsteroidMaterialIds, options?: { sectorSeed?: string }) {
     this.noa = noa;
     this.materialIds = materialIds;
     this.sectorSeed = options?.sectorSeed ?? 'sector.001';
-    this.meshController = new AsteroidMeshController(noa);
   }
 
   sample(x: number, y: number, z: number): number {
@@ -163,9 +152,6 @@ export class AsteroidField {
     }
     for (let i = 0; i < clusters.length; i += 1) {
       const cluster = clusters[i];
-      if (cluster.mode !== 'voxel') {
-        continue;
-      }
       const dx = x - cluster.center.x;
       const dy = y - cluster.center.y;
       const dz = z - cluster.center.z;
@@ -211,38 +197,17 @@ export class AsteroidField {
       getChunkBase(chunkX),
       getChunkBase(chunkY),
       getChunkBase(chunkZ),
-    ).filter((cluster) => cluster.mode === 'voxel');
+    );
   }
 
   getCacheStats(): { cachedChunks: number; queueSize: number } {
-    return { cachedChunks: this.cellClusterCache.size, queueSize: 0 };
+    return { cachedChunks: 0, queueSize: 0 };
   }
 
   getClustersWithinRadius(center: Vector3, radius: number): AsteroidCluster[] {
     const min = new Vector3(center.x - radius, center.y - radius, center.z - radius);
     const max = new Vector3(center.x + radius, center.y + radius, center.z + radius);
     return this.generateClustersForBounds(min, max);
-  }
-
-  setClusterMode(cluster: AsteroidCluster, mode: ClusterMode) {
-    const previous = this.clusterModes.get(cluster.hash);
-    if (previous === mode) {
-      return;
-    }
-
-    if (mode === 'mesh') {
-      this.meshController.enable(cluster);
-    } else {
-      this.meshController.disable(cluster);
-    }
-
-    cluster.mode = mode;
-    this.clusterModes.set(cluster.hash, mode);
-    this.invalidateCluster(cluster);
-  }
-
-  updateMeshes(dt: number) {
-    this.meshController.update(dt);
   }
 
   populateChunk(
@@ -265,9 +230,6 @@ export class AsteroidField {
 
     for (let c = 0; c < clusters.length; c += 1) {
       const cluster = clusters[c];
-      if (cluster.mode !== 'voxel') {
-        continue;
-      }
       const maxRadius = cluster.maxSurfaceRadius;
       const minWorldX = Math.max(chunkX, Math.floor(cluster.center.x - maxRadius - 1));
       const maxWorldX = Math.min(chunkX + sizeX - 1, Math.ceil(cluster.center.x + maxRadius + 1));
@@ -359,57 +321,21 @@ export class AsteroidField {
 
     for (let cx = cellMinX; cx <= cellMaxX; cx += 1) {
       for (let cz = cellMinZ; cz <= cellMaxZ; cz += 1) {
-        const cellClusters = this.getClustersForCell(cx, cz);
-        for (let i = 0; i < cellClusters.length; i += 1) {
-          const cluster = cellClusters[i];
-          if (seen.has(cluster.hash)) {
-            continue;
-          }
-          if (!this.clusterIntersectsBounds(cluster, min, max)) {
-            continue;
-          }
-          const storedMode = this.clusterModes.get(cluster.hash);
-          cluster.mode = storedMode ?? cluster.mode;
-          seen.add(cluster.hash);
-          clusters.push(cluster);
-        }
+        this.tryAddClusterForCell(cx, cz, min, max, clusters, seen);
       }
     }
 
     return clusters;
   }
 
-  private getClustersForCell(cellX: number, cellZ: number): AsteroidCluster[] {
-    const key = `${cellX}:${cellZ}`;
-    const cached = this.cellClusterCache.get(key);
-    if (cached) {
-      return cached;
-    }
-    const generated = this.buildClustersForCell(cellX, cellZ);
-    this.cellClusterCache.set(key, generated);
-    return generated;
-  }
-
-  private clusterIntersectsBounds(cluster: AsteroidCluster, min: Vector3, max: Vector3): boolean {
-    const maxSurfaceRadius = cluster.maxSurfaceRadius;
-    const minX = cluster.center.x - maxSurfaceRadius;
-    const maxX = cluster.center.x + maxSurfaceRadius;
-    const minY = cluster.center.y - maxSurfaceRadius;
-    const maxY = cluster.center.y + maxSurfaceRadius;
-    const minZ = cluster.center.z - maxSurfaceRadius;
-    const maxZ = cluster.center.z + maxSurfaceRadius;
-    return !(
-      maxX < min.x ||
-      minX > max.x ||
-      maxY < min.y ||
-      minY > max.y ||
-      maxZ < min.z ||
-      minZ > max.z
-    );
-  }
-
-  private buildClustersForCell(cellX: number, cellZ: number): AsteroidCluster[] {
-    const clusters: AsteroidCluster[] = [];
+  private tryAddClusterForCell(
+    cellX: number,
+    cellZ: number,
+    boundsMin: Vector3,
+    boundsMax: Vector3,
+    clusters: AsteroidCluster[],
+    seen: Set<string>,
+  ) {
     const cellSeed = `${this.sectorSeed}:${cellX}:${cellZ}`;
     const random = new SeededRandom(cellSeed);
     const cellOriginX = cellX * CLUSTER_CELL_SIZE;
@@ -419,10 +345,10 @@ export class AsteroidField {
     const horizontalDistance = Math.sqrt(candidateX * candidateX + candidateZ * candidateZ);
     const zone = this.resolveZone(horizontalDistance);
     if (!zone) {
-      return clusters;
+      return;
     }
     if (random.next() > zone.spawnProbability) {
-      return clusters;
+      return;
     }
 
     const attempts = 1;
@@ -436,6 +362,29 @@ export class AsteroidField {
       );
       const candidate = this.createCluster(cellSeed, attempt, center, radius, zone, random);
       if (!candidate) {
+        continue;
+      }
+
+      const maxSurfaceRadius = candidate.maxSurfaceRadius;
+      const minX = candidate.center.x - maxSurfaceRadius;
+      const maxX = candidate.center.x + maxSurfaceRadius;
+      const minY = candidate.center.y - maxSurfaceRadius;
+      const maxY = candidate.center.y + maxSurfaceRadius;
+      const minZ = candidate.center.z - maxSurfaceRadius;
+      const maxZ = candidate.center.z + maxSurfaceRadius;
+
+      if (
+        maxX < boundsMin.x ||
+        minX > boundsMax.x ||
+        maxY < boundsMin.y ||
+        minY > boundsMax.y ||
+        maxZ < boundsMin.z ||
+        minZ > boundsMax.z
+      ) {
+        continue;
+      }
+
+      if (seen.has(candidate.hash)) {
         continue;
       }
 
@@ -455,10 +404,9 @@ export class AsteroidField {
         continue;
       }
 
+      seen.add(candidate.hash);
       clusters.push(candidate);
     }
-
-    return clusters;
   }
 
   private resolveZone(distance: number): ZoneConfig | null {
@@ -518,7 +466,6 @@ export class AsteroidField {
       maxSurfaceRadiusSquared: maxSurfaceRadius * maxSurfaceRadius,
       blobs,
       voids,
-      mode: this.clusterModes.get(clusterHash) ?? 'mesh',
     };
     return cluster;
   }

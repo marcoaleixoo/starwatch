@@ -13,14 +13,8 @@ import { createCrosshairController } from '../hud/crosshair';
 import { CROSSHAIR_STATE_IDLE, CROSSHAIR_STATE_TARGET } from '../hud/constants';
 import { initializeToolbar } from '../hud/toolbar';
 import { PersistenceManager } from '../persistence/manager';
-import { initializeRenderSettingsDrawer } from '../hud/render-settings';
 import { createPerformancePanel } from '../hud/performance-panel';
 import { initializePerformanceMonitor } from '../systems/performance-monitor';
-import {
-  initializeRenderSettings as initializeRenderSettingsState,
-  parseRenderSettings,
-  RENDER_SETTINGS_STORAGE_KEY,
-} from '../config/render-settings';
 
 export interface StarwatchContext {
   noa: Engine;
@@ -30,14 +24,6 @@ export interface StarwatchContext {
 }
 
 export function bootstrapStarwatch(): StarwatchContext {
-  if (typeof window !== 'undefined') {
-    const storedSettingsRaw = window.localStorage?.getItem(RENDER_SETTINGS_STORAGE_KEY) ?? null;
-    const storedSettings = parseRenderSettings(storedSettingsRaw);
-    initializeRenderSettingsState(storedSettings ?? undefined);
-  } else {
-    initializeRenderSettingsState();
-  }
-
   const noa = new Engine(ENGINE_OPTIONS);
   const persistence = new PersistenceManager(noa, 'sector.001');
 
@@ -70,9 +56,6 @@ export function bootstrapStarwatch(): StarwatchContext {
   initializeInteractions(noa, resolveBlockId, (mutation) => {
     persistence.registerBlockMutation(mutation);
   });
-
-  const chunkSize = ENGINE_OPTIONS.chunkSize ?? 32;
-  initializeRenderSettingsDrawer(noa, chunkSize, worldContext.sun);
 
   const flightSystem = initializeFlightControls(noa);
   const performancePanel = createPerformancePanel();
