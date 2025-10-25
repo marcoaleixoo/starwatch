@@ -97,6 +97,10 @@ export class EnergyNetworkManager {
     return node ? node.networkId : null;
   }
 
+  listDeckPositions(): VoxelPosition[] {
+    return Array.from(this.nodes.values()).map((node) => clonePosition(node.position));
+  }
+
   addDeck(position: VoxelPosition): number {
     const key = makeKey(position);
     if (this.nodes.has(key)) {

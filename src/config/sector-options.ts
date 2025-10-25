@@ -1,14 +1,17 @@
 import { TARGET_VIEW_DISTANCE_BLOCKS } from './render-options';
 
+/** Identificador canônico do setor atual (single node do grafo). */
+export const DEFAULT_SECTOR_ID = 'sector-lyra-z7';
+
 /**
  * Tamanho (meia extensão) da plataforma inicial onde o jogador nasce.
- * Consumido em `world/chunk-generator.ts` para definir o platô 10×10.
+ * Consumido em `sector/chunk-generator.ts` para definir o platô 10×10.
  */
 export const PLATFORM_HALF_EXTENT = 5;
 
 /**
  * Altura absoluta (eixo Y) da plataforma inicial.
- * Utilizado pelo worldgen para colocar o grid no nível correto.
+ * Utilizado pelo setor generator para colocar o grid no nível correto.
  */
 export const PLATFORM_HEIGHT = 0;
 

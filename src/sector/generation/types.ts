@@ -1,4 +1,4 @@
-import type { WorldBlocks } from '../blocks';
+import type { SectorBlocks } from '../blocks';
 
 export interface ChunkBounds {
   minX: number;
@@ -16,7 +16,7 @@ export interface ChunkDimensions {
 }
 
 export interface ChunkGenerationContext {
-  blocks: WorldBlocks;
+  blocks: SectorBlocks;
   bounds: ChunkBounds;
   dimensions: ChunkDimensions;
   writeBlock: (worldX: number, worldY: number, worldZ: number, blockId: number) => void;

@@ -25,10 +25,10 @@ A árvore `src/` reflete o roadmap definido no MANIFESTO. Diretórios vazios pos
 - `src/config/`: arquivos `*-options.ts` que concentram parâmetros ajustáveis (engine, render, player, mundo). Sempre crie/atualize um options file antes de usar uma constante. Convenção atual:
   - `engine-options.ts` — opções passadas ao `noa-engine` (spawn, pointer lock, chunk size).
   - `render-options.ts` — draw distance, tamanho de chunk, add/remove distance.
-  - `world-options.ts` — plataforma inicial, cinturão de nuvens/asteroides, spawn.
+  - `sector-options.ts` — plataforma inicial, cinturão de nuvens/asteroides, spawn.
   - `player-options.ts` — zoom/câmera, velocidade básica do jogador.
-- `src/world/`: adaptadores NOA. Contém registro de materiais, blocos, hooks de geração de chunk, assets de mundo (atlas, shaders) e funções auxiliares. Regras:
-  - Qualquer asset deve viver em `src/world/assets/`.
+- `src/sector/`: adaptadores NOA. Contém registro de materiais, blocos, hooks de geração de chunk, assets do setor (atlas, shaders) e funções auxiliares. Regras:
+  - Qualquer asset deve viver em `src/sector/assets/`.
   - Geradores de chunk devem ser determinísticos, idempotentes e facilmente parametrizáveis via constantes em `src/config/`.
   - APIs externas não devem “vazar” para outros domínios (ex.: Babylon specifics ficam encapsulados aqui).
 - `src/player/`: lida com mesh, física, inputs e estados do jogador. Padrão: `initializePlayer(noa)` que registra binds e configura componentes. Qualquer UI/câmera adicional vira módulo separado (ex.: `camera-effects.ts`).
@@ -81,7 +81,7 @@ Arquivos na raiz:
 - Futuras tasks (`pnpm test`, `pnpm lint`) serão documentadas aqui quando surgirem.
 
 Ferramentas externas:
-- **Babylon.js**: manipulação via `noa.rendering`. Qualquer shader custom deve ir em `src/world/shaders`.
+- **Babylon.js**: manipulação via `noa.rendering`. Qualquer shader custom deve ir em `src/sector/shaders`.
 - **NOA**: interaja somente através das APIs expostas pelo motor vendorizado. Quaisquer patches devem ser isolados e descritos em `src/engine/README.md`.
 - **Vite**: para adicionar plugins (GLSL, WASM), atualize `vite.config.ts` e documente.
 
@@ -100,15 +100,17 @@ Ferramentas externas:
 - **Eventos de bloco → sistemas.** Placement/removal chamam APIs explícitas (`EnergySystem.registerX`). Nunca atualizar métricas diretamente sem passar pelos sistemas.
 - **Constantes centralizadas.** Ajustes de tick, potência, direção solar e thresholds vivem em `src/config/energy-options.ts`.
 - **Debug opt-in.** Use `VITE_DEBUG_ENERGY=1 pnpm dev` para habilitar overlay/logs. O flag deve ficar desligado em builds normais.
-- **Documentação viva.** READMEs em `world/`, `blocks/` e `systems/` já descrevem fluxos; ao ampliar o slice, atualize-os junto com o código.
+- **Documentação viva.** READMEs em `sector/`, `blocks/` e `systems/` já descrevem fluxos; ao ampliar o slice, atualize-os junto com o código.
+- **Persistência setorial.** Snapshots são orquestrados por `src/persistence/manager.ts` (adapter plugável). Sempre use `captureSnapshot/restoreSnapshot` ao incluir novo estado durável.
+- **Controles atuais.** Botão direito posiciona blocos; segurar botão esquerdo (~2 s) remove; `E` abre terminais; `Esc` fecha overlays.
 
 ---
 
 ## 7. Integração com NOA Engine
 
 1. Registre materiais antes de blocos (`noa.registry.registerMaterial`). IDs devem iniciar em 1 e nunca se sobrepor manualmente sem razão clara.
-2. Hooks de worldgen (`noa.world.on('worldDataNeeded')`) devem preencher a ndarray completamente e chamar `noa.world.setChunkData` uma única vez por chunk.
-3. Use `noa.rendering.getScene()` para ajustes de iluminação/shadow apenas se necessário; encapsule em helpers (`world/shadows.ts`).
+2. Hooks de sector-gen (`noa.world.on('worldDataNeeded')`) devem preencher a ndarray completamente e chamar `noa.world.setChunkData` uma única vez por chunk.
+3. Use `noa.rendering.getScene()` para ajustes de iluminação/shadow apenas se necessário; encapsule em helpers (`sector/shadows.ts`).
 4. Inputs: `noa.inputs.bind('acao', ['KeyX'])` e `noa.inputs.down.on('acao', handler)`. Sempre mantenha um mecanismo de toggle/pause.
 5. Player: acesse componentes via `noa.entities` e respeite offsets (meio da caixa).
 6. Performance: `chunkAddDistance`, `chunkRemoveDistance` e limites de render devem sempre ser consumidos da camada `src/config/`. Nunca setar valores no código sem passar por um arquivo `*-options.ts`.

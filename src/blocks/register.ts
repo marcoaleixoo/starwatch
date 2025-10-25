@@ -1,5 +1,5 @@
 import type { Engine } from 'noa-engine';
-import type { WorldMaterials } from '../world/materials';
+import type { SectorMaterials } from '../sector/materials';
 import type { BlockCatalog, BlockDefinition, BlockKind } from './types';
 
 function registerSimpleBlock(
@@ -26,7 +26,7 @@ function registerSimpleBlock(
 
 export function registerStarwatchBlocks(
   noa: Engine,
-  materials: WorldMaterials,
+  materials: SectorMaterials,
   startingBlockId: number,
 ): BlockCatalog {
   let nextId = startingBlockId;

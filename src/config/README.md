@@ -4,7 +4,7 @@ Todos os parâmetros ajustáveis do jogo vivem em arquivos `*-options.ts` neste 
 
 - `engine-options.ts`: opções passadas diretamente ao `noa-engine` durante o bootstrap (spawn, pointer lock, chunk size, etc.).
 - `render-options.ts`: draw distance, tamanho de chunk e distâncias de add/remove.
-- `world-options.ts`: plataforma inicial e cinturão de nuvens/asteroides.
+- `sector-options.ts`: plataforma inicial e cinturão de nuvens/asteroides do setor atual.
 - `player-options.ts`: limites de zoom e parâmetros de movimentação do jogador.
 
 Novas features devem introduzir seu próprio arquivo `foo-options.ts` e importar as constantes correspondentes a partir dele.

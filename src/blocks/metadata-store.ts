@@ -32,6 +32,19 @@ class BlockMetadataStore {
   clear(): void {
     this.orientations.clear();
   }
+
+  listOrientations(): Array<{ kind: BlockKind; position: [number, number, number]; orientation: BlockOrientation }> {
+    const entries: Array<{ kind: BlockKind; position: [number, number, number]; orientation: BlockOrientation }> = [];
+    for (const [key, orientation] of this.orientations.entries()) {
+      const [kind, x, y, z] = key.split(':');
+      entries.push({
+        kind: kind as BlockKind,
+        position: [Number(x), Number(y), Number(z)],
+        orientation,
+      });
+    }
+    return entries;
+  }
 }
 
 export const blockMetadataStore = new BlockMetadataStore();

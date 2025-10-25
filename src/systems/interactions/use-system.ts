@@ -1,11 +1,11 @@
 import type { Engine } from 'noa-engine';
 import type { OverlayApi } from '../../hud/overlay';
-import type { WorldResources } from '../../world';
+import type { SectorResources } from '../../sector';
 
 interface UseSystemDependencies {
   noa: Engine;
   overlay: OverlayApi;
-  world: WorldResources;
+  sector: SectorResources;
 }
 
 const USE_RANGE = 3;
@@ -16,8 +16,8 @@ type TargetedBlock = {
   blockID: number;
 };
 
-export function initializeUseSystem({ noa, overlay, world }: UseSystemDependencies): void {
-  const terminalId = world.starwatchBlocks.halTerminal.id;
+export function initializeUseSystem({ noa, overlay, sector }: UseSystemDependencies): void {
+  const terminalId = sector.starwatchBlocks.halTerminal.id;
 
   const isOverlayCapturing = (): boolean => overlay.controller.getState().captureInput;
 

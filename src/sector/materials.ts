@@ -1,6 +1,6 @@
 import type { Engine } from 'noa-engine';
 import terrainAtlasUrl from './assets/terrain_atlas.png';
-import { ASTEROID_VARIANTS } from '../config/world-options';
+import { ASTEROID_VARIANTS } from '../config/sector-options';
 
 export interface RegisteredMaterial {
   name: string;
@@ -13,7 +13,7 @@ export interface AsteroidMaterialDescriptor {
   material: RegisteredMaterial;
 }
 
-export interface WorldMaterials {
+export interface SectorMaterials {
   dirt: RegisteredMaterial;
   deck: RegisteredMaterial;
   solarPanel: RegisteredMaterial;
@@ -42,8 +42,8 @@ function registerMaterial(noa: Engine, name: string, options: RegisterMaterialOp
   };
 }
 
-export function registerWorldMaterials(noa: Engine): WorldMaterials {
-  console.log('[starwatch] registrando materiais base do mundo');
+export function registerSectorMaterials(noa: Engine): SectorMaterials {
+  console.log('[starwatch] registrando materiais base do setor');
 
   const dirt = registerMaterial(noa, 'dirt', {
     textureURL: terrainAtlasUrl,

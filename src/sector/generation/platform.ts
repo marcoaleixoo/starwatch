@@ -1,4 +1,4 @@
-import { PLATFORM_HALF_EXTENT, PLATFORM_HEIGHT } from '../../config/world-options';
+import { PLATFORM_HALF_EXTENT, PLATFORM_HEIGHT } from '../../config/sector-options';
 import type { ChunkGenerationContext } from './types';
 
 export function generateStartingPlatform(ctx: ChunkGenerationContext): void {

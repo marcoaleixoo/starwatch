@@ -1,6 +1,6 @@
 import type { Engine } from 'noa-engine';
 import { CHUNK_ADD_DISTANCE, CHUNK_SIZE } from './render-options';
-import { PLAYER_SPAWN_POSITION } from './world-options';
+import { PLAYER_SPAWN_POSITION } from './sector-options';
 
 export type EngineOptions = ConstructorParameters<typeof Engine>[0];
 

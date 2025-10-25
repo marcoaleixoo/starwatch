@@ -1,5 +1,5 @@
 import type { Engine } from 'noa-engine';
-import type { WorldMaterials } from './materials';
+import type { SectorMaterials } from './materials';
 
 export interface AsteroidBlockDescriptor {
   id: string;
@@ -8,14 +8,14 @@ export interface AsteroidBlockDescriptor {
   blockId: number;
 }
 
-export interface WorldBlocks {
+export interface SectorBlocks {
   dirt: number;
   asteroidVariants: AsteroidBlockDescriptor[];
   nextBlockId: number;
 }
 
-export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): WorldBlocks {
-  console.log('[starwatch] registrando blocos do mundo');
+export function registerSectorBlocks(noa: Engine, materials: SectorMaterials): SectorBlocks {
+  console.log('[starwatch] registrando blocos do setor');
 
   const dirt = noa.registry.registerBlock(1, {
     material: materials.dirt.name,

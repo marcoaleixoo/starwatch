@@ -5,18 +5,19 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Engine } from 'noa-engine';
 import type { OverlayApi } from '../../hud/overlay';
 import type { HotbarApi } from '../../player/hotbar';
-import type { WorldResources } from '../../world';
+import type { SectorResources } from '../../sector';
 import type { BlockCatalog, BlockDefinition, BlockKind, BlockOrientation } from '../../blocks/types';
 import { blockMetadataStore } from '../../blocks/metadata-store';
 import type { EnergySystem } from '../energy';
 
 const ORIENTATIONS: BlockOrientation[] = ['north', 'east', 'south', 'west'];
+const REMOVE_HOLD_DURATION_MS = 2000;
 
 interface PlacementSystemDependencies {
   noa: Engine;
   overlay: OverlayApi;
   hotbar: HotbarApi;
-  world: WorldResources;
+  sector: SectorResources;
   energy: EnergySystem;
 }
 
@@ -123,15 +124,18 @@ function setGhostTransform(mesh: Mesh, target: PlacementTarget, orientation: Blo
   mesh.rotation.y = orientationToRadians(orientation);
 }
 
-export function initializePlacementSystem({ noa, overlay, hotbar, world, energy }: PlacementSystemDependencies): void {
+export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy }: PlacementSystemDependencies): void {
   const ghost = createGhostResources(noa);
   let activeGhost: Mesh | null = null;
   let currentDefinition: BlockDefinition | null = null;
   const orientationByKind = new Map<BlockKind, BlockOrientation>();
   let lastHotbarIndex = hotbar.controller.getState().activeIndex;
+  let removeHoldTimeout: ReturnType<typeof setTimeout> | null = null;
+  let removeHoldTarget: PlacementTarget | null = null;
+  let removeHoldTriggered = false;
 
   const updateActiveDefinition = () => {
-    currentDefinition = getActiveBlockDefinition(hotbar, world.starwatchBlocks);
+    currentDefinition = getActiveBlockDefinition(hotbar, sector.starwatchBlocks);
     if (currentDefinition && !orientationByKind.has(currentDefinition.kind)) {
       orientationByKind.set(currentDefinition.kind, currentDefinition.defaultOrientation);
     }
@@ -180,7 +184,7 @@ export function initializePlacementSystem({ noa, overlay, hotbar, world, energy 
     const [x, y, z] = target.position;
     const existingId = noa.world.getBlockID(x, y, z);
     if (existingId !== 0) {
-      const def = world.starwatchBlocks.byId.get(existingId);
+      const def = sector.starwatchBlocks.byId.get(existingId);
       noa.setBlock(0, x, y, z);
       if (def?.orientable) {
         blockMetadataStore.deleteOrientation({ kind: def.kind, x, y, z });
@@ -194,6 +198,66 @@ export function initializePlacementSystem({ noa, overlay, hotbar, world, energy 
       } else if (def?.kind === 'starwatch:hal-terminal') {
         energy.unregisterTerminal([x, y, z]);
       }
+    }
+  };
+
+  const cancelRemoveHold = () => {
+    if (removeHoldTimeout !== null) {
+      clearTimeout(removeHoldTimeout);
+      removeHoldTimeout = null;
+    }
+    removeHoldTarget = null;
+    removeHoldTriggered = false;
+  };
+
+  const scheduleRemoveHold = (target: PlacementTarget) => {
+    removeHoldTarget = {
+      position: [...target.position],
+      normal: [...target.normal],
+      adjacent: [...target.adjacent],
+    };
+    removeHoldTriggered = false;
+    removeHoldTimeout = setTimeout(() => {
+      removeHoldTimeout = null;
+      removeHoldTriggered = true;
+      if (overlay.controller.getState().captureInput) {
+        removeHoldTarget = null;
+        return;
+      }
+      if (!removeHoldTarget) {
+        return;
+      }
+      const [x, y, z] = removeHoldTarget.position;
+      if (noa.world.getBlockID(x, y, z) === 0) {
+        removeHoldTarget = null;
+        return;
+      }
+      removeBlock(removeHoldTarget);
+      removeHoldTarget = null;
+    }, REMOVE_HOLD_DURATION_MS);
+  };
+
+  const handleRemoveHoldStart = () => {
+    cancelRemoveHold();
+    if (overlay.controller.getState().captureInput) {
+      return;
+    }
+    const target = getPlacementTarget(noa);
+    if (!target) {
+      return;
+    }
+    scheduleRemoveHold(target);
+  };
+
+  const handleRemoveHoldEnd = () => {
+    if (removeHoldTimeout === null && !removeHoldTriggered) {
+      cancelRemoveHold();
+      return;
+    }
+    const triggered = removeHoldTriggered;
+    cancelRemoveHold();
+    if (!triggered) {
+      handlePlace();
     }
   };
 
@@ -216,6 +280,7 @@ export function initializePlacementSystem({ noa, overlay, hotbar, world, energy 
   };
 
   const handleRemove = () => {
+    cancelRemoveHold();
     if (overlay.controller.getState().captureInput) {
       return;
     }
@@ -226,16 +291,17 @@ export function initializePlacementSystem({ noa, overlay, hotbar, world, energy 
     removeBlock(target);
   };
 
-  noa.inputs.bind('build-place', ['Mouse1']);
+  noa.inputs.bind('build-place', ['Mouse2']);
   noa.inputs.bind('build-place-alt', ['Enter']);
-  noa.inputs.bind('build-remove', ['Mouse2']);
+  noa.inputs.bind('build-remove-hold', ['Mouse1']);
   noa.inputs.bind('build-remove-alt', ['KeyX']);
   noa.inputs.bind('build-rotate', ['KeyR']);
 
   noa.inputs.down.on('build-place', handlePlace);
   noa.inputs.down.on('build-place-alt', handlePlace);
-  noa.inputs.down.on('build-remove', handleRemove);
   noa.inputs.down.on('build-remove-alt', handleRemove);
+  noa.inputs.down.on('build-remove-hold', handleRemoveHoldStart);
+  noa.inputs.up.on('build-remove-hold', handleRemoveHoldEnd);
 
   noa.inputs.down.on('build-rotate', () => {
     if (overlay.controller.getState().captureInput) {
@@ -254,7 +320,7 @@ export function initializePlacementSystem({ noa, overlay, hotbar, world, energy 
       return;
     }
 
-    const definition = getActiveBlockDefinition(hotbar, world.starwatchBlocks);
+    const definition = getActiveBlockDefinition(hotbar, sector.starwatchBlocks);
     if (!definition) {
       hideGhost();
       return;

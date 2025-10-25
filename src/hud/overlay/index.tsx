@@ -4,7 +4,7 @@ import { OverlayController } from './overlay-controller';
 import { OverlayApp } from './OverlayApp';
 import type { HotbarController } from '../../player/hotbar-controller';
 import type { EnergySystem } from '../../systems/energy';
-import type { WorldResources } from '../../world';
+import type { SectorResources } from '../../sector';
 import type { VoxelPosition } from '../../systems/energy/energy-network-manager';
 import { LookAtTracker } from '../look-at-tracker';
 
@@ -15,7 +15,7 @@ export interface OverlayApi {
 
 export interface OverlayDependencies {
   hotbarController: HotbarController;
-  world: WorldResources;
+  sector: SectorResources;
   energy: EnergySystem;
 }
 
@@ -53,8 +53,8 @@ export function initializeOverlay(noa: Engine, deps: OverlayDependencies): Overl
     />,
   );
 
-  const panelId = deps.world.starwatchBlocks.solarPanel.id;
-  const batteryId = deps.world.starwatchBlocks.battery.id;
+  const panelId = deps.sector.starwatchBlocks.solarPanel.id;
+  const batteryId = deps.sector.starwatchBlocks.battery.id;
 
   const emptyState = {
     kind: null,

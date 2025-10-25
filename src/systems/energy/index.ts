@@ -1,5 +1,5 @@
 import type { Engine } from 'noa-engine';
-import type { WorldResources } from '../../world';
+import type { SectorResources } from '../../sector';
 import {
   ENERGY_TICK_INTERVAL_SEC,
   PANEL_BASE_W,
@@ -82,6 +82,8 @@ export interface EnergySystem {
   listSolarPanels(): SolarPanelSnapshot[];
   listBatteries(): BatterySnapshot[];
   listTerminals(): TerminalSnapshot[];
+  listDecks(): VoxelPosition[];
+  setBatteryStored(position: VoxelPosition, storedMJ: number): void;
   getNetworkOverview(networkId: number): NetworkOverview | null;
   subscribe(listener: () => void): () => void;
   getVersion(): number;
@@ -100,7 +102,7 @@ function makeKey([x, y, z]: VoxelPosition): string {
   return `${x}:${y}:${z}`;
 }
 
-export function initializeEnergySystem(noa: Engine, world: WorldResources): EnergySystem {
+export function initializeEnergySystem(noa: Engine, sector: SectorResources): EnergySystem {
   const networks = new EnergyNetworkManager();
   const solarPanels = new Map<string, SolarPanelEntry>();
   const batteries = new Map<string, BatteryEntry>();
@@ -110,8 +112,8 @@ export function initializeEnergySystem(noa: Engine, world: WorldResources): Ener
 
   const sampleCount = Math.min(PANEL_RAY_COUNT, PANEL_SAMPLE_OFFSETS.length);
   const panelSamples = PANEL_SAMPLE_OFFSETS.slice(0, sampleCount);
-  const solarOpacityByBlockId = buildSolarOpacityLookup(world);
-  const deckBlockId = world.starwatchBlocks.deck.id;
+  const solarOpacityByBlockId = buildSolarOpacityLookup(sector);
+  const deckBlockId = sector.starwatchBlocks.deck.id;
 
   let tickAccumulator = 0;
 
@@ -139,6 +141,19 @@ export function initializeEnergySystem(noa: Engine, world: WorldResources): Ener
   };
 
   const getSolarOpacity = (blockId: number): number => solarOpacityByBlockId.get(blockId) ?? 1;
+
+  const setBatteryStoredInternal = (entry: BatteryEntry, storedMJ: number): void => {
+    const clamped = Math.max(0, Math.min(entry.capacityMJ, storedMJ));
+    const delta = clamped - entry.storedMJ;
+    if (Math.abs(delta) < ENERGY_EPSILON) {
+      entry.storedMJ = clamped;
+      return;
+    }
+    entry.storedMJ = clamped;
+    if (entry.networkId !== null) {
+      networks.adjustNetworkMetrics(entry.networkId, { totalStoredMJ: delta });
+    }
+  };
 
   const sampleSolarShade = (entry: SolarPanelEntry): number => {
     let totalShade = 0;
@@ -247,9 +262,8 @@ export function initializeEnergySystem(noa: Engine, world: WorldResources): Ener
         const space = battery.capacityMJ - battery.storedMJ;
         if (space <= 0) continue;
         const added = Math.min(space, remaining);
-        battery.storedMJ += added;
+        setBatteryStoredInternal(battery, battery.storedMJ + added);
         remaining -= added;
-        networks.adjustNetworkMetrics(networkId, { totalStoredMJ: added });
       }
     } else {
       remaining = Math.abs(deltaMJ);
@@ -257,9 +271,8 @@ export function initializeEnergySystem(noa: Engine, world: WorldResources): Ener
         if (remaining <= 0) break;
         if (battery.storedMJ <= 0) continue;
         const consumed = Math.min(battery.storedMJ, remaining);
-        battery.storedMJ -= consumed;
+        setBatteryStoredInternal(battery, battery.storedMJ - consumed);
         remaining -= consumed;
-        networks.adjustNetworkMetrics(networkId, { totalStoredMJ: -consumed });
       }
     }
   };
@@ -442,6 +455,17 @@ export function initializeEnergySystem(noa: Engine, world: WorldResources): Ener
         networkId: entry.networkId,
       }));
     },
+    listDecks() {
+      return networks.listDeckPositions().map((position) => [...position] as VoxelPosition);
+    },
+    setBatteryStored(position, storedMJ) {
+      const entry = batteries.get(makeKey(position));
+      if (!entry) {
+        return;
+      }
+      setBatteryStoredInternal(entry, storedMJ);
+      emitUpdate();
+    },
     getNetworkOverview(networkId) {
       const snapshot = networks.getNetworkSnapshot(networkId);
       if (!snapshot) {
@@ -489,23 +513,23 @@ export function initializeEnergySystem(noa: Engine, world: WorldResources): Ener
   };
 }
 
-function buildSolarOpacityLookup(world: WorldResources): Map<number, number> {
+function buildSolarOpacityLookup(sector: SectorResources): Map<number, number> {
   const lookup = new Map<number, number>();
   lookup.set(0, 0);
 
-  lookup.set(world.terrainBlocks.dirt, world.materials.dirt.solarOpacity);
+  lookup.set(sector.terrainBlocks.dirt, sector.materials.dirt.solarOpacity);
 
-  for (const block of world.terrainBlocks.asteroidVariants) {
-    const material = world.materials.asteroidVariants.find((variant) => variant.id === block.id);
+  for (const block of sector.terrainBlocks.asteroidVariants) {
+    const material = sector.materials.asteroidVariants.find((variant) => variant.id === block.id);
     if (material) {
       lookup.set(block.blockId, material.material.solarOpacity);
     }
   }
 
-  lookup.set(world.starwatchBlocks.deck.id, world.materials.deck.solarOpacity);
-  lookup.set(world.starwatchBlocks.solarPanel.id, world.materials.solarPanel.solarOpacity);
-  lookup.set(world.starwatchBlocks.battery.id, world.materials.battery.solarOpacity);
-  lookup.set(world.starwatchBlocks.halTerminal.id, world.materials.terminal.solarOpacity);
+  lookup.set(sector.starwatchBlocks.deck.id, sector.materials.deck.solarOpacity);
+  lookup.set(sector.starwatchBlocks.solarPanel.id, sector.materials.solarPanel.solarOpacity);
+  lookup.set(sector.starwatchBlocks.battery.id, sector.materials.battery.solarOpacity);
+  lookup.set(sector.starwatchBlocks.halTerminal.id, sector.materials.terminal.solarOpacity);
 
   return lookup;
 }

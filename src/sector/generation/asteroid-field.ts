@@ -15,7 +15,7 @@ import {
   ASTEROID_RING_INNER_RADIUS,
   ASTEROID_RING_OUTER_RADIUS,
   ASTEROID_VERTICAL_RADIUS,
-} from '../../config/world-options';
+} from '../../config/sector-options';
 import type { ChunkGenerationContext } from './types';
 import type { AsteroidBlockDescriptor } from '../blocks';
 
