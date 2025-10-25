@@ -1,5 +1,5 @@
 import './styles.css';
-import { bootstrapStarwatch } from './game/core/bootstrap';
+import { bootstrapStarwatch } from './core/bootstrap';
 
 type BootstrapResult = ReturnType<typeof bootstrapStarwatch>;
 

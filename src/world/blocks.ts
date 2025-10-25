@@ -1,13 +1,13 @@
 import type { Engine } from 'noa-engine';
-import type { MaterialHandles } from './materials';
+import type { WorldMaterials } from './materials';
 
-export interface BlockHandles {
+export interface WorldBlocks {
   dirt: number;
   cloud: number;
 }
 
-export function registerBlocks(noa: Engine, materials: MaterialHandles): BlockHandles {
-  console.log('[starwatch] registrando blocos base');
+export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): WorldBlocks {
+  console.log('[starwatch] registrando blocos do mundo');
 
   let blockId = 1;
 

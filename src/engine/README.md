@@ -1,5 +1,17 @@
 
-# noa-engine
+# noa-engine (vendored snapshot)
+
+This directory contains a trimmed snapshot of the upstream
+[`noa-engine`](https://github.com/fenomas/noa) project, kept in-source so the
+Starwatch prototype can depend on a known version without publishing an extra
+package.
+
+- Upstream license: see `LICENSE`.
+- We rely only on runtime code — upstream build/test tooling isn’t wired into
+  this repository.
+- Runtime entry point remains `src/index.js`, matching the NPM package layout.
+
+---
 
 An experimental voxel game engine.
 
@@ -45,42 +57,8 @@ please try to be sorta-kinda consistent with what's already there.
 
 
 
-## Change logs
-
-See [history.md](docs/history.md) for full changes and migration for each version.
-
-Recent changes:
-
- * `v0.33`: 
-   * Much improved [API docs](https://fenomas.github.io/noa/API/)
-   * Terrain now supports texture atlases! See `registry.registerMaterial`.
-   * Added a fast way to specify that a worldgen chunk is entirely air/dirt/etc.
-   * Modernized keybinds to use [KeyboardEvent.code](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code) strings, and changed several binding state properties
-   * Bunch of internal improvements to support shadows - see [examples](https://github.com/fenomas/noa-examples)
-
- * `v0.32`: Fixes npm versioning issue - no code changes.
- * `v0.31`: 
-   * Change the speed of the world! See `noa.timeScale`
-   * Now possible to control chunk processing order: `noa.world.chunkSortingDistFn`
-   * Much improved type exports and [API docs](https://fenomas.github.io/noa/API/) 
- * `v0.30`: 
-   * Engine now a named export, use `import {Engine} from 'noa-engine'`
-   * many performance and size optimizations
-   * now generates proper type declarations and API references!
-   * can now configure separate vert/horiz values for chunk load distance
-   * core option `tickRate` is now in **ticks per second**, not ms per tick
-   * adds several init options, e.g. `maxRenderRate`, `stickyFullscreen`
- * `v0.29`: 
-   * maximum voxel ID is now `65535`
-   * adds option `worldGenWhilePaused`
-   * adds option `manuallyControlChunkLoading` and related APIs
-   * performance and bug fixes
-
-
-----
-
 ## Credits
 
-Made with 🍺 by [@fenomas](https://fenomas.com), license is [MIT](LICENSE.txt).
+Made with 🍺 by [@fenomas](https://fenomas.com), license is [MIT](LICENSE).
 
 Uses [Babylon.js](https://www.babylonjs.com/) for 3D rendering.

@@ -1,6 +1,7 @@
 import { Engine } from 'noa-engine';
-import { buildWorld } from '../world/build-world';
-import { configurePlayer } from '../player/configure-player';
+import { initializeWorld } from '../world';
+import { initializePlayer } from '../player';
+import { ENGINE_OPTIONS } from '../config/engine-options';
 
 export interface StarwatchContext {
   noa: Engine;
@@ -13,24 +14,14 @@ export function bootstrapStarwatch(): StarwatchContext {
   }
 
   const noa = new Engine({
+    ...ENGINE_OPTIONS,
+    domElement: mountElement,
     debug: import.meta.env.DEV,
     showFPS: import.meta.env.DEV,
-    inverseY: false,
-    chunkSize: 32,
-    chunkAddDistance: [2.5, 2],
-    playerStart: [0.5, 2.5, 0.5],
-    playerAutoStep: true,
-    playerShadowComponent: false,
-    originRebaseDistance: 32,
-    domElement: mountElement,
-    stickyPointerLock: true,
-    dragCameraOutsidePointerLock: false,
-    maxRenderRate: 0,
-    blockTestDistance: 16,
   });
 
-  buildWorld(noa);
-  configurePlayer(noa);
+  initializeWorld(noa);
+  initializePlayer(noa);
 
   noa.container.setPointerLock(true);
   noa.container.on('DOMready', () => {

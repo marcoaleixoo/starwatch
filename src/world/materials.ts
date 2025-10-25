@@ -1,13 +1,13 @@
 import type { Engine } from 'noa-engine';
-import terrainAtlasUrl from '../assets/textures/terrain_atlas.png';
+import terrainAtlasUrl from './assets/terrain_atlas.png';
 
-export interface MaterialHandles {
+export interface WorldMaterials {
   dirt: string;
   cloud: string;
 }
 
-export function registerMaterials(noa: Engine): MaterialHandles {
-  console.log('[starwatch] registrando materiais base');
+export function registerWorldMaterials(noa: Engine): WorldMaterials {
+  console.log('[starwatch] registrando materiais base do mundo');
 
   noa.registry.registerMaterial('dirt', {
     textureURL: terrainAtlasUrl,

@@ -27,8 +27,7 @@ import { locationHasher } from './lib/util'
 import { makeProfileHook } from './lib/util'
 
 
-import packageJSON from '../package.json'
-var version = packageJSON.version
+var version = '0.33.0'
 
 
 

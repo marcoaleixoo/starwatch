@@ -14,9 +14,6 @@ importers:
       noa-engine:
         specifier: file:src/engine
         version: file:src/engine(@babylonjs/core@6.49.0)
-      voxel-crunch:
-        specifier: ^0.2.1
-        version: 0.2.1
     devDependencies:
       typescript:
         specifier: ^5.6.3
@@ -288,9 +285,6 @@ packages:
     resolution: {tarball: https://codeload.github.com/fenomas/aabb-3d/tar.gz/b928d0a65f64d0014e36231f94f401967a3b49ef}
     version: 0.3.0
 
-  bit-twiddle@0.0.2:
-    resolution: {integrity: sha512-76iFAOrkcuw5UPA30Pt32XaytMHXz/04JembgIwsQAp7ImHYSWNq1shBbrlWf6CUvh1+amQ81LI8hNhqQgsBEw==}
-
   bit-twiddle@1.0.2:
     resolution: {integrity: sha512-B9UhK0DKFZhoTFcfvAzhqsjStvGJp9vYWf3+6SNTtdSQnvIgfkHbgHrg/e4+TH71N2GDu8tpmCVoyfrL1d7ntA==}
 
@@ -410,9 +404,6 @@ packages:
 
   voxel-aabb-sweep@0.5.0:
     resolution: {integrity: sha512-cnjWJ8Xx03fzke8AqKCqKdDk+QsvGVOp2oAT1e6hcCFyDHAyCWM4o13G9xBofzHvXYAinz2hA8JuHK/G8+QD2w==}
-
-  voxel-crunch@0.2.1:
-    resolution: {integrity: sha512-VmlrD2M+tiuuxMIXPU4jP2cbT3Tma9pbfdlM2eA7EljQ2k2UUVYLZFw2w75qL0AzbxPWFkznaNackP4Hz9Qd3g==}
 
   voxel-physics-engine@0.13.0:
     resolution: {integrity: sha512-5/R4VLTBmzJGsyNUNX7MNJsxBWqwmmEABTwa2mv0+Z6TLCwSEDufU5LGpP8D/50HM6eVCYR3WTpoG7JH1th/jw==}
@@ -568,8 +559,6 @@ snapshots:
     dependencies:
       gl-matrix: 3.4.4
 
-  bit-twiddle@0.0.2: {}
-
   bit-twiddle@1.0.2: {}
 
   box-intersect@https://codeload.github.com/fenomas/box-intersect/tar.gz/383cb9bef2cf7140ca6ca9b705669fb108d1357f:
@@ -701,10 +690,6 @@ snapshots:
       fsevents: 2.3.3
 
   voxel-aabb-sweep@0.5.0: {}
-
-  voxel-crunch@0.2.1:
-    dependencies:
-      bit-twiddle: 0.0.2
 
   voxel-physics-engine@0.13.0:
     dependencies:
