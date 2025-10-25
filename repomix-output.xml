@@ -7851,114 +7851,6 @@ export const ENGINE_OPTIONS: EngineOptions = {
 };
 </file>
 
-<file path="src/config/world-options.ts">
-import { TARGET_VIEW_DISTANCE_BLOCKS } from './render-options';
-
-/**
- * Tamanho (meia extensão) da plataforma inicial onde o jogador nasce.
- * Consumido em `world/chunk-generator.ts` para definir o platô 10×10.
- */
-export const PLATFORM_HALF_EXTENT = 5;
-
-/**
- * Altura absoluta (eixo Y) da plataforma inicial.
- * Utilizado pelo worldgen para colocar o grid no nível correto.
- */
-export const PLATFORM_HEIGHT = 0;
-
-/**
- * Posição inicial do jogador (usada pelo engine bootstrap).
- * A altura deve manter o jogador levemente acima da plataforma.
- */
-export const PLAYER_SPAWN_POSITION: [number, number, number] = [0.5, 2.5, 0.5];
-
-/**
- * Altura média das rochas (asteroides) do anel distante.
- */
-export const ASTEROID_LAYER_ALTITUDE = 46;
-
-/**
- * Variação máxima (para cima/baixo) da altura dos asteroides.
- */
-export const ASTEROID_HEIGHT_VARIATION = 8;
-
-/**
- * Raio interno a partir do qual começam os asteroides.
- */
-export const ASTEROID_RING_INNER_RADIUS = 60;
-
-/**
- * Densidade mínima (0–1) do ruído procedural para instanciar um asteroide.
- */
-export const ASTEROID_DENSITY_THRESHOLD = 0.38;
-
-/**
- * Probabilidade de spawn de um asteroide dentro de uma célula candidata.
- */
-export const ASTEROID_CENTER_PROBABILITY = 0.42;
-
-/**
- * Tamanho da célula (em blocos) usada para amostrar centros de asteroides.
- */
-export const ASTEROID_CELL_SIZE = 18;
-
-/**
- * Margem extra usada ao calcular células vizinhas que podem afetar o chunk.
- */
-export const ASTEROID_CELL_MARGIN = 10;
-
-/**
- * Alcance máximo ao longo do eixo principal do asteroide.
- */
-export const ASTEROID_MAJOR_RADIUS = 10;
-
-/**
- * Alcance transversal (eixo curto) do asteroide.
- */
-export const ASTEROID_MINOR_RADIUS = 6;
-
-/**
- * Alcance vertical (meia altura) do asteroide.
- */
-export const ASTEROID_VERTICAL_RADIUS = 7;
-
-/**
- * Número de aglomerados (sub-porções) por asteroide.
- */
-export const ASTEROID_CLUMP_COUNT = {
-  min: 4,
-  max: 6,
-} as const;
-
-/**
- * Quantidade total de blocos por asteroide (12–18 blocos, quebrados em clumps).
- */
-export const ASTEROID_BLOCK_COUNT = {
-  min: 12,
-  max: 18,
-} as const;
-
-/**
- * Escalas de ruído usadas na decisão de spawn.
- */
-export const ASTEROID_NOISE_PROFILE = {
-  scaleA: 160,
-  weightA: 0.6,
-  scaleB: 120,
-  weightB: 0.25,
-  scaleC: 90,
-  weightC: 0.15,
-} as const;
-
-/**
- * Raio externo do cinturão de asteroides, ajustado conforme draw distance.
- */
-export const ASTEROID_RING_OUTER_RADIUS = Math.max(
-  ASTEROID_RING_INNER_RADIUS + ASTEROID_MAJOR_RADIUS,
-  TARGET_VIEW_DISTANCE_BLOCKS - 40,
-);
-</file>
-
 <file path="src/engine/index.js">
 /*!
  * noa: an experimental voxel game engine.
@@ -8724,39 +8616,6 @@ export function initializePlayer(noa: Engine): void {
 }
 </file>
 
-<file path="src/world/blocks.ts">
-import type { Engine } from 'noa-engine';
-import type { WorldMaterials } from './materials';
-
-export interface WorldBlocks {
-  dirt: number;
-  asteroid: number;
-}
-
-export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): WorldBlocks {
-  console.log('[starwatch] registrando blocos do mundo');
-
-  let blockId = 1;
-
-  const dirt = noa.registry.registerBlock(blockId++, {
-    material: materials.dirt,
-    solid: true,
-  });
-
-  const asteroid = noa.registry.registerBlock(blockId++, {
-    material: materials.asteroid,
-    solid: true,
-    opaque: true,
-    blockLight: true,
-  });
-
-  return {
-    dirt,
-    asteroid,
-  };
-}
-</file>
-
 <file path="src/world/index.ts">
 import type { Engine } from 'noa-engine';
 import { registerWorldMaterials } from './materials';
@@ -8774,13 +8633,175 @@ export function initializeWorld(noa: Engine): void {
 }
 </file>
 
+<file path="src/config/world-options.ts">
+import { TARGET_VIEW_DISTANCE_BLOCKS } from './render-options';
+
+/**
+ * Tamanho (meia extensão) da plataforma inicial onde o jogador nasce.
+ * Consumido em `world/chunk-generator.ts` para definir o platô 10×10.
+ */
+export const PLATFORM_HALF_EXTENT = 5;
+
+/**
+ * Altura absoluta (eixo Y) da plataforma inicial.
+ * Utilizado pelo worldgen para colocar o grid no nível correto.
+ */
+export const PLATFORM_HEIGHT = 0;
+
+/**
+ * Posição inicial do jogador (usada pelo engine bootstrap).
+ * A altura deve manter o jogador levemente acima da plataforma.
+ */
+export const PLAYER_SPAWN_POSITION: [number, number, number] = [0.5, 2.5, 0.5];
+
+/**
+ * Altura média das rochas (asteroides) do anel distante.
+ */
+export const ASTEROID_LAYER_ALTITUDE = 52;
+
+/**
+ * Variação máxima (para cima/baixo) da altura dos asteroides.
+ */
+export const ASTEROID_HEIGHT_VARIATION = 12;
+
+/**
+ * Raio interno a partir do qual começam os asteroides.
+ */
+export const ASTEROID_RING_INNER_RADIUS = 90;
+
+/**
+ * Densidade mínima (0–1) do ruído procedural para instanciar um asteroide.
+ */
+export const ASTEROID_DENSITY_THRESHOLD = 0.4;
+
+/**
+ * Probabilidade base de spawn de um asteroide dentro de uma célula candidata.
+ */
+export const ASTEROID_CENTER_PROBABILITY = 0.18;
+
+/**
+ * Tamanho da célula (em blocos) usada para amostrar centros de asteroides.
+ */
+export const ASTEROID_CELL_SIZE = 48;
+
+/**
+ * Margem extra usada ao calcular células vizinhas que podem afetar o chunk.
+ */
+export const ASTEROID_CELL_MARGIN = 48;
+
+/**
+ * Alcance máximo ao longo do eixo principal do asteroide.
+ */
+export const ASTEROID_MAJOR_RADIUS = 14;
+
+/**
+ * Alcance transversal (eixo curto) do asteroide.
+ */
+export const ASTEROID_MINOR_RADIUS = 8;
+
+/**
+ * Alcance vertical (meia altura) do asteroide.
+ */
+export const ASTEROID_VERTICAL_RADIUS = 10;
+
+/**
+ * Quantidade total de blocos por asteroide (60–120 blocos, formando massas densas).
+ */
+export const ASTEROID_BLOCK_COUNT = {
+  min: 60,
+  max: 120,
+} as const;
+
+/**
+ * Número de asteroides em cada cluster (1–3 massas por centro).
+ */
+export const ASTEROID_CLUSTER_SIZE = {
+  min: 1,
+  max: 3,
+} as const;
+
+/**
+ * Distância (em blocos) para deslocar asteroides dentro do mesmo cluster.
+ */
+export const ASTEROID_CLUSTER_SPREAD = 24;
+
+/**
+ * Variedades de asteroide registradas como materiais/blocos, com pesos para distribuição.
+ */
+export const ASTEROID_VARIANTS = [
+  {
+    id: 'basalt',
+    color: [0.36, 0.38, 0.42, 1],
+    weight: 0.5,
+  },
+  {
+    id: 'nickel',
+    color: [0.56, 0.58, 0.62, 1],
+    weight: 0.3,
+  },
+  {
+    id: 'ice',
+    color: [0.74, 0.8, 0.85, 1],
+    weight: 0.2,
+  },
+] as const;
+
+/**
+ * Raio externo do cinturão de asteroides, ajustado conforme draw distance.
+ */
+export const ASTEROID_RING_OUTER_RADIUS = Math.max(
+  ASTEROID_RING_INNER_RADIUS + ASTEROID_MAJOR_RADIUS,
+  TARGET_VIEW_DISTANCE_BLOCKS - 40,
+);
+</file>
+
+<file path="src/world/blocks.ts">
+import type { Engine } from 'noa-engine';
+import type { WorldMaterials } from './materials';
+import { ASTEROID_VARIANTS } from '../config/world-options';
+
+export interface WorldBlocks {
+  dirt: number;
+  asteroidVariants: number[];
+}
+
+export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): WorldBlocks {
+  console.log('[starwatch] registrando blocos do mundo');
+
+  let blockId = 1;
+
+  const dirt = noa.registry.registerBlock(blockId++, {
+    material: materials.dirt,
+    solid: true,
+  });
+
+  const asteroidVariantBlocks = materials.asteroidVariants.map((materialName, index) => {
+    const blockName = `asteroid-${ASTEROID_VARIANTS[index]?.id ?? index}`;
+    return noa.registry.registerBlock(blockId++, {
+      material: materialName,
+      solid: true,
+      opaque: true,
+      blockLight: true,
+      hardness: 3,
+      displayName: blockName,
+    });
+  });
+
+  return {
+    dirt,
+    asteroidVariants: asteroidVariantBlocks,
+  };
+}
+</file>
+
 <file path="src/world/materials.ts">
 import type { Engine } from 'noa-engine';
 import terrainAtlasUrl from './assets/terrain_atlas.png';
+import { ASTEROID_VARIANTS } from '../config/world-options';
 
 export interface WorldMaterials {
   dirt: string;
-  asteroid: string;
+  asteroidVariants: string[];
 }
 
 export function registerWorldMaterials(noa: Engine): WorldMaterials {
@@ -8791,262 +8812,18 @@ export function registerWorldMaterials(noa: Engine): WorldMaterials {
     atlasIndex: 2,
   });
 
-  noa.registry.registerMaterial('asteroid', {
-    color: [0.58, 0.6, 0.62, 1],
+  const asteroidMaterials = ASTEROID_VARIANTS.map((variant) => {
+    const materialName = `asteroid-${variant.id}`;
+    noa.registry.registerMaterial(materialName, {
+      color: variant.color,
+    });
+    return materialName;
   });
 
   return {
     dirt: 'dirt',
-    asteroid: 'asteroid',
+    asteroidVariants: asteroidMaterials,
   };
-}
-</file>
-
-<file path="src/world/chunk-generator.ts">
-import type { Engine } from 'noa-engine';
-import type { WorldBlocks } from './blocks';
-import { sampleAsteroidNoise } from './asteroid-noise';
-import {
-  PLATFORM_HALF_EXTENT,
-  PLATFORM_HEIGHT,
-  ASTEROID_LAYER_ALTITUDE,
-  ASTEROID_HEIGHT_VARIATION,
-  ASTEROID_RING_INNER_RADIUS,
-  ASTEROID_RING_OUTER_RADIUS,
-  ASTEROID_DENSITY_THRESHOLD,
-  ASTEROID_CENTER_PROBABILITY,
-  ASTEROID_CELL_SIZE,
-  ASTEROID_CELL_MARGIN,
-  ASTEROID_MAJOR_RADIUS,
-  ASTEROID_MINOR_RADIUS,
-  ASTEROID_VERTICAL_RADIUS,
-  ASTEROID_CLUMP_COUNT,
-  ASTEROID_BLOCK_COUNT,
-  ASTEROID_NOISE_PROFILE,
-} from '../config/world-options';
-
-const CLUMP_DELTAS: Array<[number, number, number]> = [
-  [0, 0, 0],
-  [1, 0, 0],
-  [-1, 0, 0],
-  [0, 0, 1],
-  [0, 0, -1],
-  [0, 1, 0],
-  [0, -1, 0],
-  [1, 0, 1],
-  [-1, 0, 1],
-  [1, 0, -1],
-  [-1, 0, -1],
-  [0, 1, 1],
-  [0, 1, -1],
-  [0, -1, 1],
-  [0, -1, -1],
-  [1, 1, 0],
-  [-1, 1, 0],
-  [1, -1, 0],
-  [-1, -1, 0],
-];
-
-export function installChunkGenerator(noa: Engine, blocks: WorldBlocks): void {
-  console.log('[starwatch] chunk generator habilitado (plataforma + campo de asteroides)');
-
-  noa.world.on('worldDataNeeded', (requestID: number, data: any, x: number, y: number, z: number) => {
-    const sizeX = data.shape[0];
-    const sizeY = data.shape[1];
-    const sizeZ = data.shape[2];
-
-    const chunkMinX = x;
-    const chunkMaxX = x + sizeX - 1;
-    const chunkMinY = y;
-    const chunkMaxY = y + sizeY - 1;
-    const chunkMinZ = z;
-    const chunkMaxZ = z + sizeZ - 1;
-
-    const writeBlock = (wx: number, wy: number, wz: number, blockId: number) => {
-      if (wy < chunkMinY || wy > chunkMaxY) return;
-      if (wx < chunkMinX || wx > chunkMaxX) return;
-      if (wz < chunkMinZ || wz > chunkMaxZ) return;
-      const ix = wx - x;
-      const iy = wy - y;
-      const iz = wz - z;
-      data.set(ix, iy, iz, blockId);
-    };
-
-    // Plataforma inicial 10x10 (1 bloco de profundidade)
-    for (let ix = 0; ix < sizeX; ix += 1) {
-      const worldX = x + ix;
-      for (let iz = 0; iz < sizeZ; iz += 1) {
-        const worldZ = z + iz;
-        if (
-          worldX >= -PLATFORM_HALF_EXTENT && worldX < PLATFORM_HALF_EXTENT &&
-          worldZ >= -PLATFORM_HALF_EXTENT && worldZ < PLATFORM_HALF_EXTENT
-        ) {
-          const iy = PLATFORM_HEIGHT - y;
-          if (iy >= 0 && iy < sizeY) {
-            data.set(ix, iy, iz, blocks.dirt);
-          }
-        }
-      }
-    }
-
-    generateAsteroidsForChunk({
-      data,
-      blocks,
-      chunkMinX,
-      chunkMaxX,
-      chunkMinY,
-      chunkMaxY,
-      chunkMinZ,
-      chunkMaxZ,
-      writeBlock,
-    });
-
-    noa.world.setChunkData(requestID, data);
-  });
-}
-
-interface ChunkContext {
-  data: any;
-  blocks: WorldBlocks;
-  chunkMinX: number;
-  chunkMaxX: number;
-  chunkMinY: number;
-  chunkMaxY: number;
-  chunkMinZ: number;
-  chunkMaxZ: number;
-  writeBlock: (wx: number, wy: number, wz: number, blockId: number) => void;
-}
-
-function generateAsteroidsForChunk(ctx: ChunkContext): void {
-  const {
-    chunkMinX,
-    chunkMaxX,
-    chunkMinZ,
-    chunkMaxZ,
-    writeBlock,
-    blocks,
-  } = ctx;
-
-  const margin = ASTEROID_CELL_MARGIN + ASTEROID_MAJOR_RADIUS;
-  const minCellX = Math.floor((chunkMinX - margin) / ASTEROID_CELL_SIZE);
-  const maxCellX = Math.floor((chunkMaxX + margin) / ASTEROID_CELL_SIZE);
-  const minCellZ = Math.floor((chunkMinZ - margin) / ASTEROID_CELL_SIZE);
-  const maxCellZ = Math.floor((chunkMaxZ + margin) / ASTEROID_CELL_SIZE);
-
-  for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
-    for (let cellZ = minCellZ; cellZ <= maxCellZ; cellZ += 1) {
-      const seed = hash2D(cellX, cellZ);
-      const rand = createRandom(seed);
-
-      const offsetX = Math.round((rand() - 0.5) * (ASTEROID_CELL_SIZE - 1));
-      const offsetZ = Math.round((rand() - 0.5) * (ASTEROID_CELL_SIZE - 1));
-
-      const centerX = cellX * ASTEROID_CELL_SIZE + offsetX;
-      const centerZ = cellZ * ASTEROID_CELL_SIZE + offsetZ;
-      const radialDistance = Math.hypot(centerX, centerZ);
-
-      if (
-        radialDistance < ASTEROID_RING_INNER_RADIUS ||
-        radialDistance > ASTEROID_RING_OUTER_RADIUS
-      ) {
-        continue;
-      }
-
-      const density = sampleAsteroidDensity(centerX, centerZ);
-      const normalizedDensity = (density + 1) * 0.5; // map [-1, 1] → [0, 1]
-      if (normalizedDensity < ASTEROID_DENSITY_THRESHOLD) {
-        continue;
-      }
-
-      if (rand() > ASTEROID_CENTER_PROBABILITY) {
-        continue;
-      }
-
-      const centerY = ASTEROID_LAYER_ALTITUDE + Math.round((rand() - 0.5) * 2 * ASTEROID_HEIGHT_VARIATION);
-      const offsets = buildAsteroidOffsets(rand);
-
-      offsets.forEach(([ox, oy, oz]) => {
-        const wx = centerX + ox;
-        const wy = centerY + oy;
-        const wz = centerZ + oz;
-        writeBlock(wx, wy, wz, blocks.asteroid);
-      });
-    }
-  }
-}
-
-function sampleAsteroidDensity(x: number, z: number): number {
-  const a = sampleAsteroidNoise(x, ASTEROID_NOISE_PROFILE.scaleA) * ASTEROID_NOISE_PROFILE.weightA;
-  const b = sampleAsteroidNoise(z + 51.37, ASTEROID_NOISE_PROFILE.scaleB) * ASTEROID_NOISE_PROFILE.weightB;
-  const c = sampleAsteroidNoise(x - z - 97.53, ASTEROID_NOISE_PROFILE.scaleC) * ASTEROID_NOISE_PROFILE.weightC;
-  return a + b + c;
-}
-
-function buildAsteroidOffsets(rand: () => number): Array<[number, number, number]> {
-  const totalBlocks = randomInt(rand, ASTEROID_BLOCK_COUNT.min, ASTEROID_BLOCK_COUNT.max);
-  const clumpTarget = randomInt(rand, ASTEROID_CLUMP_COUNT.min, ASTEROID_CLUMP_COUNT.max);
-  const majorRadius = ASTEROID_MAJOR_RADIUS * (0.85 + rand() * 0.3);
-  const minorRadius = ASTEROID_MINOR_RADIUS * (0.85 + rand() * 0.3);
-  const verticalRadius = ASTEROID_VERTICAL_RADIUS;
-  const orientation = rand() * Math.PI * 2;
-
-  const offsets: Array<[number, number, number]> = [];
-  const used = new Set<string>();
-
-  const addOffset = (ox: number, oy: number, oz: number) => {
-    const key = `${ox},${oy},${oz}`;
-    if (!used.has(key)) {
-      used.add(key);
-      offsets.push([ox, oy, oz]);
-    }
-  };
-
-  for (let i = 0; i < clumpTarget && offsets.length < totalBlocks; i += 1) {
-    const t = clumpTarget > 1 ? (i / (clumpTarget - 1)) * 2 - 1 : 0;
-    const jitter = (rand() - 0.5) * 0.6;
-    const along = (t + jitter) * majorRadius * 0.6;
-    const lateral = (rand() - 0.5) * minorRadius;
-
-    const baseX = Math.round(Math.cos(orientation) * along - Math.sin(orientation) * lateral);
-    const baseZ = Math.round(Math.sin(orientation) * along + Math.cos(orientation) * lateral);
-    const baseY = Math.round((rand() - 0.5) * 2 * verticalRadius);
-
-    addOffset(baseX, baseY, baseZ);
-
-    const clumpSize = Math.min(randomInt(rand, 2, 4), totalBlocks - offsets.length);
-    for (let j = 0; j < clumpSize && offsets.length < totalBlocks; j += 1) {
-      const [dx, dy, dz] = CLUMP_DELTAS[Math.floor(rand() * CLUMP_DELTAS.length)];
-      addOffset(baseX + dx, baseY + dy, baseZ + dz);
-    }
-  }
-
-  while (offsets.length < totalBlocks) {
-    const [cx, cy, cz] = offsets[Math.floor(rand() * offsets.length)] || [0, 0, 0];
-    const [dx, dy, dz] = CLUMP_DELTAS[Math.floor(rand() * CLUMP_DELTAS.length)];
-    addOffset(cx + dx, cy + dy, cz + dz);
-  }
-
-  return offsets;
-}
-
-function hash2D(x: number, z: number): number {
-  let h = x * 374761393 + z * 668265263;
-  h = (h ^ (h >> 13)) * 1274126177;
-  h = h ^ (h >> 16);
-  return h >>> 0;
-}
-
-function createRandom(seed: number): () => number {
-  let state = seed || 1;
-  return () => {
-    state = Math.imul(state ^ (state >>> 15), 2246822519) + 0x9e3779b9;
-    state = state >>> 0;
-    return state / 0x100000000;
-  };
-}
-
-function randomInt(rand: () => number, min: number, max: number): number {
-  return min + Math.floor(rand() * (max - min + 1));
 }
 </file>
 
@@ -9103,6 +8880,277 @@ export default defineConfig({
     port: 4173,
   },
 });
+</file>
+
+<file path="src/world/chunk-generator.ts">
+import type { Engine } from 'noa-engine';
+import type { WorldBlocks } from './blocks';
+import { sampleAsteroidNoise } from './asteroid-noise';
+import {
+  PLATFORM_HALF_EXTENT,
+  PLATFORM_HEIGHT,
+  ASTEROID_LAYER_ALTITUDE,
+  ASTEROID_HEIGHT_VARIATION,
+  ASTEROID_RING_INNER_RADIUS,
+  ASTEROID_RING_OUTER_RADIUS,
+  ASTEROID_DENSITY_THRESHOLD,
+  ASTEROID_CENTER_PROBABILITY,
+  ASTEROID_CELL_SIZE,
+  ASTEROID_CELL_MARGIN,
+  ASTEROID_MAJOR_RADIUS,
+  ASTEROID_MINOR_RADIUS,
+  ASTEROID_VERTICAL_RADIUS,
+  ASTEROID_BLOCK_COUNT,
+  ASTEROID_CLUSTER_SIZE,
+  ASTEROID_CLUSTER_SPREAD,
+  ASTEROID_VARIANTS,
+} from '../config/world-options';
+
+const ASTEROID_WEIGHT_SUM = ASTEROID_VARIANTS.reduce((sum, variant) => sum + variant.weight, 0);
+
+export function installChunkGenerator(noa: Engine, blocks: WorldBlocks): void {
+  console.log('[starwatch] chunk generator habilitado (plataforma + campo de asteroides)');
+
+  noa.world.on('worldDataNeeded', (requestID: number, data: any, x: number, y: number, z: number) => {
+    const sizeX = data.shape[0];
+    const sizeY = data.shape[1];
+    const sizeZ = data.shape[2];
+
+    const chunkMinX = x;
+    const chunkMaxX = x + sizeX - 1;
+    const chunkMinY = y;
+    const chunkMaxY = y + sizeY - 1;
+    const chunkMinZ = z;
+    const chunkMaxZ = z + sizeZ - 1;
+
+    const writeBlock = (wx: number, wy: number, wz: number, blockId: number) => {
+      if (wy < chunkMinY || wy > chunkMaxY) return;
+      if (wx < chunkMinX || wx > chunkMaxX) return;
+      if (wz < chunkMinZ || wz > chunkMaxZ) return;
+      const ix = wx - x;
+      const iy = wy - y;
+      const iz = wz - z;
+      data.set(ix, iy, iz, blockId);
+    };
+
+    // Plataforma inicial 10x10 (1 bloco de profundidade)
+    const platformMinX = -PLATFORM_HALF_EXTENT;
+    const platformMaxX = PLATFORM_HALF_EXTENT - 1;
+    const platformMinZ = -PLATFORM_HALF_EXTENT;
+    const platformMaxZ = PLATFORM_HALF_EXTENT - 1;
+
+    for (let ix = 0; ix < sizeX; ix += 1) {
+      const worldX = x + ix;
+      if (worldX < platformMinX || worldX > platformMaxX) continue;
+      for (let iz = 0; iz < sizeZ; iz += 1) {
+        const worldZ = z + iz;
+        if (worldZ < platformMinZ || worldZ > platformMaxZ) continue;
+        const iy = PLATFORM_HEIGHT - y;
+        if (iy >= 0 && iy < sizeY) {
+          data.set(ix, iy, iz, blocks.dirt);
+        }
+      }
+    }
+
+    generateAsteroidsForChunk({
+      blocks,
+      chunkMinX,
+      chunkMaxX,
+      chunkMinY,
+      chunkMaxY,
+      chunkMinZ,
+      chunkMaxZ,
+      writeBlock,
+    });
+
+    noa.world.setChunkData(requestID, data);
+  });
+}
+
+interface ChunkContext {
+  blocks: WorldBlocks;
+  chunkMinX: number;
+  chunkMaxX: number;
+  chunkMinY: number;
+  chunkMaxY: number;
+  chunkMinZ: number;
+  chunkMaxZ: number;
+  writeBlock: (wx: number, wy: number, wz: number, blockId: number) => void;
+}
+
+function generateAsteroidsForChunk(ctx: ChunkContext): void {
+  const {
+    blocks,
+    chunkMinX,
+    chunkMaxX,
+    chunkMinZ,
+    chunkMaxZ,
+    writeBlock,
+  } = ctx;
+
+  const minCellX = Math.floor((chunkMinX - ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
+  const maxCellX = Math.floor((chunkMaxX + ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
+  const minCellZ = Math.floor((chunkMinZ - ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
+  const maxCellZ = Math.floor((chunkMaxZ + ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
+
+  for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+    for (let cellZ = minCellZ; cellZ <= maxCellZ; cellZ += 1) {
+      const baseSeed = hash2D(cellX, cellZ);
+      const baseRand = createRandom(baseSeed);
+
+      const offsetX = Math.round((baseRand() - 0.5) * (ASTEROID_CELL_SIZE - 1));
+      const offsetZ = Math.round((baseRand() - 0.5) * (ASTEROID_CELL_SIZE - 1));
+
+      const baseCenterX = cellX * ASTEROID_CELL_SIZE + offsetX;
+      const baseCenterZ = cellZ * ASTEROID_CELL_SIZE + offsetZ;
+      const baseRadius = Math.hypot(baseCenterX, baseCenterZ);
+
+      if (
+        baseRadius < ASTEROID_RING_INNER_RADIUS ||
+        baseRadius > ASTEROID_RING_OUTER_RADIUS
+      ) {
+        continue;
+      }
+
+      const density = sampleAsteroidDensity(baseCenterX, baseCenterZ);
+      const normalizedDensity = (density + 1) * 0.5; // [-1,1] → [0,1]
+      if (normalizedDensity < ASTEROID_DENSITY_THRESHOLD) {
+        continue;
+      }
+
+      if (baseRand() > ASTEROID_CENTER_PROBABILITY) {
+        continue;
+      }
+
+      const clusterCount = randomInt(baseRand, ASTEROID_CLUSTER_SIZE.min, ASTEROID_CLUSTER_SIZE.max);
+      for (let clusterIndex = 0; clusterIndex < clusterCount; clusterIndex += 1) {
+        const clusterAngle = baseRand() * Math.PI * 2;
+        const clusterDistance = clusterIndex === 0
+          ? 0
+          : ASTEROID_CLUSTER_SPREAD * (0.5 + baseRand() * 0.5);
+
+        const clusterCenterX = Math.round(baseCenterX + Math.cos(clusterAngle) * clusterDistance);
+        const clusterCenterZ = Math.round(baseCenterZ + Math.sin(clusterAngle) * clusterDistance);
+        const clusterCenterY = ASTEROID_LAYER_ALTITUDE + Math.round((baseRand() - 0.5) * 2 * ASTEROID_HEIGHT_VARIATION);
+
+        const clusterRadius = Math.hypot(clusterCenterX, clusterCenterZ);
+        if (
+          clusterRadius < ASTEROID_RING_INNER_RADIUS ||
+          clusterRadius > ASTEROID_RING_OUTER_RADIUS
+        ) {
+          continue;
+        }
+
+        const clusterSeed = hash3D(cellX, cellZ, clusterIndex);
+        const clusterRand = createRandom(clusterSeed);
+        const blockId = pickAsteroidBlockId(clusterRand, blocks);
+        const offsets = buildAsteroidOffsets(clusterRand);
+
+        for (const [ox, oy, oz] of offsets) {
+          const wx = clusterCenterX + ox;
+          const wy = clusterCenterY + oy;
+          const wz = clusterCenterZ + oz;
+          const radialDistance = Math.hypot(wx, wz);
+          if (
+            radialDistance < ASTEROID_RING_INNER_RADIUS ||
+            radialDistance > ASTEROID_RING_OUTER_RADIUS + ASTEROID_MAJOR_RADIUS
+          ) {
+            continue;
+          }
+          writeBlock(wx, wy, wz, blockId);
+        }
+      }
+    }
+  }
+}
+
+function sampleAsteroidDensity(x: number, z: number): number {
+  const a = sampleAsteroidNoise(x, 160) * 0.6;
+  const b = sampleAsteroidNoise(z + 51.37, 120) * 0.25;
+  const c = sampleAsteroidNoise(x - z - 97.53, 90) * 0.15;
+  return a + b + c;
+}
+
+function buildAsteroidOffsets(rand: () => number): Array<[number, number, number]> {
+  const totalBlocks = randomInt(rand, ASTEROID_BLOCK_COUNT.min, ASTEROID_BLOCK_COUNT.max);
+  const majorRadius = ASTEROID_MAJOR_RADIUS * (0.8 + rand() * 0.4);
+  const minorRadius = ASTEROID_MINOR_RADIUS * (0.8 + rand() * 0.4);
+  const verticalRadius = ASTEROID_VERTICAL_RADIUS * (0.8 + rand() * 0.4);
+  const orientation = rand() * Math.PI * 2;
+
+  const offsets: Array<[number, number, number]> = [];
+  const used = new Set<string>();
+  let attempts = 0;
+  const maxAttempts = totalBlocks * 30;
+
+  while (offsets.length < totalBlocks && attempts < maxAttempts) {
+    attempts += 1;
+    const along = (rand() * 2 - 1) * majorRadius;
+    const lateral = (rand() * 2 - 1) * minorRadius;
+    const vertical = (rand() * 2 - 1) * verticalRadius;
+
+    const norm = (along * along) / (majorRadius * majorRadius)
+      + (lateral * lateral) / (minorRadius * minorRadius)
+      + (vertical * vertical) / (verticalRadius * verticalRadius);
+    if (norm > 1) continue;
+
+    const rotX = Math.round(Math.cos(orientation) * along - Math.sin(orientation) * lateral);
+    const rotZ = Math.round(Math.sin(orientation) * along + Math.cos(orientation) * lateral);
+    const rotY = Math.round(vertical);
+
+    const key = `${rotX},${rotY},${rotZ}`;
+    if (used.has(key)) continue;
+    used.add(key);
+    offsets.push([rotX, rotY, rotZ]);
+  }
+
+  if (offsets.length === 0) {
+    offsets.push([0, 0, 0]);
+  }
+
+  return offsets;
+}
+
+function pickAsteroidBlockId(rand: () => number, blocks: WorldBlocks): number {
+  if (blocks.asteroidVariants.length === 0) {
+    return blocks.dirt;
+  }
+  let r = rand() * ASTEROID_WEIGHT_SUM;
+  for (let i = 0; i < ASTEROID_VARIANTS.length && i < blocks.asteroidVariants.length; i += 1) {
+    r -= ASTEROID_VARIANTS[i].weight;
+    if (r <= 0) {
+      return blocks.asteroidVariants[i];
+    }
+  }
+  return blocks.asteroidVariants[blocks.asteroidVariants.length - 1];
+}
+
+function hash2D(x: number, z: number): number {
+  let h = x * 374761393 + z * 668265263;
+  h = (h ^ (h >> 13)) * 1274126177;
+  h = h ^ (h >> 16);
+  return h >>> 0;
+}
+
+function hash3D(x: number, y: number, z: number): number {
+  let h = x * 374761393 + y * 668265263 + z * 144305901;
+  h = (h ^ (h >> 13)) * 1274126177;
+  h = h ^ (h >> 16);
+  return h >>> 0;
+}
+
+function createRandom(seed: number): () => number {
+  let state = seed || 1;
+  return () => {
+    state = Math.imul(state ^ (state >>> 15), 2246822519) + 0x9e3779b9;
+    state = state >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function randomInt(rand: () => number, min: number, max: number): number {
+  return min + Math.floor(rand() * (max - min + 1));
+}
 </file>
 
 <file path="src/main.ts">
