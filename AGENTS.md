@@ -11,6 +11,8 @@ Este documento descreve o comportamento esperado de todo agente técnico que toc
 3. **Transparência radical.** Documente decisões, trade-offs e limitações diretamente no código com comentários curtos ou em READMEs locais. Logs (`console.log`) são encorajados quando ajudam a diagnosticar comportamentos ou dar visibilidade ao usuário.
 4. **Trabalho incremental, sempre funcional.** Após cada alteração relevante, o jogo deve executar (`pnpm dev`) e compilar (`pnpm exec tsc --noEmit`). Evite “big bang refactors”.
 5. **Single source of truth.** O repositório deve ser autoexplicativo: nenhum conhecimento deve ficar preso na cabeça do engenheiro. Atualize READMEs, GUIs internas e comentários sempre que mudar comportamento.
+   - Toda constante operacional do slice Energia & Terminal fica em `src/config/energy-options.ts`. Ajuste potência/ticks/direção solar apenas lá.
+   - IDs de blocos, materiais e orientações devem vir do catálogo exposto em `src/blocks/`. Nunca hardcodeie literais em systems/HUD.
 6. **Modularidade inegociável.** O Starwatch é uma engine viva; todo código deve ser composto de módulos pequenos, reutilizáveis e facilmente extensíveis. Se um arquivo passar de ~400–600 linhas, divida em submódulos ou extraia helpers. Novas mecânicas devem plug-and-play com o mínimo de acoplamento.
 
 ---
@@ -30,8 +32,8 @@ A árvore `src/` reflete o roadmap definido no MANIFESTO. Diretórios vazios pos
   - Geradores de chunk devem ser determinísticos, idempotentes e facilmente parametrizáveis via constantes em `src/config/`.
   - APIs externas não devem “vazar” para outros domínios (ex.: Babylon specifics ficam encapsulados aqui).
 - `src/player/`: lida com mesh, física, inputs e estados do jogador. Padrão: `initializePlayer(noa)` que registra binds e configura componentes. Qualquer UI/câmera adicional vira módulo separado (ex.: `camera-effects.ts`).
-- `src/hud/`: UI in-game baseada em DOM ou Babylon GUI. Seguir pattern modular: cada componente expõe `mount(container)` e `unmount()`. Documentar dependências (CSS, assets).
-- `src/systems/`: simulações persistentes (energia, temperatura, scripts HAL). Cada sistema expõe `initializeSystem(noa, context)` e registra seus próprios ticks. Sem side-effects globais não declarados.
+- `src/hud/`: UI in-game baseada em React (overlay) ou Babylon GUI. O overlay HTML vive em `src/hud/overlay/` e deve ser alimentado via controladores explícitos (ex.: `OverlayController`, `LookAtTracker`). Toda nova UI deve ser registrada através do overlay, usando context providers e mantendo pointer-lock/estado de input sincronizados.
+- `src/systems/`: simulações persistentes (energia, interação, scripts HAL). Cada sistema expõe `initializeSystem(noa, context)` e registra seus próprios ticks. Sem side-effects globais não declarados. O bootstrap é responsável por passá-los ao overlay/player para que inputs e HUDs continuem desacoplados.
 - `src/blocks/`: comportamentos específicos de blocos (handlers, meshes personalizados). Estrutura sugerida: uma pasta por tipo de bloco com `register.ts`.
 - `src/ai/`: HAL-9001, drones, NPCs. Manter regras de IA puras; integrações com engine devem acontecer via adapters em `systems/` ou `scripts/`.
 - `src/scripts/`: runtime de automação do jogador. Organize scripts por domínio (mineração, navegação, base building). Entrelaçar com HAL apenas via APIs tipadas.
@@ -91,6 +93,14 @@ Ferramentas externas:
 2. Nomenclatura consistente (`terrain_atlas.png`, `crosshair.svg`). Manter metadata (dimensões, autor) no README do módulo.
 3. Evitar assets gigantes sem compressão. Prefira PNG/WEBP. Documente se usar licenças externas.
 4. Scripts de conversão (ex.: gerar normal maps) devem ir para `scripts/` com instruções no README.
+
+### Slice Energia & Terminal (v0.1)
+
+- **Overlay React** é a camada oficial para HUD/menus. Toda tela deve passar por `OverlayController`, preservar pointer-lock e consumir estado via context (ex.: `EnergySystem`, `LookAtTracker`).
+- **Eventos de bloco → sistemas.** Placement/removal chamam APIs explícitas (`EnergySystem.registerX`). Nunca atualizar métricas diretamente sem passar pelos sistemas.
+- **Constantes centralizadas.** Ajustes de tick, potência, direção solar e thresholds vivem em `src/config/energy-options.ts`.
+- **Debug opt-in.** Use `VITE_DEBUG_ENERGY=1 pnpm dev` para habilitar overlay/logs. O flag deve ficar desligado em builds normais.
+- **Documentação viva.** READMEs em `world/`, `blocks/` e `systems/` já descrevem fluxos; ao ampliar o slice, atualize-os junto com o código.
 
 ---
 
