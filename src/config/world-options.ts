@@ -21,80 +21,94 @@ export const PLAYER_SPAWN_POSITION: [number, number, number] = [0.5, 2.5, 0.5];
 /**
  * Altura média das rochas (asteroides) do anel distante.
  */
-export const ASTEROID_LAYER_ALTITUDE = 46;
+export const ASTEROID_LAYER_ALTITUDE = 52;
 
 /**
  * Variação máxima (para cima/baixo) da altura dos asteroides.
  */
-export const ASTEROID_HEIGHT_VARIATION = 8;
+export const ASTEROID_HEIGHT_VARIATION = 12;
 
 /**
  * Raio interno a partir do qual começam os asteroides.
  */
-export const ASTEROID_RING_INNER_RADIUS = 60;
+export const ASTEROID_RING_INNER_RADIUS = 90;
 
 /**
  * Densidade mínima (0–1) do ruído procedural para instanciar um asteroide.
  */
-export const ASTEROID_DENSITY_THRESHOLD = 0.38;
+export const ASTEROID_DENSITY_THRESHOLD = 0.4;
 
 /**
- * Probabilidade de spawn de um asteroide dentro de uma célula candidata.
+ * Probabilidade base de spawn de um asteroide dentro de uma célula candidata.
  */
-export const ASTEROID_CENTER_PROBABILITY = 0.42;
+export const ASTEROID_CENTER_PROBABILITY = 0.18;
 
 /**
  * Tamanho da célula (em blocos) usada para amostrar centros de asteroides.
  */
-export const ASTEROID_CELL_SIZE = 18;
+export const ASTEROID_CELL_SIZE = 48;
 
 /**
  * Margem extra usada ao calcular células vizinhas que podem afetar o chunk.
  */
-export const ASTEROID_CELL_MARGIN = 10;
+export const ASTEROID_CELL_MARGIN = 48;
 
 /**
  * Alcance máximo ao longo do eixo principal do asteroide.
  */
-export const ASTEROID_MAJOR_RADIUS = 10;
+export const ASTEROID_MAJOR_RADIUS = 14;
 
 /**
  * Alcance transversal (eixo curto) do asteroide.
  */
-export const ASTEROID_MINOR_RADIUS = 6;
+export const ASTEROID_MINOR_RADIUS = 8;
 
 /**
  * Alcance vertical (meia altura) do asteroide.
  */
-export const ASTEROID_VERTICAL_RADIUS = 7;
+export const ASTEROID_VERTICAL_RADIUS = 10;
 
 /**
- * Número de aglomerados (sub-porções) por asteroide.
- */
-export const ASTEROID_CLUMP_COUNT = {
-  min: 4,
-  max: 6,
-} as const;
-
-/**
- * Quantidade total de blocos por asteroide (12–18 blocos, quebrados em clumps).
+ * Quantidade total de blocos por asteroide (60–120 blocos, formando massas densas).
  */
 export const ASTEROID_BLOCK_COUNT = {
-  min: 12,
-  max: 18,
+  min: 60,
+  max: 120,
 } as const;
 
 /**
- * Escalas de ruído usadas na decisão de spawn.
+ * Número de asteroides em cada cluster (1–3 massas por centro).
  */
-export const ASTEROID_NOISE_PROFILE = {
-  scaleA: 160,
-  weightA: 0.6,
-  scaleB: 120,
-  weightB: 0.25,
-  scaleC: 90,
-  weightC: 0.15,
+export const ASTEROID_CLUSTER_SIZE = {
+  min: 1,
+  max: 3,
 } as const;
+
+/**
+ * Distância (em blocos) para deslocar asteroides dentro do mesmo cluster.
+ */
+export const ASTEROID_CLUSTER_SPREAD = 24;
+
+/**
+ * Variedades de asteroide registradas como materiais/blocos, com pesos para distribuição.
+ */
+export const ASTEROID_VARIANTS = [
+  {
+    id: 'basalt',
+    color: [0.36, 0.38, 0.42, 1],
+    weight: 0.5,
+  },
+  {
+    id: 'nickel',
+    color: [0.56, 0.58, 0.62, 1],
+    weight: 0.3,
+  },
+  {
+    id: 'ice',
+    color: [0.74, 0.8, 0.85, 1],
+    weight: 0.2,
+  },
+] as const;
 
 /**
  * Raio externo do cinturão de asteroides, ajustado conforme draw distance.

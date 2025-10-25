@@ -15,32 +15,13 @@ import {
   ASTEROID_MAJOR_RADIUS,
   ASTEROID_MINOR_RADIUS,
   ASTEROID_VERTICAL_RADIUS,
-  ASTEROID_CLUMP_COUNT,
   ASTEROID_BLOCK_COUNT,
-  ASTEROID_NOISE_PROFILE,
+  ASTEROID_CLUSTER_SIZE,
+  ASTEROID_CLUSTER_SPREAD,
+  ASTEROID_VARIANTS,
 } from '../config/world-options';
 
-const CLUMP_DELTAS: Array<[number, number, number]> = [
-  [0, 0, 0],
-  [1, 0, 0],
-  [-1, 0, 0],
-  [0, 0, 1],
-  [0, 0, -1],
-  [0, 1, 0],
-  [0, -1, 0],
-  [1, 0, 1],
-  [-1, 0, 1],
-  [1, 0, -1],
-  [-1, 0, -1],
-  [0, 1, 1],
-  [0, 1, -1],
-  [0, -1, 1],
-  [0, -1, -1],
-  [1, 1, 0],
-  [-1, 1, 0],
-  [1, -1, 0],
-  [-1, -1, 0],
-];
+const ASTEROID_WEIGHT_SUM = ASTEROID_VARIANTS.reduce((sum, variant) => sum + variant.weight, 0);
 
 export function installChunkGenerator(noa: Engine, blocks: WorldBlocks): void {
   console.log('[starwatch] chunk generator habilitado (plataforma + campo de asteroides)');
@@ -68,24 +49,25 @@ export function installChunkGenerator(noa: Engine, blocks: WorldBlocks): void {
     };
 
     // Plataforma inicial 10x10 (1 bloco de profundidade)
+    const platformMinX = -PLATFORM_HALF_EXTENT;
+    const platformMaxX = PLATFORM_HALF_EXTENT - 1;
+    const platformMinZ = -PLATFORM_HALF_EXTENT;
+    const platformMaxZ = PLATFORM_HALF_EXTENT - 1;
+
     for (let ix = 0; ix < sizeX; ix += 1) {
       const worldX = x + ix;
+      if (worldX < platformMinX || worldX > platformMaxX) continue;
       for (let iz = 0; iz < sizeZ; iz += 1) {
         const worldZ = z + iz;
-        if (
-          worldX >= -PLATFORM_HALF_EXTENT && worldX < PLATFORM_HALF_EXTENT &&
-          worldZ >= -PLATFORM_HALF_EXTENT && worldZ < PLATFORM_HALF_EXTENT
-        ) {
-          const iy = PLATFORM_HEIGHT - y;
-          if (iy >= 0 && iy < sizeY) {
-            data.set(ix, iy, iz, blocks.dirt);
-          }
+        if (worldZ < platformMinZ || worldZ > platformMaxZ) continue;
+        const iy = PLATFORM_HEIGHT - y;
+        if (iy >= 0 && iy < sizeY) {
+          data.set(ix, iy, iz, blocks.dirt);
         }
       }
     }
 
     generateAsteroidsForChunk({
-      data,
       blocks,
       chunkMinX,
       chunkMaxX,
@@ -101,7 +83,6 @@ export function installChunkGenerator(noa: Engine, blocks: WorldBlocks): void {
 }
 
 interface ChunkContext {
-  data: any;
   blocks: WorldBlocks;
   chunkMinX: number;
   chunkMaxX: number;
@@ -114,118 +95,160 @@ interface ChunkContext {
 
 function generateAsteroidsForChunk(ctx: ChunkContext): void {
   const {
+    blocks,
     chunkMinX,
     chunkMaxX,
     chunkMinZ,
     chunkMaxZ,
     writeBlock,
-    blocks,
   } = ctx;
 
-  const margin = ASTEROID_CELL_MARGIN + ASTEROID_MAJOR_RADIUS;
-  const minCellX = Math.floor((chunkMinX - margin) / ASTEROID_CELL_SIZE);
-  const maxCellX = Math.floor((chunkMaxX + margin) / ASTEROID_CELL_SIZE);
-  const minCellZ = Math.floor((chunkMinZ - margin) / ASTEROID_CELL_SIZE);
-  const maxCellZ = Math.floor((chunkMaxZ + margin) / ASTEROID_CELL_SIZE);
+  const minCellX = Math.floor((chunkMinX - ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
+  const maxCellX = Math.floor((chunkMaxX + ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
+  const minCellZ = Math.floor((chunkMinZ - ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
+  const maxCellZ = Math.floor((chunkMaxZ + ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
 
   for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
     for (let cellZ = minCellZ; cellZ <= maxCellZ; cellZ += 1) {
-      const seed = hash2D(cellX, cellZ);
-      const rand = createRandom(seed);
+      const baseSeed = hash2D(cellX, cellZ);
+      const baseRand = createRandom(baseSeed);
 
-      const offsetX = Math.round((rand() - 0.5) * (ASTEROID_CELL_SIZE - 1));
-      const offsetZ = Math.round((rand() - 0.5) * (ASTEROID_CELL_SIZE - 1));
+      const offsetX = Math.round((baseRand() - 0.5) * (ASTEROID_CELL_SIZE - 1));
+      const offsetZ = Math.round((baseRand() - 0.5) * (ASTEROID_CELL_SIZE - 1));
 
-      const centerX = cellX * ASTEROID_CELL_SIZE + offsetX;
-      const centerZ = cellZ * ASTEROID_CELL_SIZE + offsetZ;
-      const radialDistance = Math.hypot(centerX, centerZ);
+      const baseCenterX = cellX * ASTEROID_CELL_SIZE + offsetX;
+      const baseCenterZ = cellZ * ASTEROID_CELL_SIZE + offsetZ;
+      const baseRadius = Math.hypot(baseCenterX, baseCenterZ);
 
       if (
-        radialDistance < ASTEROID_RING_INNER_RADIUS ||
-        radialDistance > ASTEROID_RING_OUTER_RADIUS
+        baseRadius < ASTEROID_RING_INNER_RADIUS ||
+        baseRadius > ASTEROID_RING_OUTER_RADIUS
       ) {
         continue;
       }
 
-      const density = sampleAsteroidDensity(centerX, centerZ);
-      const normalizedDensity = (density + 1) * 0.5; // map [-1, 1] → [0, 1]
+      const density = sampleAsteroidDensity(baseCenterX, baseCenterZ);
+      const normalizedDensity = (density + 1) * 0.5; // [-1,1] → [0,1]
       if (normalizedDensity < ASTEROID_DENSITY_THRESHOLD) {
         continue;
       }
 
-      if (rand() > ASTEROID_CENTER_PROBABILITY) {
+      if (baseRand() > ASTEROID_CENTER_PROBABILITY) {
         continue;
       }
 
-      const centerY = ASTEROID_LAYER_ALTITUDE + Math.round((rand() - 0.5) * 2 * ASTEROID_HEIGHT_VARIATION);
-      const offsets = buildAsteroidOffsets(rand);
+      const clusterCount = randomInt(baseRand, ASTEROID_CLUSTER_SIZE.min, ASTEROID_CLUSTER_SIZE.max);
+      for (let clusterIndex = 0; clusterIndex < clusterCount; clusterIndex += 1) {
+        const clusterAngle = baseRand() * Math.PI * 2;
+        const clusterDistance = clusterIndex === 0
+          ? 0
+          : ASTEROID_CLUSTER_SPREAD * (0.5 + baseRand() * 0.5);
 
-      offsets.forEach(([ox, oy, oz]) => {
-        const wx = centerX + ox;
-        const wy = centerY + oy;
-        const wz = centerZ + oz;
-        writeBlock(wx, wy, wz, blocks.asteroid);
-      });
+        const clusterCenterX = Math.round(baseCenterX + Math.cos(clusterAngle) * clusterDistance);
+        const clusterCenterZ = Math.round(baseCenterZ + Math.sin(clusterAngle) * clusterDistance);
+        const clusterCenterY = ASTEROID_LAYER_ALTITUDE + Math.round((baseRand() - 0.5) * 2 * ASTEROID_HEIGHT_VARIATION);
+
+        const clusterRadius = Math.hypot(clusterCenterX, clusterCenterZ);
+        if (
+          clusterRadius < ASTEROID_RING_INNER_RADIUS ||
+          clusterRadius > ASTEROID_RING_OUTER_RADIUS
+        ) {
+          continue;
+        }
+
+        const clusterSeed = hash3D(cellX, cellZ, clusterIndex);
+        const clusterRand = createRandom(clusterSeed);
+        const blockId = pickAsteroidBlockId(clusterRand, blocks);
+        const offsets = buildAsteroidOffsets(clusterRand);
+
+        for (const [ox, oy, oz] of offsets) {
+          const wx = clusterCenterX + ox;
+          const wy = clusterCenterY + oy;
+          const wz = clusterCenterZ + oz;
+          const radialDistance = Math.hypot(wx, wz);
+          if (
+            radialDistance < ASTEROID_RING_INNER_RADIUS ||
+            radialDistance > ASTEROID_RING_OUTER_RADIUS + ASTEROID_MAJOR_RADIUS
+          ) {
+            continue;
+          }
+          writeBlock(wx, wy, wz, blockId);
+        }
+      }
     }
   }
 }
 
 function sampleAsteroidDensity(x: number, z: number): number {
-  const a = sampleAsteroidNoise(x, ASTEROID_NOISE_PROFILE.scaleA) * ASTEROID_NOISE_PROFILE.weightA;
-  const b = sampleAsteroidNoise(z + 51.37, ASTEROID_NOISE_PROFILE.scaleB) * ASTEROID_NOISE_PROFILE.weightB;
-  const c = sampleAsteroidNoise(x - z - 97.53, ASTEROID_NOISE_PROFILE.scaleC) * ASTEROID_NOISE_PROFILE.weightC;
+  const a = sampleAsteroidNoise(x, 160) * 0.6;
+  const b = sampleAsteroidNoise(z + 51.37, 120) * 0.25;
+  const c = sampleAsteroidNoise(x - z - 97.53, 90) * 0.15;
   return a + b + c;
 }
 
 function buildAsteroidOffsets(rand: () => number): Array<[number, number, number]> {
   const totalBlocks = randomInt(rand, ASTEROID_BLOCK_COUNT.min, ASTEROID_BLOCK_COUNT.max);
-  const clumpTarget = randomInt(rand, ASTEROID_CLUMP_COUNT.min, ASTEROID_CLUMP_COUNT.max);
-  const majorRadius = ASTEROID_MAJOR_RADIUS * (0.85 + rand() * 0.3);
-  const minorRadius = ASTEROID_MINOR_RADIUS * (0.85 + rand() * 0.3);
-  const verticalRadius = ASTEROID_VERTICAL_RADIUS;
+  const majorRadius = ASTEROID_MAJOR_RADIUS * (0.8 + rand() * 0.4);
+  const minorRadius = ASTEROID_MINOR_RADIUS * (0.8 + rand() * 0.4);
+  const verticalRadius = ASTEROID_VERTICAL_RADIUS * (0.8 + rand() * 0.4);
   const orientation = rand() * Math.PI * 2;
 
   const offsets: Array<[number, number, number]> = [];
   const used = new Set<string>();
+  let attempts = 0;
+  const maxAttempts = totalBlocks * 30;
 
-  const addOffset = (ox: number, oy: number, oz: number) => {
-    const key = `${ox},${oy},${oz}`;
-    if (!used.has(key)) {
-      used.add(key);
-      offsets.push([ox, oy, oz]);
-    }
-  };
+  while (offsets.length < totalBlocks && attempts < maxAttempts) {
+    attempts += 1;
+    const along = (rand() * 2 - 1) * majorRadius;
+    const lateral = (rand() * 2 - 1) * minorRadius;
+    const vertical = (rand() * 2 - 1) * verticalRadius;
 
-  for (let i = 0; i < clumpTarget && offsets.length < totalBlocks; i += 1) {
-    const t = clumpTarget > 1 ? (i / (clumpTarget - 1)) * 2 - 1 : 0;
-    const jitter = (rand() - 0.5) * 0.6;
-    const along = (t + jitter) * majorRadius * 0.6;
-    const lateral = (rand() - 0.5) * minorRadius;
+    const norm = (along * along) / (majorRadius * majorRadius)
+      + (lateral * lateral) / (minorRadius * minorRadius)
+      + (vertical * vertical) / (verticalRadius * verticalRadius);
+    if (norm > 1) continue;
 
-    const baseX = Math.round(Math.cos(orientation) * along - Math.sin(orientation) * lateral);
-    const baseZ = Math.round(Math.sin(orientation) * along + Math.cos(orientation) * lateral);
-    const baseY = Math.round((rand() - 0.5) * 2 * verticalRadius);
+    const rotX = Math.round(Math.cos(orientation) * along - Math.sin(orientation) * lateral);
+    const rotZ = Math.round(Math.sin(orientation) * along + Math.cos(orientation) * lateral);
+    const rotY = Math.round(vertical);
 
-    addOffset(baseX, baseY, baseZ);
-
-    const clumpSize = Math.min(randomInt(rand, 2, 4), totalBlocks - offsets.length);
-    for (let j = 0; j < clumpSize && offsets.length < totalBlocks; j += 1) {
-      const [dx, dy, dz] = CLUMP_DELTAS[Math.floor(rand() * CLUMP_DELTAS.length)];
-      addOffset(baseX + dx, baseY + dy, baseZ + dz);
-    }
+    const key = `${rotX},${rotY},${rotZ}`;
+    if (used.has(key)) continue;
+    used.add(key);
+    offsets.push([rotX, rotY, rotZ]);
   }
 
-  while (offsets.length < totalBlocks) {
-    const [cx, cy, cz] = offsets[Math.floor(rand() * offsets.length)] || [0, 0, 0];
-    const [dx, dy, dz] = CLUMP_DELTAS[Math.floor(rand() * CLUMP_DELTAS.length)];
-    addOffset(cx + dx, cy + dy, cz + dz);
+  if (offsets.length === 0) {
+    offsets.push([0, 0, 0]);
   }
 
   return offsets;
 }
 
+function pickAsteroidBlockId(rand: () => number, blocks: WorldBlocks): number {
+  if (blocks.asteroidVariants.length === 0) {
+    return blocks.dirt;
+  }
+  let r = rand() * ASTEROID_WEIGHT_SUM;
+  for (let i = 0; i < ASTEROID_VARIANTS.length && i < blocks.asteroidVariants.length; i += 1) {
+    r -= ASTEROID_VARIANTS[i].weight;
+    if (r <= 0) {
+      return blocks.asteroidVariants[i];
+    }
+  }
+  return blocks.asteroidVariants[blocks.asteroidVariants.length - 1];
+}
+
 function hash2D(x: number, z: number): number {
   let h = x * 374761393 + z * 668265263;
+  h = (h ^ (h >> 13)) * 1274126177;
+  h = h ^ (h >> 16);
+  return h >>> 0;
+}
+
+function hash3D(x: number, y: number, z: number): number {
+  let h = x * 374761393 + y * 668265263 + z * 144305901;
   h = (h ^ (h >> 13)) * 1274126177;
   h = h ^ (h >> 16);
   return h >>> 0;

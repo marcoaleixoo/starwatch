@@ -1,9 +1,10 @@
 import type { Engine } from 'noa-engine';
 import type { WorldMaterials } from './materials';
+import { ASTEROID_VARIANTS } from '../config/world-options';
 
 export interface WorldBlocks {
   dirt: number;
-  asteroid: number;
+  asteroidVariants: number[];
 }
 
 export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): WorldBlocks {
@@ -16,15 +17,20 @@ export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): Wor
     solid: true,
   });
 
-  const asteroid = noa.registry.registerBlock(blockId++, {
-    material: materials.asteroid,
-    solid: true,
-    opaque: true,
-    blockLight: true,
+  const asteroidVariantBlocks = materials.asteroidVariants.map((materialName, index) => {
+    const blockName = `asteroid-${ASTEROID_VARIANTS[index]?.id ?? index}`;
+    return noa.registry.registerBlock(blockId++, {
+      material: materialName,
+      solid: true,
+      opaque: true,
+      blockLight: true,
+      hardness: 3,
+      displayName: blockName,
+    });
   });
 
   return {
     dirt,
-    asteroid,
+    asteroidVariants: asteroidVariantBlocks,
   };
 }
