@@ -1,10 +1,18 @@
 import { Engine } from 'noa-engine';
-import { initializeWorld } from '../world';
+import { initializeWorld, type WorldResources } from '../world';
 import { initializePlayer } from '../player';
 import { ENGINE_OPTIONS } from '../config/engine-options';
+import { initializeOverlay, type OverlayApi } from '../hud/overlay';
+import { initializeHotbar, type HotbarApi } from '../player/hotbar';
+import { initializePlacementSystem } from '../systems/building/placement-system';
+import { initializeEnergySystem, type EnergySystem } from '../systems/energy';
 
 export interface StarwatchContext {
   noa: Engine;
+  world: WorldResources;
+  energy: EnergySystem;
+  overlay: OverlayApi;
+  hotbar: HotbarApi;
 }
 
 export function bootstrapStarwatch(): StarwatchContext {
@@ -20,8 +28,15 @@ export function bootstrapStarwatch(): StarwatchContext {
     showFPS: import.meta.env.DEV,
   });
 
-  initializeWorld(noa);
-  initializePlayer(noa);
+  const world = initializeWorld(noa);
+  const energy = initializeEnergySystem(noa, world);
+
+  const hotbar = initializeHotbar();
+  const overlay = initializeOverlay(noa, { hotbarController: hotbar.controller });
+  hotbar.attachOverlay(overlay);
+
+  initializePlayer(noa, { hotbar, overlay });
+  initializePlacementSystem({ noa, overlay, hotbar, world, energy });
 
   noa.container.setPointerLock(true);
   noa.container.on('DOMready', () => {
@@ -31,5 +46,5 @@ export function bootstrapStarwatch(): StarwatchContext {
 
   console.log(`[starwatch] noa-engine inicializada v${noa.version}`);
 
-  return { noa };
+  return { noa, world, energy, overlay, hotbar };
 }

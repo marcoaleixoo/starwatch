@@ -11,13 +11,14 @@ export interface AsteroidBlockDescriptor {
 export interface WorldBlocks {
   dirt: number;
   asteroidVariants: AsteroidBlockDescriptor[];
+  nextBlockId: number;
 }
 
 export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): WorldBlocks {
   console.log('[starwatch] registrando blocos do mundo');
 
   const dirt = noa.registry.registerBlock(1, {
-    material: materials.dirt,
+    material: materials.dirt.name,
     solid: true,
   });
 
@@ -25,7 +26,7 @@ export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): Wor
 
   const asteroidVariantBlocks = materials.asteroidVariants.map((variant) => {
     const blockId = noa.registry.registerBlock(nextBlockId, {
-      material: variant.materialName,
+      material: variant.material.name,
       solid: true,
       opaque: true,
       blockLight: true,
@@ -36,7 +37,7 @@ export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): Wor
     return {
       id: variant.id,
       weight: variant.weight,
-      materialName: variant.materialName,
+      materialName: variant.material.name,
       blockId,
     };
   });
@@ -44,5 +45,6 @@ export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): Wor
   return {
     dirt,
     asteroidVariants: asteroidVariantBlocks,
+    nextBlockId,
   };
 }

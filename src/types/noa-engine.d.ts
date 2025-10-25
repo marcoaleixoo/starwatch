@@ -6,7 +6,12 @@ declare module 'noa-engine' {
     setPaused(paused: boolean): void;
     render(dt: number): void;
     tick(dt: number): void;
-    getTargetBlock(): unknown;
+    targetedBlock: {
+      position: number[];
+      normal: number[];
+      adjacent: number[];
+      blockID: number;
+    } | null;
     setBlock(id: number, x: number, y: number, z: number): void;
     registry: {
       registerMaterial(name: string, options: Record<string, unknown>): number;
@@ -17,6 +22,7 @@ declare module 'noa-engine' {
       on(event: string, handler: (...args: any[]) => void): void;
       setChunkData(requestID: number, voxelData: any, voxelIDs?: any, fillID?: number): void;
       setBlock(id: number, x: number, y: number, z: number): void;
+      getBlockID(x: number, y: number, z: number): number;
       _chunkSize: number;
       setAddRemoveDistance(addDist: [number, number], removeDist?: [number, number]): void;
     };
