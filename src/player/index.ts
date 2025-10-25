@@ -1,5 +1,5 @@
 import type { Engine } from 'noa-engine';
-import { CAMERA_ZOOM_LIMITS, PLAYER_MOVEMENT } from '../config/constants';
+import { CAMERA_ZOOM_LIMITS, PLAYER_MOVEMENT } from '../config/player-options';
 
 export function initializePlayer(noa: Engine): void {
   const movement = noa.entities.getMovement(noa.playerEntity);

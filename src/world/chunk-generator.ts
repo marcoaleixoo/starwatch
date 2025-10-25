@@ -9,7 +9,7 @@ import {
   CLOUD_RING_INNER_RADIUS,
   CLOUD_RING_OUTER_RADIUS,
   CLOUD_DENSITY_THRESHOLD,
-} from '../config/constants';
+} from '../config/world-options';
 
 export function installChunkGenerator(noa: Engine, blocks: WorldBlocks): void {
   console.log('[starwatch] chunk generator habilitado');

@@ -1,12 +1,14 @@
 import type { Engine } from 'noa-engine';
+import { CHUNK_ADD_DISTANCE, CHUNK_SIZE } from './render-options';
+import { PLAYER_SPAWN_POSITION } from './world-options';
 
 export type EngineOptions = ConstructorParameters<typeof Engine>[0];
 
 export const ENGINE_OPTIONS: EngineOptions = {
   inverseY: false,
-  chunkSize: 32,
-  chunkAddDistance: [2.5, 2],
-  playerStart: [0.5, 2.5, 0.5],
+  chunkSize: CHUNK_SIZE,
+  chunkAddDistance: CHUNK_ADD_DISTANCE,
+  playerStart: PLAYER_SPAWN_POSITION,
   playerAutoStep: true,
   playerShadowComponent: false,
   originRebaseDistance: 32,

@@ -19,7 +19,11 @@ Este documento descreve o comportamento esperado de todo agente técnico que toc
 A árvore `src/` reflete o roadmap definido no MANIFESTO. Diretórios vazios possuem README descrevendo expectativas futuras; use-os como guia para novos módulos.
 
 - `src/core/`: ponto de entrada. Responsável por instanciar o engine, orquestrar inicializações, lidar com lifecycle e dependências globais. Qualquer novo sistema deve expor uma função `initializeX()` e ser registrado aqui.
-- `src/config/`: constantes, opções de engine, dicionários e enums compartilhados. **Nunca** esconda literais mágicos no código; promova-os para este diretório. Subdivida por temática quando escalar (p. ex. `energy.ts`, `hud.ts`).
+- `src/config/`: arquivos `*-options.ts` que concentram parâmetros ajustáveis (engine, render, player, mundo). Sempre crie/atualize um options file antes de usar uma constante. Convenção atual:
+  - `engine-options.ts` — opções passadas ao `noa-engine` (spawn, pointer lock, chunk size).
+  - `render-options.ts` — draw distance, tamanho de chunk, add/remove distance.
+  - `world-options.ts` — plataforma inicial, cinturão de nuvens/asteroides, spawn.
+  - `player-options.ts` — zoom/câmera, velocidade básica do jogador.
 - `src/world/`: adaptadores NOA. Contém registro de materiais, blocos, hooks de geração de chunk, assets de mundo (atlas, shaders) e funções auxiliares. Regras:
   - Qualquer asset deve viver em `src/world/assets/`.
   - Geradores de chunk devem ser determinísticos, idempotentes e facilmente parametrizáveis via constantes em `src/config/`.
@@ -49,6 +53,7 @@ Arquivos na raiz:
 4. **Exportação explícita:** exporte funções nomeadas em vez de `default`. Favoreça APIs pequenas e coesas.
 5. **Side-effects controlados:** módulos não devem executar lógica ao importar; exponha funções e deixe `core` decidir quando rodar.
 6. **Logs:** prefixar com `[starwatch]` ou `[system-name]`. Remova logs de debug temporários antes de finalizar a feature, exceto se o usuário solicitar.
+7. **Centralização de constantes:** qualquer parâmetro configurável, threshold ou literal que altere comportamento deve viver em arquivos `*-options.ts` ou `*-constants.ts` dentro de `src/config/`. É proibido deixar literais espalhados pelo código; sempre promova-os para o arquivo de opções correspondente ao domínio (ex.: `render-settings.ts`, `player-options.ts`).
 
 ---
 
@@ -69,6 +74,7 @@ Arquivos na raiz:
 - `pnpm dev`: inicia Vite em `http://localhost:5173`. Usar para validações rápidas e smoke tests visuais.
 - `pnpm build`: executa `tsc` e `vite build`. Usar antes de releases ou sempre que mexer em bundling.
 - `pnpm exec tsc --noEmit`: verificação rápida (obrigatória antes de qualquer PR/entrega).
+- `pnpm check`: roda `tsc --noEmit` e `vite build` para garantir que bundling continua saudável.
 - Futuras tasks (`pnpm test`, `pnpm lint`) serão documentadas aqui quando surgirem.
 
 Ferramentas externas:
@@ -94,7 +100,7 @@ Ferramentas externas:
 3. Use `noa.rendering.getScene()` para ajustes de iluminação/shadow apenas se necessário; encapsule em helpers (`world/shadows.ts`).
 4. Inputs: `noa.inputs.bind('acao', ['KeyX'])` e `noa.inputs.down.on('acao', handler)`. Sempre mantenha um mecanismo de toggle/pause.
 5. Player: acesse componentes via `noa.entities` e respeite offsets (meio da caixa).
-6. Performance: `chunkAddDistance` e `maxRenderRate` devem ser tunados em `src/config/engine-options.ts`. Documente benchmarks quando alterar.
+6. Performance: `chunkAddDistance`, `chunkRemoveDistance` e limites de render devem sempre ser consumidos da camada `src/config/`. Nunca setar valores no código sem passar por um arquivo `*-options.ts`.
 
 ---
 
