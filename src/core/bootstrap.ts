@@ -6,6 +6,8 @@ import { initializeOverlay, type OverlayApi } from '../hud/overlay';
 import { initializeHotbar, type HotbarApi } from '../player/hotbar';
 import { initializePlacementSystem } from '../systems/building/placement-system';
 import { initializeEnergySystem, type EnergySystem } from '../systems/energy';
+import { initializeUseSystem } from '../systems/interactions/use-system';
+import { EnergyDebugOverlay } from '../systems/energy/debug-overlay';
 
 export interface StarwatchContext {
   noa: Engine;
@@ -13,6 +15,9 @@ export interface StarwatchContext {
   energy: EnergySystem;
   overlay: OverlayApi;
   hotbar: HotbarApi;
+  debug?: {
+    energyOverlay?: EnergyDebugOverlay;
+  };
 }
 
 export function bootstrapStarwatch(): StarwatchContext {
@@ -32,11 +37,21 @@ export function bootstrapStarwatch(): StarwatchContext {
   const energy = initializeEnergySystem(noa, world);
 
   const hotbar = initializeHotbar();
-  const overlay = initializeOverlay(noa, { hotbarController: hotbar.controller });
+  const overlay = initializeOverlay(noa, { hotbarController: hotbar.controller, world, energy });
   hotbar.attachOverlay(overlay);
 
   initializePlayer(noa, { hotbar, overlay });
   initializePlacementSystem({ noa, overlay, hotbar, world, energy });
+  initializeUseSystem({ noa, overlay, world });
+
+  let energyDebug: EnergyDebugOverlay | undefined;
+  if (import.meta.env.VITE_DEBUG_ENERGY === '1') {
+    energyDebug = new EnergyDebugOverlay(energy);
+    energyDebug.setVisible(true);
+    noa.on('tick', (dt: number) => {
+      energyDebug?.handleTick(dt);
+    });
+  }
 
   noa.container.setPointerLock(true);
   noa.container.on('DOMready', () => {
@@ -46,5 +61,14 @@ export function bootstrapStarwatch(): StarwatchContext {
 
   console.log(`[starwatch] noa-engine inicializada v${noa.version}`);
 
-  return { noa, world, energy, overlay, hotbar };
+  return {
+    noa,
+    world,
+    energy,
+    overlay,
+    hotbar,
+    debug: {
+      energyOverlay: energyDebug,
+    },
+  };
 }

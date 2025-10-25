@@ -4,10 +4,16 @@ import type { OverlayController, OverlayState } from './overlay-controller';
 import type { HotbarController } from '../../player/hotbar-controller';
 import { DummyPanel } from './panels/dummy-panel';
 import { HotbarHud } from '../components/hotbar-hud';
+import type { EnergySystem } from '../../systems/energy';
+import { TerminalPanel } from './panels/terminal-panel';
+import type { LookAtTracker } from '../look-at-tracker';
+import { LookAtBadge } from '../components/look-at-badge';
 
 interface OverlayAppProps {
   controller: OverlayController;
   hotbarController: HotbarController;
+  energy: EnergySystem;
+  lookAt: LookAtTracker;
 }
 
 function useOverlayState(controller: OverlayController): OverlayState {
@@ -17,20 +23,22 @@ function useOverlayState(controller: OverlayController): OverlayState {
   );
 }
 
-function renderModal(state: OverlayState): JSX.Element | null {
+function renderModal(state: OverlayState, energy: EnergySystem): JSX.Element | null {
   if (!state.modal) {
     return null;
   }
 
-  switch (state.modal) {
+  switch (state.modal.id) {
     case 'dummy':
       return <DummyPanel />;
+    case 'terminal':
+      return <TerminalPanel energy={energy} position={state.modal.position} />;
     default:
       return null;
   }
 }
 
-export function OverlayApp({ controller, hotbarController }: OverlayAppProps): JSX.Element {
+export function OverlayApp({ controller, hotbarController, energy, lookAt }: OverlayAppProps): JSX.Element {
   const state = useOverlayState(controller);
   const focusRef = useRef<HTMLDivElement>(null);
 
@@ -50,8 +58,10 @@ export function OverlayApp({ controller, hotbarController }: OverlayAppProps): J
     () => ({
       controller,
       state,
+      energy,
+      lookAt,
     }),
-    [controller, state],
+    [controller, state, energy, lookAt],
   );
 
   return (
@@ -64,9 +74,10 @@ export function OverlayApp({ controller, hotbarController }: OverlayAppProps): J
       >
         <div className="overlay-hud-layer" data-visible="true">
           <HotbarHud controller={hotbarController} />
+          <LookAtBadge lookAt={lookAt} energy={energy} />
         </div>
         <div className="overlay-modal-layer" data-visible={state.modal ? 'true' : 'false'}>
-          {renderModal(state)}
+          {renderModal(state, energy)}
         </div>
       </div>
     </OverlayContext.Provider>

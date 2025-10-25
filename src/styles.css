@@ -168,6 +168,209 @@ canvas {
   color: rgba(205, 224, 255, 0.85);
 }
 
+.lookat-badge {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  min-width: 240px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(102, 140, 255, 0.4);
+  background: rgba(9, 13, 24, 0.82);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  color: #e3edff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.lookat-badge[data-visible='true'] {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.lookat-badge__title {
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  color: rgba(166, 207, 255, 0.95);
+}
+
+.lookat-badge__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  margin-bottom: 4px;
+}
+
+.lookat-badge .label {
+  color: rgba(170, 192, 230, 0.75);
+  letter-spacing: 0.05em;
+}
+
+.lookat-badge .value {
+  font-weight: 600;
+  color: rgba(226, 240, 255, 0.95);
+}
+
+.lookat-badge .value.is-positive {
+  color: #7ef0c6;
+}
+
+.lookat-badge .value.is-negative {
+  color: #ff7b7b;
+}
+
+.lookat-badge__hint {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: rgba(168, 196, 238, 0.7);
+}
+
+.terminal-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 420px;
+  max-width: 480px;
+  padding: 24px;
+  border-radius: 12px;
+  background: radial-gradient(circle at top, rgba(15, 46, 94, 0.85), rgba(9, 18, 36, 0.95));
+  border: 1px solid rgba(100, 150, 240, 0.35);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  color: #d8efff;
+  pointer-events: auto;
+  font-family: 'IBM Plex Mono', 'Inter', system-ui, sans-serif;
+}
+
+.terminal-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.terminal-panel__header h1 {
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.terminal-panel__header button {
+  padding: 6px 12px;
+  border: 1px solid rgba(150, 210, 255, 0.4);
+  background: rgba(12, 28, 56, 0.8);
+  color: #d8efff;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.terminal-panel__header button:hover {
+  background: rgba(25, 58, 104, 0.9);
+}
+
+.terminal-panel__content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.terminal-panel__content--empty {
+  text-align: center;
+  gap: 4px;
+  font-size: 0.9rem;
+  color: rgba(176, 206, 255, 0.85);
+}
+
+.terminal-panel__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
+.terminal-panel__row .terminal-label {
+  color: rgba(160, 200, 255, 0.7);
+}
+
+.terminal-panel__row .terminal-value {
+  font-weight: 600;
+  color: rgba(220, 238, 255, 0.95);
+}
+
+.terminal-panel__row .terminal-value.is-positive {
+  color: #7ef0c6;
+}
+
+.terminal-panel__row .terminal-value.is-negative {
+  color: #ff7b7b;
+}
+
+.terminal-panel__divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(65, 120, 200, 0), rgba(128, 186, 255, 0.6), rgba(65, 120, 200, 0));
+  margin: 6px 0;
+}
+
+.terminal-panel__footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 18px;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: rgba(160, 200, 255, 0.6);
+}
+
+#energy-debug-overlay {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 320px;
+  max-height: 70vh;
+  overflow: auto;
+  z-index: 9999;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.energy-debug {
+  background: rgba(10, 16, 28, 0.92);
+  border: 1px solid rgba(120, 180, 255, 0.45);
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: #d8efff;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.energy-debug h2 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.energy-debug h3 {
+  margin: 10px 0 6px;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(180, 210, 255, 0.85);
+}
+
+.energy-debug ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
 .overlay-modal-layer {
   position: absolute;
   inset: 0;

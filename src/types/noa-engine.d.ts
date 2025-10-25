@@ -43,11 +43,12 @@ declare module 'noa-engine' {
     inputs: {
       bind(action: string, bindings: string | string[]): void;
       down: { on(action: string, handler: (...args: any[]) => void): void };
+      up: { on(action: string, handler: (...args: any[]) => void): void };
       pointerState: { scrolly: number };
     };
     playerEntity: number;
     entities: {
-      getPositionData(id: number): { width: number; height: number };
+      getPositionData(id: number): { width: number; height: number; position: [number, number, number] };
       getMovement(id: number): { maxSpeed: number; moveForce: number };
       addComponent(id: number, name: string, data: Record<string, unknown>): void;
       names: Record<string, string>;

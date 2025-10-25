@@ -167,6 +167,12 @@ export function initializePlacementSystem({ noa, overlay, hotbar, world, energy 
     }
     if (definition.kind === 'starwatch:deck') {
       energy.networks.addDeck([x, y, z]);
+    } else if (definition.kind === 'starwatch:solar-panel') {
+      energy.registerSolarPanel([x, y, z]);
+    } else if (definition.kind === 'starwatch:battery') {
+      energy.registerBattery([x, y, z]);
+    } else if (definition.kind === 'starwatch:hal-terminal') {
+      energy.registerTerminal([x, y, z]);
     }
   };
 
@@ -181,6 +187,12 @@ export function initializePlacementSystem({ noa, overlay, hotbar, world, energy 
       }
       if (def?.kind === 'starwatch:deck') {
         energy.networks.removeDeck([x, y, z]);
+      } else if (def?.kind === 'starwatch:solar-panel') {
+        energy.unregisterSolarPanel([x, y, z]);
+      } else if (def?.kind === 'starwatch:battery') {
+        energy.unregisterBattery([x, y, z]);
+      } else if (def?.kind === 'starwatch:hal-terminal') {
+        energy.unregisterTerminal([x, y, z]);
       }
     }
   };

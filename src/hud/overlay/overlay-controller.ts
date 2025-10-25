@@ -1,7 +1,9 @@
-export type OverlayModalId = 'dummy' | 'terminal';
+export type OverlayModalState =
+  | { id: 'dummy' }
+  | { id: 'terminal'; position: [number, number, number] };
 
 export interface OverlayState {
-  modal: OverlayModalId | null;
+  modal: OverlayModalState | null;
   captureInput: boolean;
 }
 
@@ -32,16 +34,16 @@ export class OverlayController {
     handler(this.state.captureInput);
   }
 
-  toggleModal(modal: OverlayModalId): void {
-    if (this.state.modal === modal) {
+  toggleModal(modal: OverlayModalState): void {
+    if (this.state.modal?.id === modal.id) {
       this.closeModal();
       return;
     }
     this.openModal(modal);
   }
 
-  openModal(modal: OverlayModalId): void {
-    if (this.state.modal === modal && this.state.captureInput) {
+  openModal(modal: OverlayModalState): void {
+    if (this.state.modal?.id === modal.id && this.state.captureInput) {
       return;
     }
     this.setState({
