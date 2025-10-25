@@ -11,9 +11,6 @@ importers:
       '@babylonjs/core':
         specifier: ^6.1.0
         version: 6.49.0
-      noa-engine:
-        specifier: file:src/engine
-        version: file:src/engine(@babylonjs/core@6.49.0)
     devDependencies:
       typescript:
         specifier: ^5.6.3
@@ -165,9 +162,6 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@jpweeks/typedarray-pool@2.0.0':
-    resolution: {integrity: sha512-gIVyexWRE9UtiwWWr0bQuO1Odl6jZkVGVzdCVwAl4aCYllOPf+A8pz99ttYtAieXOh5OS3M50qfRYd+yDw6jEw==}
-
   '@rollup/rollup-android-arm-eabi@4.52.5':
     resolution: {integrity: sha512-8c1vW4ocv3UOMp9K+gToY5zL2XiiVw3k7f1ksf4yO1FlDFQ1C2u72iACFnSOceJFsWskc2WZNqeRhFRPzv+wtQ==}
     cpu: [arm]
@@ -281,74 +275,20 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
-  aabb-3d@https://codeload.github.com/fenomas/aabb-3d/tar.gz/b928d0a65f64d0014e36231f94f401967a3b49ef:
-    resolution: {tarball: https://codeload.github.com/fenomas/aabb-3d/tar.gz/b928d0a65f64d0014e36231f94f401967a3b49ef}
-    version: 0.3.0
-
-  bit-twiddle@1.0.2:
-    resolution: {integrity: sha512-B9UhK0DKFZhoTFcfvAzhqsjStvGJp9vYWf3+6SNTtdSQnvIgfkHbgHrg/e4+TH71N2GDu8tpmCVoyfrL1d7ntA==}
-
-  box-intersect@https://codeload.github.com/fenomas/box-intersect/tar.gz/383cb9bef2cf7140ca6ca9b705669fb108d1357f:
-    resolution: {tarball: https://codeload.github.com/fenomas/box-intersect/tar.gz/383cb9bef2cf7140ca6ca9b705669fb108d1357f}
-    version: 1.0.3
-
-  dup@1.0.0:
-    resolution: {integrity: sha512-Bz5jxMMC0wgp23Zm15ip1x8IhYRqJvF3nFC0UInJUDkN1z4uNPk9jTnfCUJXbOGiQ1JbXLQsiV41Fb+HXcj5BA==}
-
-  ent-comp@0.11.0:
-    resolution: {integrity: sha512-CgFnraUeegcPQTEwhaqqlZwdwEEfTToxvqA+m9WizNP3I7ZECphv8odpQevinkTl5B4Zdv4vcWk0GcvBH3/Wxw==}
-
   esbuild@0.21.5:
     resolution: {integrity: sha512-mg3OPMV4hXywwpoDxu3Qda5xCKQi+vCTZq8S9J/EpkhB2HzKXq4SNFZE3+NK93JYxc8VMSep+lOUSC/RVKaBqw==}
     engines: {node: '>=12'}
     hasBin: true
-
-  events@3.3.0:
-    resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
-    engines: {node: '>=0.8.x'}
-
-  fast-voxel-raycast@0.1.1:
-    resolution: {integrity: sha512-0xL13ln+mxB4NCed3sfmBRhywy/vWYxbimKYvqdy/lV+/3/VPAS6/6kiNT2peFnpgeTGWGMZs05sTkvVktPAUA==}
 
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
-  game-inputs@0.8.0:
-    resolution: {integrity: sha512-YCpIS7tUenag2zZoBAk4lWWIJyWOrT+fvGMe9h0hF75riIvUe/7xXmqZ1BANu/gydvGaxlBHuVNNcytNM3NxbA==}
-
-  gl-matrix@3.4.4:
-    resolution: {integrity: sha512-latSnyDNt/8zYUB6VIJ6PCh2jBjJX6gnDsoCZ7LyW7GkqrD51EWwa9qCoGixj8YqBtETQK/xY7OmpTF8xz1DdQ==}
-
-  gl-vec3@1.2.0:
-    resolution: {integrity: sha512-ynW7j5ZshRTHXG5UPC5u6G52cBCNx53LbNlq2HQ1bAosZbO4wOCEBufXS7KGiKL1slMgy4j/77Ikt+vMznouLg==}
-
-  iota-array@1.0.0:
-    resolution: {integrity: sha512-pZ2xT+LOHckCatGQ3DcG/a+QuEqvoxqkiL7tvE8nn3uuu+f6i1TtpB5/FtWFbxUuVr5PZCx8KskuGatbJDXOWA==}
-
-  is-buffer@1.1.6:
-    resolution: {integrity: sha512-NcdALwpXkTm5Zvvbk7owOUSvVvBKDgKP5/ewfXEznmQFfs4ZRmanOeKBTjRVjka3QFoN6XJ+9F3USqfHqTaU5w==}
-
-  is-buffer@2.0.5:
-    resolution: {integrity: sha512-i2R6zNFDwgEHJyQUtJEk0XFi1i0dPFn/oqjK3/vPCcDeJvW5NQ83V8QbicfF1SupOaB0h8ntgBC2YiE7dfyctQ==}
-    engines: {node: '>=4'}
-
-  micro-game-shell@0.9.0:
-    resolution: {integrity: sha512-7MxyiUX54OLRK75GV7tQEIJhtRd8mrYDdK2AZYU2VqiYXohCcCwQfm1fAYqmyeRDt1FZaA022fbj1eAImL59Dg==}
-
   nanoid@3.3.11:
     resolution: {integrity: sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
-
-  ndarray@1.0.19:
-    resolution: {integrity: sha512-B4JHA4vdyZU30ELBw3g7/p9bZupyew5a7tX1Y/gGeF2hafrPaQZhgrGQfsvgfYbgdFZjYwuEcnaobeM/WMW+HQ==}
-
-  noa-engine@file:src/engine:
-    resolution: {directory: src/engine, type: directory}
-    peerDependencies:
-      '@babylonjs/core': ^6.1.0
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -401,12 +341,6 @@ packages:
         optional: true
       terser:
         optional: true
-
-  voxel-aabb-sweep@0.5.0:
-    resolution: {integrity: sha512-cnjWJ8Xx03fzke8AqKCqKdDk+QsvGVOp2oAT1e6hcCFyDHAyCWM4o13G9xBofzHvXYAinz2hA8JuHK/G8+QD2w==}
-
-  voxel-physics-engine@0.13.0:
-    resolution: {integrity: sha512-5/R4VLTBmzJGsyNUNX7MNJsxBWqwmmEABTwa2mv0+Z6TLCwSEDufU5LGpP8D/50HM6eVCYR3WTpoG7JH1th/jw==}
 
 snapshots:
 
@@ -481,12 +415,6 @@ snapshots:
   '@esbuild/win32-x64@0.21.5':
     optional: true
 
-  '@jpweeks/typedarray-pool@2.0.0':
-    dependencies:
-      bit-twiddle: 1.0.2
-      dup: 1.0.0
-      is-buffer: 2.0.5
-
   '@rollup/rollup-android-arm-eabi@4.52.5':
     optional: true
 
@@ -555,21 +483,6 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
-  aabb-3d@https://codeload.github.com/fenomas/aabb-3d/tar.gz/b928d0a65f64d0014e36231f94f401967a3b49ef:
-    dependencies:
-      gl-matrix: 3.4.4
-
-  bit-twiddle@1.0.2: {}
-
-  box-intersect@https://codeload.github.com/fenomas/box-intersect/tar.gz/383cb9bef2cf7140ca6ca9b705669fb108d1357f:
-    dependencies:
-      '@jpweeks/typedarray-pool': 2.0.0
-      bit-twiddle: 1.0.2
-
-  dup@1.0.0: {}
-
-  ent-comp@0.11.0: {}
-
   esbuild@0.21.5:
     optionalDependencies:
       '@esbuild/aix-ppc64': 0.21.5
@@ -596,50 +509,10 @@ snapshots:
       '@esbuild/win32-ia32': 0.21.5
       '@esbuild/win32-x64': 0.21.5
 
-  events@3.3.0: {}
-
-  fast-voxel-raycast@0.1.1: {}
-
   fsevents@2.3.3:
     optional: true
 
-  game-inputs@0.8.0:
-    dependencies:
-      events: 3.3.0
-
-  gl-matrix@3.4.4: {}
-
-  gl-vec3@1.2.0: {}
-
-  iota-array@1.0.0: {}
-
-  is-buffer@1.1.6: {}
-
-  is-buffer@2.0.5: {}
-
-  micro-game-shell@0.9.0: {}
-
   nanoid@3.3.11: {}
-
-  ndarray@1.0.19:
-    dependencies:
-      iota-array: 1.0.0
-      is-buffer: 1.1.6
-
-  noa-engine@file:src/engine(@babylonjs/core@6.49.0):
-    dependencies:
-      '@babylonjs/core': 6.49.0
-      aabb-3d: https://codeload.github.com/fenomas/aabb-3d/tar.gz/b928d0a65f64d0014e36231f94f401967a3b49ef
-      box-intersect: https://codeload.github.com/fenomas/box-intersect/tar.gz/383cb9bef2cf7140ca6ca9b705669fb108d1357f
-      ent-comp: 0.11.0
-      events: 3.3.0
-      fast-voxel-raycast: 0.1.1
-      game-inputs: 0.8.0
-      gl-vec3: 1.2.0
-      micro-game-shell: 0.9.0
-      ndarray: 1.0.19
-      voxel-aabb-sweep: 0.5.0
-      voxel-physics-engine: 0.13.0
 
   picocolors@1.1.1: {}
 
@@ -688,11 +561,3 @@ snapshots:
       rollup: 4.52.5
     optionalDependencies:
       fsevents: 2.3.3
-
-  voxel-aabb-sweep@0.5.0: {}
-
-  voxel-physics-engine@0.13.0:
-    dependencies:
-      aabb-3d: https://codeload.github.com/fenomas/aabb-3d/tar.gz/b928d0a65f64d0014e36231f94f401967a3b49ef
-      gl-vec3: 1.2.0
-      voxel-aabb-sweep: 0.5.0

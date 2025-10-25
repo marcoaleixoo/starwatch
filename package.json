@@ -10,8 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@babylonjs/core": "^6.1.0",
-    "noa-engine": "file:src/engine"
+    "@babylonjs/core": "^6.1.0"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

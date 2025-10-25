@@ -12,7 +12,9 @@
     "jsx": "preserve",
     "strict": true,
     "baseUrl": ".",
-    "paths": {}
+    "paths": {
+      "noa-engine": ["src/engine/index.js"]
+    }
   },
   "include": ["src"]
 }

@@ -47,7 +47,7 @@ var defaultOptions = {
     playerShadowComponent: true,
     tickRate: 30,           // ticks per second
     maxRenderRate: 0,       // max FPS, 0 for uncapped 
-    blockTestDistance: 10,
+    blockTestDistance: 100,
     stickyPointerLock: true,
     dragCameraOutsidePointerLock: true,
     stickyFullscreen: false,
