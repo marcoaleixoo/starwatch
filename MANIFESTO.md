@@ -282,11 +282,11 @@
 
 ## 18. UI/UX In‑game — HUD + Toolbar “Minecraft‑like” + Terminais
 
-* **HUD básico:** energia total/consumo, calor médio, %O₂/pressão, relógio estelar, indicadores de scripts ativos, alerta de gargalos.
-* **Toolbar inferior (Minecraft‑like):** slots com **objetos/peças** prontos para colocar no mundo (módulos/estruturas); rolagem rápida; tooltips com W/CPU/heat.
+* **HUD básico:** energia total/consumo, calor médio, %O₂/pressão, relógio estelar, indicadores de scripts ativos, alerta de gargalos. Dados contextuais surgem via badges “look-at” (≤3 m) ao mirar módulos críticos (painel/bateria/terminal).
+* **Toolbar inferior (Minecraft‑like):** slots com **objetos/peças** prontos para colocar no mundo (módulos/estruturas); rolagem rápida; tooltips com W/CPU/heat. Implementação vive num overlay React acima do canvas, mantendo pointer-lock e inputs sincronizados com o NOA.
 * **Inventário & Radial:** seleção rápida de módulos; preview “ghost” no builder.
 * **Top bar:** recursos globais (Ferro/Silício/Urânio, MJ em rede), naves/drones/estações ativas.
-* **Terminais físicos:** UI dedicadas por subsistema (energia, mineração, pesquisa, manutenção) — localização diegética (o jogador caminha até eles).
+* **Terminais físicos:** UI dedicadas por subsistema (energia, mineração, pesquisa, manutenção) — localização diegética (o jogador caminha até eles). HAL Terminal exibe métricas agregadas por rede (ΔW, MJ armazenado/capacidade, contagem de módulos) numa CRT azul; abre com `E`, fecha com `Esc`.
 * **Câmera/Controle:** FPS no builder, pointer lock, sprint/crouch/jump; navegação Homeworld‑like na visão estratégica do setor (futuro).
 
 ---
