@@ -11,6 +11,7 @@ Este documento descreve o comportamento esperado de todo agente técnico que toc
 3. **Transparência radical.** Documente decisões, trade-offs e limitações diretamente no código com comentários curtos ou em READMEs locais. Logs (`console.log`) são encorajados quando ajudam a diagnosticar comportamentos ou dar visibilidade ao usuário.
 4. **Trabalho incremental, sempre funcional.** Após cada alteração relevante, o jogo deve executar (`pnpm dev`) e compilar (`pnpm exec tsc --noEmit`). Evite “big bang refactors”.
 5. **Single source of truth.** O repositório deve ser autoexplicativo: nenhum conhecimento deve ficar preso na cabeça do engenheiro. Atualize READMEs, GUIs internas e comentários sempre que mudar comportamento.
+6. **Modularidade inegociável.** O Starwatch é uma engine viva; todo código deve ser composto de módulos pequenos, reutilizáveis e facilmente extensíveis. Se um arquivo passar de ~400–600 linhas, divida em submódulos ou extraia helpers. Novas mecânicas devem plug-and-play com o mínimo de acoplamento.
 
 ---
 
