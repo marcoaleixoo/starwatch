@@ -18,6 +18,7 @@ const BORDER = 32;
 const HEADER_HEIGHT = 64;
 const TAB_BAR_HEIGHT = 80;
 const FOOTER_HEIGHT = 64;
+const SCREEN_SURFACE_BIAS = 0.002;
 
 export interface BaseTerminalDisplayOptions<TData> {
   scene: Scene;
@@ -105,7 +106,7 @@ export abstract class BaseTerminalDisplay<TData> {
     this.mesh.metadata = { terminalScreen: true, key: this.makeKey() };
     this.allMeshes.push(this.mesh);
 
-    const anchor = this.getSurfacePosition();
+    const anchor = this.getSurfacePosition(this.mountOffset + SCREEN_SURFACE_BIAS);
     this.mesh.position = anchor;
     this.mesh.lookAt(anchor.add(this.surfaceNormal));
     this.mesh.rotate(Vector3.Up(), Math.PI);
