@@ -1,22 +1,18 @@
-export type OverlayModalState =
-  | { id: 'dummy' }
-  | { id: 'terminal'; position: [number, number, number] };
-
 export interface OverlayState {
-  modal: OverlayModalState | null;
   captureInput: boolean;
+  pointerPassthrough: boolean;
 }
 
 type Listener = () => void;
 
 export class OverlayController {
   private state: OverlayState = {
-    modal: null,
     captureInput: false,
+    pointerPassthrough: false,
   };
 
   private listeners = new Set<Listener>();
-  private onCaptureChange?: (capture: boolean) => void;
+  private onCaptureChange?: (state: OverlayState) => void;
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
@@ -29,58 +25,50 @@ export class OverlayController {
     return this.state;
   }
 
-  registerCaptureHandler(handler: (capture: boolean) => void): void {
-    this.onCaptureChange = handler;
-    handler(this.state.captureInput);
-  }
-
-  toggleModal(modal: OverlayModalState): void {
-    if (this.state.modal?.id === modal.id) {
-      this.closeModal();
-      return;
-    }
-    this.openModal(modal);
-  }
-
-  openModal(modal: OverlayModalState): void {
-    if (this.state.modal?.id === modal.id && this.state.captureInput) {
+  setCapture(capture: boolean): void {
+    if (this.state.captureInput === capture) {
       return;
     }
     this.setState({
-      modal,
-      captureInput: true,
+      captureInput: capture,
+      pointerPassthrough: this.state.pointerPassthrough,
     });
   }
 
-  closeModal(): void {
-    if (!this.state.modal && !this.state.captureInput) {
+  registerCaptureHandler(handler: (state: OverlayState) => void): void {
+    this.onCaptureChange = handler;
+    handler(this.state);
+  }
+
+  setPointerPassthrough(pointerPassthrough: boolean): void {
+    if (this.state.pointerPassthrough === pointerPassthrough) {
       return;
     }
     this.setState({
-      modal: null,
-      captureInput: false,
+      captureInput: this.state.captureInput,
+      pointerPassthrough,
     });
   }
 
   reset(): void {
     this.setState({
-      modal: null,
       captureInput: false,
+      pointerPassthrough: false,
     });
     this.listeners.clear();
   }
 
   private setState(nextState: OverlayState): void {
-    const changedModal = this.state.modal !== nextState.modal;
     const changedCapture = this.state.captureInput !== nextState.captureInput;
+    const changedPointer = this.state.pointerPassthrough !== nextState.pointerPassthrough;
 
     this.state = nextState;
 
-    if (changedCapture && this.onCaptureChange) {
-      this.onCaptureChange(this.state.captureInput);
+    if ((changedCapture || changedPointer) && this.onCaptureChange) {
+      this.onCaptureChange(this.state);
     }
 
-    if (changedModal || changedCapture) {
+    if (changedCapture || changedPointer) {
       this.emit();
     }
   }

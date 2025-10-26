@@ -61,8 +61,8 @@ export function registerStarwatchBlocks(
     { material: materials.battery.name, solid: true, opaque: true },
     {
       kind: 'starwatch:battery',
-      orientable: false,
-      defaultOrientation: 'north',
+      orientable: true,
+      defaultOrientation: 'south',
     },
   );
   nextId += 1;

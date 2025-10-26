@@ -1,56 +1,59 @@
 This file is a merged representation of the entire codebase, combined into a single document by Repomix.
 
-<file_summary>
-This section contains a summary of this file.
+# File Summary
 
-<purpose>
+## Purpose
 This file contains a packed representation of the entire repository's contents.
 It is designed to be easily consumable by AI systems for analysis, code review,
 or other automated processes.
-</purpose>
 
-<file_format>
+## File Format
 The content is organized as follows:
 1. This summary section
 2. Repository information
 3. Directory structure
 4. Repository files (if enabled)
 5. Multiple file entries, each consisting of:
-  - File path as an attribute
-  - Full contents of the file
-</file_format>
+  a. A header with the file path (## File: path/to/file)
+  b. The full contents of the file in a code block
 
-<usage_guidelines>
+## Usage Guidelines
 - This file should be treated as read-only. Any changes should be made to the
   original repository files, not this packed version.
 - When processing this file, use the file path to distinguish
   between different files in the repository.
 - Be aware that this file may contain sensitive information. Handle it with
   the same level of security as you would the original repository.
-</usage_guidelines>
 
-<notes>
+## Notes
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
-</notes>
 
-</file_summary>
-
-<directory_structure>
+# Directory Structure
+```
+data/
+  schemas/
+    sector-snapshot.schema.json
 src/
   ai/
     README.md
   blocks/
+    metadata-store.ts
     README.md
+    register.ts
+    types.ts
   config/
+    energy-options.ts
     engine-options.ts
+    hud-options.ts
     player-options.ts
     README.md
     render-options.ts
-    world-options.ts
+    sector-options.ts
+    terminal-options.ts
   core/
     bootstrap.ts
   engine/
@@ -94,26 +97,71 @@ src/
       README.md
     index.js
   hud/
+    components/
+      crosshair.tsx
+      hotbar-hud.tsx
+      hotbar-icons.tsx
+    overlay/
+      index.tsx
+      overlay-context.tsx
+      overlay-controller.ts
+      OverlayApp.tsx
     README.md
+    removal-hold-tracker.ts
   persistence/
+    adapter.ts
+    local-storage-adapter.ts
+    manager.ts
     README.md
+    snapshot.ts
+    types.ts
   player/
+    hotbar-controller.ts
+    hotbar.ts
     index.ts
   scripts/
     README.md
-  systems/
-    README.md
-  types/
-    assets.d.ts
-    noa-engine.d.ts
-  utils/
-    README.md
-  world/
+  sector/
+    assets/
+      terrain_atlas.png
+    generation/
+      asteroid-field.ts
+      index.ts
+      platform.ts
+      types.ts
     asteroid-noise.ts
     blocks.ts
     chunk-generator.ts
     index.ts
     materials.ts
+    README.md
+  systems/
+    building/
+      placement-system.ts
+    energy/
+      debug-overlay.ts
+      energy-network-manager.ts
+      index.ts
+    interactions/
+      use-system.ts
+    terminals/
+      battery-terminal-display.ts
+      format.ts
+      hal-terminal-display.ts
+      helpers.ts
+      index.ts
+      render-helpers.ts
+      solar-terminal-display.ts
+      terminal-display-manager.ts
+      terminal-display.ts
+      types.ts
+    README.md
+  types/
+    assets.d.ts
+    noa-engine.d.ts
+  utils/
+    random.ts
+    README.md
   main.ts
   README.md
   styles.css
@@ -124,27 +172,236 @@ index.html
 package.json
 tsconfig.json
 vite.config.ts
-</directory_structure>
+```
 
-<files>
-This section contains the contents of the repository's files.
+# Files
 
-<file path="src/ai/README.md">
+## File: data/schemas/sector-snapshot.schema.json
+````json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://starwatch.dev/schemas/sector-snapshot.schema.json",
+  "title": "SectorSnapshot",
+  "type": "object",
+  "required": ["schemaVersion", "player", "sector", "construction", "hotbar"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "player": {
+      "type": "object",
+      "required": ["id", "lastSeenIso"],
+      "properties": {
+        "id": { "type": "string" },
+        "lastSeenIso": { "type": "string", "format": "date-time" }
+      }
+    },
+    "sector": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string" },
+        "seed": { "type": "integer" }
+      }
+    },
+    "construction": {
+      "type": "object",
+      "required": ["decks", "solarPanels", "batteries", "terminals"],
+      "properties": {
+        "decks": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/positionEntry" }
+        },
+        "solarPanels": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/orientedEntry" }
+        },
+        "batteries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["position", "storedMJ", "capacityMJ"],
+            "properties": {
+              "position": { "$ref": "#/definitions/voxelPosition" },
+              "storedMJ": { "type": "number" },
+              "capacityMJ": { "type": "number" }
+            }
+          }
+        },
+        "terminals": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/orientedEntry" }
+        }
+      }
+    },
+    "hotbar": {
+      "type": "object",
+      "required": ["activeIndex", "slotItemIds"],
+      "properties": {
+        "activeIndex": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "slotItemIds": {
+          "type": "array",
+          "items": { "type": ["string", "null"] },
+          "minItems": 9,
+          "maxItems": 9
+        }
+      }
+    }
+  },
+  "definitions": {
+    "voxelPosition": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "positionEntry": {
+      "type": "object",
+      "required": ["position"],
+      "properties": {
+        "position": { "$ref": "#/definitions/voxelPosition" }
+      }
+    },
+    "orientedEntry": {
+      "type": "object",
+      "required": ["position"],
+      "properties": {
+        "position": { "$ref": "#/definitions/voxelPosition" },
+        "orientation": { "type": "string" }
+      }
+    }
+  }
+}
+````
+
+## File: src/ai/README.md
+````markdown
 # AI & Agents
 
 Reserved for HAL-9001 behaviours, drone controllers, finite-state machines and navigation helpers.
 Expose pure logic here; wiring into the engine should happen via systems or scripts.
-</file>
+````
 
-<file path="src/blocks/README.md">
-# Custom Blocks
+## File: src/blocks/types.ts
+````typescript
+export type BlockKind =
+  | 'starwatch:deck'
+  | 'starwatch:solar-panel'
+  | 'starwatch:battery'
+  | 'starwatch:hal-terminal';
 
-Use this area for bespoke block behaviours, meshes or registries beyond the base world setup.
-Keep block definitions focused (one file per block family) and export factory functions that
-the world initializer can call.
-</file>
+export type BlockOrientation = 'north' | 'east' | 'south' | 'west';
 
-<file path="src/config/player-options.ts">
+export interface BlockDefinition {
+  kind: BlockKind;
+  id: number;
+  orientable: boolean;
+  defaultOrientation: BlockOrientation;
+}
+
+export interface BlockCatalog {
+  deck: BlockDefinition;
+  solarPanel: BlockDefinition;
+  battery: BlockDefinition;
+  halTerminal: BlockDefinition;
+  byKind: Map<BlockKind, BlockDefinition>;
+  byId: Map<number, BlockDefinition>;
+}
+````
+
+## File: src/config/energy-options.ts
+````typescript
+/** Frequência (Hz) do tick global de energia. */
+export const ENERGY_TICK_HZ = 1;
+export const ENERGY_TICK_INTERVAL_SEC = 1 / ENERGY_TICK_HZ;
+
+/** Potência nominal de um painel sem sombra. */
+export const PANEL_BASE_W = 120;
+
+/** Número máximo de raios usados no sombreamento por painel. */
+export const PANEL_RAY_COUNT = 8;
+
+/** Distância máxima percorrida pelos raios (em blocos). */
+export const PANEL_MAX_RAY_DISTANCE = 64;
+
+/** Passo (em blocos) ao avançar cada raio. */
+export const PANEL_RAY_STEP = 0.5;
+
+/**
+ * Offsets em relação ao centro do painel para amostrar sombras.
+ * A lista pode ser extendida; o sistema usa os primeiros `PANEL_RAY_COUNT` valores.
+ */
+export const PANEL_SAMPLE_OFFSETS: ReadonlyArray<readonly [number, number]> = [
+  [-0.25, -0.25],
+  [0.25, -0.25],
+  [-0.25, 0.25],
+  [0.25, 0.25],
+  [0, 0],
+  [-0.25, 0],
+  [0.25, 0],
+  [0, 0.25],
+];
+
+/** Direção normalizada da luz solar usada no slice (apontando levemente para leste). */
+export const SUN_DIRECTION: readonly [number, number, number] = normalize([0.25, 1, 0.15]);
+
+/** Capacidade padrão da bateria pequena (MJ). */
+export const BATTERY_SMALL_MJ = 5;
+
+/** Margem para evitar ruído numérico quando acumulando flutuações de energia. */
+export const ENERGY_EPSILON = 1e-6;
+
+function normalize(vector: [number, number, number]): [number, number, number] {
+  const [x, y, z] = vector;
+  const len = Math.hypot(x, y, z) || 1;
+  return [x / len, y / len, z / len];
+}
+````
+
+## File: src/config/hud-options.ts
+````typescript
+export const HOTBAR_SLOT_COUNT = 9;
+
+export interface HotbarItemDefinition {
+  id: string;
+  label: string;
+  description: string;
+  icon: 'deck' | 'solar-panel' | 'battery' | 'terminal';
+  blockKind: string;
+}
+
+export const INITIAL_HOTBAR_ITEMS: HotbarItemDefinition[] = [
+  {
+    id: 'deck',
+    label: 'Deck Condutivo',
+    description: 'Chão estruturante e condutor da rede elétrica.',
+    icon: 'deck',
+    blockKind: 'starwatch:deck',
+  },
+  {
+    id: 'solar-panel',
+    label: 'Painel Solar',
+    description: 'Gera energia baseada em iluminação solar.',
+    icon: 'solar-panel',
+    blockKind: 'starwatch:solar-panel',
+  },
+  {
+    id: 'battery',
+    label: 'Bateria 5 MJ',
+    description: 'Armazena energia excedente da rede.',
+    icon: 'battery',
+    blockKind: 'starwatch:battery',
+  },
+  {
+    id: 'hal-terminal',
+    label: 'Terminal HAL',
+    description: 'Console interativo HAL com CRT azul.',
+    icon: 'terminal',
+    blockKind: 'starwatch:hal-terminal',
+  },
+];
+````
+
+## File: src/config/player-options.ts
+````typescript
 /**
  * Limites de zoom da câmera FPS. Consumido em `player/index.ts`.
  */
@@ -161,22 +418,10 @@ export const PLAYER_MOVEMENT = {
   maxSpeed: 8,
   moveForce: 35,
 } as const;
-</file>
+````
 
-<file path="src/config/README.md">
-# Config Options
-
-Todos os parâmetros ajustáveis do jogo vivem em arquivos `*-options.ts` neste diretório. Cada arquivo documenta onde os valores são consumidos:
-
-- `engine-options.ts`: opções passadas diretamente ao `noa-engine` durante o bootstrap (spawn, pointer lock, chunk size, etc.).
-- `render-options.ts`: draw distance, tamanho de chunk e distâncias de add/remove.
-- `world-options.ts`: plataforma inicial e cinturão de nuvens/asteroides.
-- `player-options.ts`: limites de zoom e parâmetros de movimentação do jogador.
-
-Novas features devem introduzir seu próprio arquivo `foo-options.ts` e importar as constantes correspondentes a partir dele.
-</file>
-
-<file path="src/config/render-options.ts">
+## File: src/config/render-options.ts
+````typescript
 /**
  * Distância alvo de renderização em blocos. Altere este valor para expandir
  * ou reduzir o horizonte visual (chunk distance é recalculada automaticamente).
@@ -200,9 +445,10 @@ export const CHUNK_ADD_DISTANCE: [number, number] = [horizontalAdd, verticalAdd]
  * Distância de remoção (hysterese) para descarregar chunks fora de vista.
  */
 export const CHUNK_REMOVE_DISTANCE: [number, number] = [horizontalAdd + 1, verticalAdd + 0.5];
-</file>
+````
 
-<file path="src/engine/components/collideEntities.js">
+## File: src/engine/components/collideEntities.js
+````javascript
 import boxIntersect from 'box-intersect'
 
 
@@ -365,9 +611,10 @@ export default function (noa) {
 
 
 }
-</file>
+````
 
-<file path="src/engine/components/collideTerrain.js">
+## File: src/engine/components/collideTerrain.js
+````javascript
 export default function (noa) {
     return {
 
@@ -402,9 +649,10 @@ export default function (noa) {
 
     }
 }
-</file>
+````
 
-<file path="src/engine/components/fadeOnZoom.js">
+## File: src/engine/components/fadeOnZoom.js
+````javascript
 /**
  * Component for the player entity, when active hides the player's mesh 
  * when camera zoom is less than a certain amount
@@ -442,9 +690,10 @@ function checkZoom(state, zoom, noa) {
     var shouldHide = (zoom < state.cutoff)
     noa.rendering.setMeshVisibility(mesh, !shouldHide)
 }
-</file>
+````
 
-<file path="src/engine/components/followsEntity.js">
+## File: src/engine/components/followsEntity.js
+````javascript
 import vec3 from 'gl-vec3'
 
 
@@ -517,9 +766,10 @@ export default function (noa) {
     }
 
 }
-</file>
+````
 
-<file path="src/engine/components/mesh.js">
+## File: src/engine/components/mesh.js
+````javascript
 import vec3 from 'gl-vec3'
 
 
@@ -579,9 +829,10 @@ export default function (noa) {
 
     }
 }
-</file>
+````
 
-<file path="src/engine/components/movement.js">
+## File: src/engine/components/movement.js
+````javascript
 import vec3 from 'gl-vec3'
 
 
@@ -745,9 +996,10 @@ function applyMovementPhysics(dt, state, body) {
         body.friction = state.standingFriction
     }
 }
-</file>
+````
 
-<file path="src/engine/components/physics.js">
+## File: src/engine/components/physics.js
+````javascript
 /** 
  * @module
  * @internal
@@ -870,9 +1122,10 @@ function backtrackRenderPos(physState, posState, backtrackAmt, smoothed) {
     // copy values over to renderPosition, 
     vec3.copy(posState._renderPosition, local)
 }
-</file>
+````
 
-<file path="src/engine/components/position.js">
+## File: src/engine/components/position.js
+````javascript
 /** 
  * @module 
  * @internal 
@@ -975,9 +1228,10 @@ export function updatePositionExtents(state) {
     ext[4] = lpos[1] + state.height
     ext[5] = lpos[2] + hw
 }
-</file>
+````
 
-<file path="src/engine/components/receivesInputs.js">
+## File: src/engine/components/receivesInputs.js
+````javascript
 /**
  * 
  * Input processing component - gets (key) input state and  
@@ -1044,9 +1298,10 @@ function setMovementState(state, inputs, camHeading) {
     }
 
 }
-</file>
+````
 
-<file path="src/engine/components/shadow.js">
+## File: src/engine/components/shadow.js
+````javascript
 import vec3 from 'gl-vec3'
 
 import { Color3 } from '@babylonjs/core/Maths/math.color'
@@ -1162,9 +1417,10 @@ function updateShadowHeight(noa, posDat, physDat, mesh, size, shadowDist, camPos
     mesh.scaling.copyFromFloats(scale, scale, scale)
     mesh.setEnabled(true)
 }
-</file>
+````
 
-<file path="src/engine/components/smoothCamera.js">
+## File: src/engine/components/smoothCamera.js
+````javascript
 export default function (noa) {
 
     var compName = 'smoothCamera'
@@ -1194,9 +1450,10 @@ export default function (noa) {
 
     }
 }
-</file>
+````
 
-<file path="src/engine/lib/camera.js">
+## File: src/engine/lib/camera.js
+````javascript
 import vec3 from 'gl-vec3'
 import aabb from 'aabb-3d'
 import sweep from 'voxel-aabb-sweep'
@@ -1529,9 +1786,10 @@ function bugFix(pointerState) {
 
 var lastx = 0
 var lasty = 0
-</file>
+````
 
-<file path="src/engine/lib/chunk.js">
+## File: src/engine/lib/chunk.js
+````javascript
 import { LocationQueue } from './util'
 import ndarray from 'ndarray'
 
@@ -1885,9 +2143,10 @@ function callAllBlockHandlers(chunk, type) {
         callBlockHandler(chunk, handlerLookup[id], type, i, j, k)
     })
 }
-</file>
+````
 
-<file path="src/engine/lib/container.js">
+## File: src/engine/lib/container.js
+````javascript
 import { EventEmitter } from 'events'
 import { MicroGameShell } from 'micro-game-shell'
 
@@ -2103,9 +2362,10 @@ function doCanvasBugfix(noa, canvas) {
     }
     noa.on('beforeRender', fixCanvas)
 }
-</file>
+````
 
-<file path="src/engine/lib/entities.js">
+## File: src/engine/lib/entities.js
+````javascript
 import ECS from 'ent-comp'
 import vec3 from 'gl-vec3'
 import { updatePositionExtents } from '../components/position'
@@ -2556,9 +2816,10 @@ function extentsOverlap(extA, extB) {
     if (extA[5] < extB[2]) return false
     return true
 }
-</file>
+````
 
-<file path="src/engine/lib/inputs.js">
+## File: src/engine/lib/inputs.js
+````javascript
 import { GameInputs } from 'game-inputs'
 
 var defaultOptions = {
@@ -2617,9 +2878,10 @@ export class Inputs extends GameInputs {
         }
     }
 }
-</file>
+````
 
-<file path="src/engine/lib/objectMesher.js">
+## File: src/engine/lib/objectMesher.js
+````javascript
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { makeProfileHook } from './util'
 import '@babylonjs/core/Meshes/thinInstanceMesh'
@@ -2975,9 +3237,10 @@ function copyMatrixData(src, srcOff, dest, destOff) {
 
 var profile_hook = (PROFILE) ?
     makeProfileHook(PROFILE, 'Object meshing') : () => { }
-</file>
+````
 
-<file path="src/engine/lib/physics.js">
+## File: src/engine/lib/physics.js
+````javascript
 import { Physics as VoxelPhysics } from 'voxel-physics-engine'
 
 
@@ -3038,9 +3301,10 @@ export class Physics extends VoxelPhysics {
     }
 
 }
-</file>
+````
 
-<file path="src/engine/lib/registry.js">
+## File: src/engine/lib/registry.js
+````javascript
 var defaults = {
     texturePath: ''
 }
@@ -3453,9 +3717,10 @@ function MaterialOptions() {
      */
     this.renderMaterial = null
 }
-</file>
+````
 
-<file path="src/engine/lib/rendering.js">
+## File: src/engine/lib/rendering.js
+````javascript
 import glvec3 from 'gl-vec3'
 import { makeProfileHook } from './util'
 
@@ -4071,9 +4336,10 @@ function setUpFPS() {
         start = nt
     }
 }
-</file>
+````
 
-<file path="src/engine/lib/sceneOctreeManager.js">
+## File: src/engine/lib/sceneOctreeManager.js
+````javascript
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Octree } from '@babylonjs/core/Culling/Octrees/octree'
 import { OctreeBlock } from '@babylonjs/core/Culling/Octrees/octreeBlock'
@@ -4238,9 +4504,10 @@ export class SceneOctreeManager {
     }
 
 }
-</file>
+````
 
-<file path="src/engine/lib/shims.js">
+## File: src/engine/lib/shims.js
+````javascript
 /**
  * This works around some old node-style code in a
  * dependency of box-intersect.
@@ -4248,9 +4515,10 @@ export class SceneOctreeManager {
 if (window && !window['global']) {
     window['global'] = window.globalThis || {}
 }
-</file>
+````
 
-<file path="src/engine/lib/terrainMaterials.js">
+## File: src/engine/lib/terrainMaterials.js
+````javascript
 import { Engine } from '@babylonjs/core/Engines/engine'
 import { Texture } from '@babylonjs/core/Materials/Textures/texture'
 import { MaterialPluginBase } from '@babylonjs/core/Materials/materialPluginBase'
@@ -4513,9 +4781,10 @@ class TerrainMaterialPlugin extends MaterialPluginBase {
         return null
     }
 }
-</file>
+````
 
-<file path="src/engine/lib/terrainMesher.js">
+## File: src/engine/lib/terrainMesher.js
+````javascript
 import ndarray from 'ndarray'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData'
@@ -5501,9 +5770,10 @@ function unpackAOMask(aomask) {
 
 var profile_hook = (PROFILE_EVERY) ?
     makeProfileHook(PROFILE_EVERY, 'Meshing') : () => { }
-</file>
+````
 
-<file path="src/engine/lib/util.js">
+## File: src/engine/lib/util.js
+````javascript
 // helper to swap item to end and pop(), instead of splice()ing
 export function removeUnorderedListItem(list, item) {
     var i = list.indexOf(item)
@@ -5818,9 +6088,10 @@ export function makeThroughputHook(_every, _title, filter) {
         }
     }
 }
-</file>
+````
 
-<file path="src/engine/lib/world.js">
+## File: src/engine/lib/world.js
+````javascript
 import EventEmitter from 'events'
 import { Chunk } from './chunk'
 import { LocationQueue, ChunkStorage, locationHasher } from './util'
@@ -6884,9 +7155,10 @@ var profile_queues_hook = ((every) => {
         started = performance.now()
     }
 })(PROFILE_QUEUES_EVERY)
-</file>
+````
 
-<file path="src/engine/types/aabb-3d/index.d.ts">
+## File: src/engine/types/aabb-3d/index.d.ts
+````typescript
 declare module "aabb-3d" {
     export = AABB;
     function AABB(pos: any, vec: any): AABB;
@@ -6898,9 +7170,10 @@ declare module "aabb-3d" {
         mag: any;
     }
 }
-</file>
+````
 
-<file path="src/engine/types/ent-comp/index.d.ts">
+## File: src/engine/types/ent-comp/index.d.ts
+````typescript
 declare module "dataStore" {
     export = DataStore;
     class DataStore {
@@ -7171,9 +7444,10 @@ declare module "ent-comp" {
         removeMultiComponent: (entID: any, compName: any, index: any) => ECS;
     }
 }
-</file>
+````
 
-<file path="src/engine/types/events/index.d.ts">
+## File: src/engine/types/events/index.d.ts
+````typescript
 declare module "events" {
     export = EventEmitter;
     function EventEmitter(): void;
@@ -7209,9 +7483,10 @@ declare module "events" {
     function listenerCount(emitter: any, type: any): any;
     function once(emitter: any, name: any): Promise<any>;
 }
-</file>
+````
 
-<file path="src/engine/types/gl-vec3/index.d.ts">
+## File: src/engine/types/gl-vec3/index.d.ts
+````typescript
 declare module "epsilon" {
     const _exports: number;
     export = _exports;
@@ -7719,9 +7994,10 @@ declare module "gl-vec3" {
     export const rotateZ: typeof import("rotateZ");
     export const forEach: typeof import("forEach");
 }
-</file>
+````
 
-<file path="src/engine/types/README.md">
+## File: src/engine/types/README.md
+````markdown
 These ambient definitions shadow upstream packages that ship incomplete or inaccurate types.
 Only the modules consumed by `noa-engine` at runtime are copied here:
 
@@ -7732,9 +8008,194 @@ Only the modules consumed by `noa-engine` at runtime are copied here:
 
 If additional dependencies need type patches, add a sibling directory that mirrors the package name
 and expose an `index.d.ts` entry point.
-</file>
+````
 
-<file path="src/hud/README.md">
+## File: src/hud/components/crosshair.tsx
+````typescript
+import { useMemo, useSyncExternalStore } from 'react';
+import { useOverlayContext } from '../overlay/overlay-context';
+
+const SVG_SIZE = 40;
+const RADIUS = 14;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+function useRemovalHoldProgress(): { active: boolean; progress: number } {
+  const { removal } = useOverlayContext();
+  return useSyncExternalStore(
+    (listener) => removal.subscribe(listener),
+    () => removal.getState(),
+  );
+}
+
+export function Crosshair(): JSX.Element {
+  const removalState = useRemovalHoldProgress();
+  const dashOffset = useMemo(() => {
+    const progress = Math.min(1, Math.max(0, removalState.progress));
+    return CIRCUMFERENCE * (1 - progress);
+  }, [removalState.progress]);
+  const hasProgress = removalState.active || removalState.progress > 0.001;
+
+  return (
+    <div
+      className="crosshair"
+      data-removing={removalState.active ? 'true' : 'false'}
+      data-progress={hasProgress ? 'true' : 'false'}
+    >
+      <svg
+        className="crosshair__progress"
+        width={SVG_SIZE}
+        height={SVG_SIZE}
+        viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
+        aria-hidden="true"
+      >
+        <circle
+          className="crosshair__progress-bg"
+          cx={SVG_SIZE / 2}
+          cy={SVG_SIZE / 2}
+          r={RADIUS}
+        />
+        <circle
+          className="crosshair__progress-ring"
+          cx={SVG_SIZE / 2}
+          cy={SVG_SIZE / 2}
+          r={RADIUS}
+          style={{ strokeDasharray: CIRCUMFERENCE, strokeDashoffset: dashOffset }}
+        />
+      </svg>
+      <div className="crosshair__reticle" aria-hidden="true">
+        <span className="crosshair__line crosshair__line--horizontal" />
+        <span className="crosshair__line crosshair__line--vertical" />
+        <span className="crosshair__dot" />
+      </div>
+    </div>
+  );
+}
+````
+
+## File: src/hud/components/hotbar-hud.tsx
+````typescript
+import { useCallback, useSyncExternalStore } from 'react';
+import type { HotbarController, HotbarState } from '../../player/hotbar-controller';
+import { HotbarIcon } from './hotbar-icons';
+
+interface HotbarHudProps {
+  controller: HotbarController;
+}
+
+function useHotbarState(controller: HotbarController): HotbarState {
+  return useSyncExternalStore(
+    (listener) => controller.subscribe(listener),
+    () => controller.getState(),
+  );
+}
+
+export function HotbarHud({ controller }: HotbarHudProps): JSX.Element {
+  const state = useHotbarState(controller);
+  const { slots, activeIndex } = state;
+  const activeSlot = slots[activeIndex];
+
+  const handleSlotClick = useCallback(
+    (index: number) => {
+      controller.setActiveIndex(index);
+    },
+    [controller],
+  );
+
+  return (
+    <div className="hotbar-root">
+      <div className="hotbar-slots">
+        {slots.map((slot) => {
+          const isActive = slot.index === activeIndex;
+          return (
+            <button
+              key={slot.index}
+              type="button"
+              className="hotbar-slot"
+              data-active={isActive ? 'true' : 'false'}
+              onClick={() => handleSlotClick(slot.index)}
+              title={slot.item ? slot.item.label : 'Slot vazio'}
+            >
+              <span className="hotbar-slot-index">{slot.index + 1}</span>
+              <span className="hotbar-slot-icon" data-has-item={slot.item ? 'true' : 'false'}>
+                {slot.item ? <HotbarIcon icon={slot.item.icon} /> : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="hotbar-tooltip" data-visible={activeSlot.item ? 'true' : 'false'}>
+        <h2>{activeSlot.item ? activeSlot.item.label : 'Slot vazio'}</h2>
+        <p>{activeSlot.item ? activeSlot.item.description : 'Sem item atribuído.'}</p>
+      </div>
+    </div>
+  );
+}
+````
+
+## File: src/hud/components/hotbar-icons.tsx
+````typescript
+import type { SVGProps } from 'react';
+
+export type HotbarIconId = 'deck' | 'solar-panel' | 'battery' | 'terminal';
+
+type IconComponent = (props: SVGProps<SVGSVGElement>) => JSX.Element;
+
+const iconSizeProps = {
+  width: 32,
+  height: 32,
+  viewBox: '0 0 32 32',
+  role: 'img' as const,
+  'aria-hidden': true,
+};
+
+const DeckIcon: IconComponent = (props) => (
+  <svg {...iconSizeProps} {...props}>
+    <rect x="2" y="6" width="28" height="20" rx="4" fill="#1f273a" stroke="#4f6fc5" strokeWidth="2" />
+    <path d="M6 12h20" stroke="#7a9bff" strokeWidth="2" strokeLinecap="round" />
+    <path d="M6 18h20" stroke="#3e58a8" strokeWidth="2" strokeLinecap="round" opacity="0.85" />
+  </svg>
+);
+
+const SolarPanelIcon: IconComponent = (props) => (
+  <svg {...iconSizeProps} {...props}>
+    <rect x="4" y="7" width="24" height="18" rx="3" fill="#0b1e3a" stroke="#45d3ff" strokeWidth="2" />
+    <path d="M4 13h24M4 19h24M12 7v18M20 7v18" stroke="#72ebff" strokeWidth="1.6" opacity="0.8" />
+    <circle cx="26" cy="6" r="3" fill="#ffda5c" opacity="0.85" />
+  </svg>
+);
+
+const BatteryIcon: IconComponent = (props) => (
+  <svg {...iconSizeProps} {...props}>
+    <rect x="7" y="6" width="18" height="20" rx="4" fill="#131b2c" stroke="#8ce1ff" strokeWidth="2" />
+    <rect x="13" y="2" width="6" height="4" rx="1" fill="#8ce1ff" />
+    <path d="M16 10l-3 5h2v5l3-5h-2z" fill="#ffee7d" />
+  </svg>
+);
+
+const TerminalIcon: IconComponent = (props) => (
+  <svg {...iconSizeProps} {...props}>
+    <rect x="5" y="5" width="22" height="18" rx="3" fill="#0b1730" stroke="#6fb4ff" strokeWidth="2" />
+    <rect x="5" y="23" width="22" height="4" rx="1.5" fill="#1d2d4f" />
+    <path d="M10 11l4 3-4 3" stroke="#88f7ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="22" cy="21" r="2" fill="#ff4778" opacity="0.85" />
+  </svg>
+);
+
+const ICONS: Record<HotbarIconId, IconComponent> = {
+  deck: DeckIcon,
+  'solar-panel': SolarPanelIcon,
+  battery: BatteryIcon,
+  terminal: TerminalIcon,
+};
+
+export function HotbarIcon({ icon, ...props }: { icon: HotbarIconId } & SVGProps<SVGSVGElement>): JSX.Element {
+  const Component = ICONS[icon];
+  return <Component {...props} />;
+}
+````
+
+## File: src/hud/README.md
+````markdown
 # HUD Module Staging
 
 This directory will host the Babylon/NOA HUD widgets referenced in the manifesto:
@@ -7744,45 +8205,482 @@ This directory will host the Babylon/NOA HUD widgets referenced in the manifesto
 - toolbar inventory strip
 
 Each widget should live in its own file (e.g. `crosshair.ts`) with shared constants colocated in `constants.ts`.
-</file>
+````
 
-<file path="src/persistence/README.md">
-# Persistence & Networking
+## File: src/hud/removal-hold-tracker.ts
+````typescript
+export interface RemovalHoldState {
+  active: boolean;
+  progress: number;
+}
 
-Future save/load routines, snapshot sync and backend adapters belong here.
-Design APIs around async operations returning plain data so they can be unit tested easily.
-</file>
+type Listener = () => void;
 
-<file path="src/scripts/README.md">
+const PROGRESS_EPSILON = 0.001;
+
+export class RemovalHoldTracker {
+  private state: RemovalHoldState = {
+    active: false,
+    progress: 0,
+  };
+
+  private listeners = new Set<Listener>();
+
+  subscribe(listener: Listener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  getState(): RemovalHoldState {
+    return this.state;
+  }
+
+  setState(nextState: RemovalHoldState): void {
+    const clampedProgress = Math.min(1, Math.max(0, nextState.progress));
+    const normalized: RemovalHoldState = {
+      active: nextState.active,
+      progress: clampedProgress,
+    };
+
+    const prev = this.state;
+    const progressDelta = Math.abs(prev.progress - normalized.progress);
+    const changed = prev.active !== normalized.active || progressDelta > PROGRESS_EPSILON;
+    if (!changed) {
+      return;
+    }
+
+    this.state = normalized;
+    for (const listener of this.listeners) {
+      listener();
+    }
+  }
+}
+````
+
+## File: src/persistence/adapter.ts
+````typescript
+import type { SectorSnapshot } from './types';
+
+export interface PersistenceAdapter {
+  loadSnapshot(playerId: string, sectorId: string): SectorSnapshot | null;
+  saveSnapshot(snapshot: SectorSnapshot): void;
+  clearSnapshot(playerId: string, sectorId: string): void;
+}
+````
+
+## File: src/persistence/local-storage-adapter.ts
+````typescript
+import type { SectorSnapshot } from './types';
+import type { PersistenceAdapter } from './adapter';
+
+const STORAGE_PREFIX = 'starwatch/save';
+
+function makeKey(playerId: string, sectorId: string): string {
+  return `${STORAGE_PREFIX}/${playerId}/${sectorId}`;
+}
+
+export class LocalStorageAdapter implements PersistenceAdapter {
+  loadSnapshot(playerId: string, sectorId: string): SectorSnapshot | null {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return null;
+    }
+    const raw = window.localStorage.getItem(makeKey(playerId, sectorId));
+    if (!raw) {
+      return null;
+    }
+    try {
+      return JSON.parse(raw) as SectorSnapshot;
+    } catch (error) {
+      console.warn('[starwatch:persistence] snapshot inválido, limpando storage', error);
+      window.localStorage.removeItem(makeKey(playerId, sectorId));
+      return null;
+    }
+  }
+
+  saveSnapshot(snapshot: SectorSnapshot): void {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return;
+    }
+    window.localStorage.setItem(makeKey(snapshot.player.id, snapshot.sector.id), JSON.stringify(snapshot));
+  }
+
+  clearSnapshot(playerId: string, sectorId: string): void {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return;
+    }
+    window.localStorage.removeItem(makeKey(playerId, sectorId));
+  }
+}
+````
+
+## File: src/player/hotbar-controller.ts
+````typescript
+import { HOTBAR_SLOT_COUNT, INITIAL_HOTBAR_ITEMS, type HotbarItemDefinition } from '../config/hud-options';
+
+export interface HotbarSlot {
+  index: number;
+  item: HotbarItemDefinition | null;
+}
+
+export interface HotbarState {
+  slots: HotbarSlot[];
+  activeIndex: number;
+}
+
+type Listener = () => void;
+
+export class HotbarController {
+  private state: HotbarState;
+  private listeners = new Set<Listener>();
+
+  constructor() {
+    const slots: HotbarSlot[] = Array.from({ length: HOTBAR_SLOT_COUNT }, (_, index) => ({
+      index,
+      item: INITIAL_HOTBAR_ITEMS[index] ?? null,
+    }));
+
+    this.state = {
+      slots,
+      activeIndex: 0,
+    };
+  }
+
+  subscribe(listener: Listener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  getState(): HotbarState {
+    return this.state;
+  }
+
+  setActiveIndex(index: number): void {
+    const normalized = this.normalizeIndex(index);
+    if (this.state.activeIndex === normalized) {
+      return;
+    }
+    this.updateState({
+      ...this.state,
+      activeIndex: normalized,
+    });
+  }
+
+  stepActiveIndex(delta: number): void {
+    const target = this.normalizeIndex(this.state.activeIndex + delta);
+    this.setActiveIndex(target);
+  }
+
+  setSlotItem(index: number, item: HotbarItemDefinition | null): void {
+    const normalized = this.normalizeIndex(index);
+    const slot = this.state.slots[normalized];
+    if (slot.item?.id === item?.id) {
+      return;
+    }
+    const nextSlots = this.state.slots.slice();
+    nextSlots[normalized] = {
+      ...slot,
+      item,
+    };
+    this.updateState({
+      ...this.state,
+      slots: nextSlots,
+    });
+  }
+
+  getActiveSlot(): HotbarSlot {
+    return this.state.slots[this.state.activeIndex];
+  }
+
+  reset(): void {
+    this.listeners.clear();
+  }
+
+  private updateState(nextState: HotbarState): void {
+    this.state = nextState;
+    for (const listener of this.listeners) {
+      listener();
+    }
+  }
+
+  private normalizeIndex(index: number): number {
+    const size = HOTBAR_SLOT_COUNT;
+    return ((index % size) + size) % size;
+  }
+}
+````
+
+## File: src/player/hotbar.ts
+````typescript
+import type { OverlayApi } from '../hud/overlay';
+import { HotbarController } from './hotbar-controller';
+
+export interface HotbarApi {
+  controller: HotbarController;
+  attachOverlay(overlay: OverlayApi): void;
+  destroy(): void;
+}
+
+export function initializeHotbar(initialOverlay?: OverlayApi): HotbarApi {
+  const controller = new HotbarController();
+  let overlayRef: OverlayApi | null = initialOverlay ?? null;
+
+  const isOverlayCapturing = (): boolean => {
+    if (!overlayRef) {
+      return false;
+    }
+    return overlayRef.controller.getState().captureInput;
+  };
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (isOverlayCapturing()) {
+      return;
+    }
+
+    if (event.code.startsWith('Digit')) {
+      const digit = Number.parseInt(event.code.replace('Digit', ''), 10);
+      if (Number.isFinite(digit) && digit >= 1 && digit <= 9) {
+        controller.setActiveIndex(digit - 1);
+        event.preventDefault();
+      }
+      return;
+    }
+
+    if (event.code.startsWith('Numpad')) {
+      const digit = Number.parseInt(event.code.replace('Numpad', ''), 10);
+      if (Number.isFinite(digit) && digit >= 1 && digit <= 9) {
+        controller.setActiveIndex(digit - 1);
+        event.preventDefault();
+      }
+    }
+  };
+
+  const handleWheel = (event: WheelEvent) => {
+    if (isOverlayCapturing()) {
+      return;
+    }
+
+    if (event.deltaY === 0) {
+      return;
+    }
+
+    controller.stepActiveIndex(event.deltaY > 0 ? 1 : -1);
+    event.preventDefault();
+  };
+
+  window.addEventListener('keydown', handleKeyDown, { passive: false, capture: true });
+  window.addEventListener('wheel', handleWheel, { passive: false, capture: true });
+
+  const destroy = () => {
+    window.removeEventListener('keydown', handleKeyDown, true);
+    window.removeEventListener('wheel', handleWheel, true);
+    controller.reset();
+    overlayRef = null;
+  };
+
+  return {
+    controller,
+    attachOverlay(overlay) {
+      overlayRef = overlay;
+    },
+    destroy,
+  };
+}
+````
+
+## File: src/scripts/README.md
+````markdown
 # Gameplay Scripts
 
 This directory will host Starwatch user-facing scripts, automation hooks and any tooling around the HAL scripting UX.
 Keep runtime bindings thin so we can swap interpreters or sandboxes later.
-</file>
+````
 
-<file path="src/systems/README.md">
-# Runtime Systems Staging
+## File: src/sector/generation/asteroid-field.ts
+````typescript
+import { createSeededRng, hash2D, hash3D, randomInt } from '../../utils/random';
+import { sampleAsteroidNoise } from '../asteroid-noise';
+import {
+  ASTEROID_BLOCK_COUNT,
+  ASTEROID_CELL_MARGIN,
+  ASTEROID_CELL_SIZE,
+  ASTEROID_CENTER_PROBABILITY,
+  ASTEROID_CLUSTER_SIZE,
+  ASTEROID_CLUSTER_SPREAD,
+  ASTEROID_DENSITY_THRESHOLD,
+  ASTEROID_HEIGHT_VARIATION,
+  ASTEROID_LAYER_ALTITUDE,
+  ASTEROID_MAJOR_RADIUS,
+  ASTEROID_MINOR_RADIUS,
+  ASTEROID_RING_INNER_RADIUS,
+  ASTEROID_RING_OUTER_RADIUS,
+  ASTEROID_VERTICAL_RADIUS,
+} from '../../config/sector-options';
+import type { ChunkGenerationContext } from './types';
+import type { AsteroidBlockDescriptor } from '../blocks';
 
-Future simulation systems (energia, temperatura, scripts HAL, etc.) should live here.
-Mirror the manifesto by isolating each subsystem in its own folder and exposing an
-initializer that the core bootstrap can compose.
-</file>
+export function generateAsteroidField(ctx: ChunkGenerationContext): void {
+  if (ctx.bounds.maxY < ASTEROID_LAYER_ALTITUDE - ASTEROID_HEIGHT_VARIATION) return;
+  if (ctx.bounds.minY > ASTEROID_LAYER_ALTITUDE + ASTEROID_HEIGHT_VARIATION) return;
 
-<file path="src/types/assets.d.ts">
-declare module '*.png' {
-  const url: string;
-  export default url;
+  const variants = ctx.blocks.asteroidVariants;
+  if (variants.length === 0) return;
+
+  const weightSum = variants.reduce((sum, variant) => sum + variant.weight, 0);
+  if (weightSum <= 0) return;
+
+  const minCellX = Math.floor((ctx.bounds.minX - ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
+  const maxCellX = Math.floor((ctx.bounds.maxX + ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
+  const minCellZ = Math.floor((ctx.bounds.minZ - ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
+  const maxCellZ = Math.floor((ctx.bounds.maxZ + ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
+
+  for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+    for (let cellZ = minCellZ; cellZ <= maxCellZ; cellZ += 1) {
+      const baseSeed = hash2D(cellX, cellZ);
+      const baseRng = createSeededRng(baseSeed);
+
+      const offsetX = Math.round((baseRng() - 0.5) * (ASTEROID_CELL_SIZE - 1));
+      const offsetZ = Math.round((baseRng() - 0.5) * (ASTEROID_CELL_SIZE - 1));
+
+      const baseCenterX = cellX * ASTEROID_CELL_SIZE + offsetX;
+      const baseCenterZ = cellZ * ASTEROID_CELL_SIZE + offsetZ;
+      const baseRadius = Math.hypot(baseCenterX, baseCenterZ);
+
+      if (baseRadius < ASTEROID_RING_INNER_RADIUS || baseRadius > ASTEROID_RING_OUTER_RADIUS) {
+        continue;
+      }
+
+      const density = sampleAsteroidDensity(baseCenterX, baseCenterZ);
+      const normalizedDensity = (density + 1) * 0.5;
+      if (normalizedDensity < ASTEROID_DENSITY_THRESHOLD) {
+        continue;
+      }
+
+      if (baseRng() > ASTEROID_CENTER_PROBABILITY) {
+        continue;
+      }
+
+      const clusterCount = randomInt(baseRng, ASTEROID_CLUSTER_SIZE.min, ASTEROID_CLUSTER_SIZE.max);
+      for (let clusterIndex = 0; clusterIndex < clusterCount; clusterIndex += 1) {
+        const clusterAngle = baseRng() * Math.PI * 2;
+        const clusterDistance = clusterIndex === 0 ? 0 : ASTEROID_CLUSTER_SPREAD * (0.5 + baseRng() * 0.5);
+
+        const clusterCenterX = Math.round(baseCenterX + Math.cos(clusterAngle) * clusterDistance);
+        const clusterCenterZ = Math.round(baseCenterZ + Math.sin(clusterAngle) * clusterDistance);
+        const clusterCenterY = ASTEROID_LAYER_ALTITUDE + Math.round((baseRng() - 0.5) * 2 * ASTEROID_HEIGHT_VARIATION);
+
+        const clusterRadius = Math.hypot(clusterCenterX, clusterCenterZ);
+        if (clusterRadius < ASTEROID_RING_INNER_RADIUS || clusterRadius > ASTEROID_RING_OUTER_RADIUS) {
+          continue;
+        }
+
+        const clusterSeed = hash3D(cellX, cellZ, clusterIndex);
+        const clusterRng = createSeededRng(clusterSeed);
+        const variant = pickAsteroidVariant(clusterRng, variants, weightSum);
+        if (!variant) continue;
+
+        const offsets = buildAsteroidOffsets(clusterRng);
+        for (const [offsetXBlock, offsetYBlock, offsetZBlock] of offsets) {
+          const worldX = clusterCenterX + offsetXBlock;
+          const worldY = clusterCenterY + offsetYBlock;
+          const worldZ = clusterCenterZ + offsetZBlock;
+
+          const radialDistance = Math.hypot(worldX, worldZ);
+          if (radialDistance < ASTEROID_RING_INNER_RADIUS || radialDistance > ASTEROID_RING_OUTER_RADIUS + ASTEROID_MAJOR_RADIUS) {
+            continue;
+          }
+
+          ctx.writeBlock(worldX, worldY, worldZ, variant.blockId);
+        }
+      }
+    }
+  }
 }
-</file>
 
-<file path="src/utils/README.md">
-# Shared Utilities
+function pickAsteroidVariant(rng: () => number, variants: AsteroidBlockDescriptor[], weightSum: number): AsteroidBlockDescriptor | undefined {
+  let r = rng() * weightSum;
+  for (const variant of variants) {
+    r -= variant.weight;
+    if (r <= 0) {
+      return variant;
+    }
+  }
+  return variants[variants.length - 1];
+}
 
-Utility helpers shared across modules should live here.
-Favor small, pure functions and keep engine-specific code in the module that owns it.
-</file>
+function buildAsteroidOffsets(rng: () => number): Array<[number, number, number]> {
+  const totalBlocks = randomInt(rng, ASTEROID_BLOCK_COUNT.min, ASTEROID_BLOCK_COUNT.max);
+  const majorRadius = ASTEROID_MAJOR_RADIUS * (0.8 + rng() * 0.4);
+  const minorRadius = ASTEROID_MINOR_RADIUS * (0.8 + rng() * 0.4);
+  const verticalRadius = ASTEROID_VERTICAL_RADIUS * (0.8 + rng() * 0.4);
+  const orientation = rng() * Math.PI * 2;
 
-<file path="src/world/asteroid-noise.ts">
+  const offsets: Array<[number, number, number]> = [];
+  const used = new Set<string>();
+  let attempts = 0;
+  const maxAttempts = totalBlocks * 30;
+
+  while (offsets.length < totalBlocks && attempts < maxAttempts) {
+    attempts += 1;
+    const along = (rng() * 2 - 1) * majorRadius;
+    const lateral = (rng() * 2 - 1) * minorRadius;
+    const vertical = (rng() * 2 - 1) * verticalRadius;
+
+    const norm = (along * along) / (majorRadius * majorRadius)
+      + (lateral * lateral) / (minorRadius * minorRadius)
+      + (vertical * vertical) / (verticalRadius * verticalRadius);
+    if (norm > 1) continue;
+
+    const rotX = Math.round(Math.cos(orientation) * along - Math.sin(orientation) * lateral);
+    const rotZ = Math.round(Math.sin(orientation) * along + Math.cos(orientation) * lateral);
+    const rotY = Math.round(vertical);
+
+    const key = `${rotX},${rotY},${rotZ}`;
+    if (used.has(key)) continue;
+    used.add(key);
+    offsets.push([rotX, rotY, rotZ]);
+  }
+
+  if (offsets.length === 0) {
+    offsets.push([0, 0, 0]);
+  }
+
+  return offsets;
+}
+
+function sampleAsteroidDensity(x: number, z: number): number {
+  const a = sampleAsteroidNoise(x, 160) * 0.6;
+  const b = sampleAsteroidNoise(z + 51.37, 120) * 0.25;
+  const c = sampleAsteroidNoise(x - z - 97.53, 90) * 0.15;
+  return a + b + c;
+}
+````
+
+## File: src/sector/generation/index.ts
+````typescript
+import type { ChunkGenerationContext } from './types';
+import { generateStartingPlatform } from './platform';
+import { generateAsteroidField } from './asteroid-field';
+
+export type ChunkGeneratorStage = (context: ChunkGenerationContext) => void;
+
+const DEFAULT_STAGES: ChunkGeneratorStage[] = [generateStartingPlatform, generateAsteroidField];
+
+export function runGenerationPipeline(
+  context: ChunkGenerationContext,
+  stages: ChunkGeneratorStage[] = DEFAULT_STAGES,
+): void {
+  for (const stage of stages) {
+    stage(context);
+  }
+}
+````
+
+## File: src/sector/asteroid-noise.ts
+````typescript
 const SEED = [0.137, 0.273, 0.419];
 const LOOKUP_SIZE = 100;
 
@@ -7799,9 +8697,683 @@ export function sampleAsteroidNoise(x: number, scale: number): number {
   const lookupIndex = Math.floor(ix * LOOKUP_SIZE) % LOOKUP_SIZE;
   return noiseValues[lookupIndex];
 }
-</file>
+````
 
-<file path="src/README.md">
+## File: src/sector/blocks.ts
+````typescript
+import type { Engine } from 'noa-engine';
+import type { SectorMaterials } from './materials';
+
+export interface AsteroidBlockDescriptor {
+  id: string;
+  weight: number;
+  materialName: string;
+  blockId: number;
+}
+
+export interface SectorBlocks {
+  dirt: number;
+  asteroidVariants: AsteroidBlockDescriptor[];
+  nextBlockId: number;
+}
+
+export function registerSectorBlocks(noa: Engine, materials: SectorMaterials): SectorBlocks {
+  console.log('[starwatch] registrando blocos do setor');
+
+  const dirt = noa.registry.registerBlock(1, {
+    material: materials.dirt.name,
+    solid: true,
+  });
+
+  let nextBlockId = 2;
+
+  const asteroidVariantBlocks = materials.asteroidVariants.map((variant) => {
+    const blockId = noa.registry.registerBlock(nextBlockId, {
+      material: variant.material.name,
+      solid: true,
+      opaque: true,
+      blockLight: true,
+      hardness: 3,
+      displayName: `asteroid-${variant.id}`,
+    });
+    nextBlockId += 1;
+    return {
+      id: variant.id,
+      weight: variant.weight,
+      materialName: variant.material.name,
+      blockId,
+    };
+  });
+
+  return {
+    dirt,
+    asteroidVariants: asteroidVariantBlocks,
+    nextBlockId,
+  };
+}
+````
+
+## File: src/sector/materials.ts
+````typescript
+import type { Engine } from 'noa-engine';
+import terrainAtlasUrl from './assets/terrain_atlas.png';
+import { ASTEROID_VARIANTS } from '../config/sector-options';
+
+export interface RegisteredMaterial {
+  name: string;
+  solarOpacity: number;
+}
+
+export interface AsteroidMaterialDescriptor {
+  id: string;
+  weight: number;
+  material: RegisteredMaterial;
+}
+
+export interface SectorMaterials {
+  dirt: RegisteredMaterial;
+  deck: RegisteredMaterial;
+  solarPanel: RegisteredMaterial;
+  battery: RegisteredMaterial;
+  terminal: RegisteredMaterial;
+  asteroidVariants: AsteroidMaterialDescriptor[];
+}
+
+interface RegisterMaterialOptions {
+  color?: [number, number, number];
+  textureURL?: string;
+  atlasIndex?: number;
+  solarOpacity: number;
+}
+
+function registerMaterial(noa: Engine, name: string, options: RegisterMaterialOptions): RegisteredMaterial {
+  noa.registry.registerMaterial(name, {
+    color: options.color,
+    textureURL: options.textureURL,
+    atlasIndex: options.atlasIndex,
+  });
+
+  return {
+    name,
+    solarOpacity: options.solarOpacity,
+  };
+}
+
+export function registerSectorMaterials(noa: Engine): SectorMaterials {
+  console.log('[starwatch] registrando materiais base do setor');
+
+  const dirt = registerMaterial(noa, 'dirt', {
+    textureURL: terrainAtlasUrl,
+    atlasIndex: 2,
+    solarOpacity: 1,
+  });
+
+  const deck = registerMaterial(noa, 'deck-metal', {
+    color: [0.22, 0.28, 0.42],
+    solarOpacity: 1,
+  });
+
+  const solarPanel = registerMaterial(noa, 'solar-panel-block', {
+    color: [0.09, 0.21, 0.46],
+    solarOpacity: 0.05,
+  });
+
+  const battery = registerMaterial(noa, 'battery-block', {
+    color: [0.14, 0.18, 0.28],
+    solarOpacity: 1,
+  });
+
+  const terminal = registerMaterial(noa, 'terminal-block', {
+    color: [0.12, 0.2, 0.36],
+    solarOpacity: 1,
+  });
+
+  const asteroidMaterials = ASTEROID_VARIANTS.map((variant) => {
+    const [r, g, b] = variant.color;
+    const material = registerMaterial(noa, `asteroid-${variant.id}`, {
+      color: [r, g, b],
+      solarOpacity: 1,
+    });
+    return {
+      id: variant.id,
+      weight: variant.weight,
+      material,
+    };
+  });
+
+  return {
+    dirt,
+    deck,
+    solarPanel,
+    battery,
+    terminal,
+    asteroidVariants: asteroidMaterials,
+  };
+}
+````
+
+## File: src/sector/README.md
+````markdown
+# Sector Registry
+
+Este diretório concentra o setup do NOA para o setor atual.
+
+- `materials.ts` define todos os materiais registrados no engine e associa `solarOpacity` used
+  pelo sistema de energia. Sempre adicione novos materiais aqui antes de referenciá-los em blocos.
+- `blocks.ts` cadastra os blocos “terrain” básicos (asteroides, dirt) e retorna `nextBlockId` para
+  que `blocks/register.ts` possa atribuir IDs contínuos aos blocos de gameplay.
+- `index.ts` é o ponto de entrada: registra materiais, blocos, instala o worldgen e devolve o
+  catálogo (`SectorResources`) usado pelo restante da aplicação.
+
+## Como testar
+
+1. Rode `pnpm dev`.
+2. Verifique via console (`window.starwatch.sector`) que os catálogos possuem os IDs esperados.
+3. Ao adicionar novo material/bloco, execute `pnpm exec tsc --noEmit` para garantir tipos alinhados.
+
+**Single source of truth:** qualquer mudança em textura/constante deve ser refletida aqui e nos
+Readmes dos módulos que dependem dela.
+````
+
+## File: src/systems/energy/debug-overlay.ts
+````typescript
+import type { EnergySystem } from './index';
+
+interface DebugOverlayState {
+  networks: string[];
+  panelOutputs: string[];
+  lastEventMs: number;
+}
+
+const PRINT_INTERVAL_MS = 5000;
+
+export class EnergyDebugOverlay {
+  private visible = false;
+  private readonly element: HTMLDivElement;
+  private readonly energy: EnergySystem;
+  private lastPrint = 0;
+
+  constructor(energy: EnergySystem) {
+    this.energy = energy;
+    this.element = document.createElement('div');
+    this.element.id = 'energy-debug-overlay';
+    this.element.setAttribute('hidden', 'true');
+    document.body.appendChild(this.element);
+  }
+
+  setVisible(visible: boolean): void {
+    this.visible = visible;
+    if (visible) {
+      this.element.removeAttribute('hidden');
+      this.render();
+    } else {
+      this.element.setAttribute('hidden', 'true');
+    }
+  }
+
+  handleTick(dt: number): void {
+    if (!this.visible) {
+      return;
+    }
+    this.render();
+    this.lastPrint += dt * 1000;
+    if (this.lastPrint >= PRINT_INTERVAL_MS) {
+      this.lastPrint = 0;
+      this.printToConsole();
+    }
+  }
+
+  dispose(): void {
+    this.element.remove();
+  }
+
+  private render(): void {
+    if (!this.visible) {
+      return;
+    }
+    const state = this.collectState();
+    this.element.innerHTML = `
+      <div class="energy-debug">
+        <h2>Energy Debug</h2>
+        <section>
+          <h3>Redes (${state.networks.length})</h3>
+          <ul>
+            ${state.networks.map((line) => `<li>${line}</li>`).join('')}
+          </ul>
+        </section>
+        <section>
+          <h3>Painéis (${state.panelOutputs.length})</h3>
+          <ul>
+            ${state.panelOutputs.map((line) => `<li>${line}</li>`).join('')}
+          </ul>
+        </section>
+      </div>
+    `;
+  }
+
+  private collectState(): DebugOverlayState {
+    const networks = this.energy.networks
+      .listNetworks()
+      .map((network) => {
+        const delta = network.metrics.totalGenW - network.metrics.totalLoadW;
+        return `#${network.id} nodes=${network.nodeCount} gen=${network.metrics.totalGenW.toFixed(
+          2,
+        )}W load=${network.metrics.totalLoadW.toFixed(2)}W Δ=${delta.toFixed(2)}W stored=${network.metrics.totalStoredMJ.toFixed(
+          3,
+        )}MJ`;
+      });
+
+    const panels = this.energy.listSolarPanels().map((panel) => {
+      const shadePct = Math.round(panel.shade * 100);
+      return `(${panel.position.join(',')}) ${panel.outputW.toFixed(2)}W shade=${shadePct}% net=${
+        panel.networkId ?? '—'
+      }`;
+    });
+
+    return {
+      networks,
+      panelOutputs: panels,
+      lastEventMs: 0,
+    };
+  }
+
+  private printToConsole(): void {
+    const state = this.collectState();
+    console.group('[energy/debug] snapshot');
+    state.networks.forEach((line) => console.log(line));
+    state.panelOutputs.forEach((line) => console.log(line));
+    console.groupEnd();
+  }
+}
+````
+
+## File: src/systems/terminals/format.ts
+````typescript
+export function formatWatts(value: number): string {
+  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+  const magnitude = Math.abs(value);
+  if (magnitude >= 1000) {
+    return `${sign}${(magnitude / 1000).toFixed(2)} kW`;
+  }
+  return `${sign}${magnitude.toFixed(0)} W`;
+}
+
+export function formatMegajoules(value: number): string {
+  if (Math.abs(value) >= 1000) {
+    return `${(value / 1000).toFixed(2)} GJ`;
+  }
+  return `${value.toFixed(2)} MJ`;
+}
+
+export function formatDelta(deltaW: number): string {
+  if (Math.abs(deltaW) < 0.5) {
+    return '±0 W';
+  }
+  return formatWatts(deltaW);
+}
+
+export function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(1)} %`;
+}
+````
+
+## File: src/systems/terminals/hal-terminal-display.ts
+````typescript
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { BaseTerminalDisplay, type BaseTerminalDisplayOptions } from './terminal-display';
+import type { HalTerminalData } from './types';
+import { clearContent, drawCenteredMessage, drawMetricList, type MetricRow, type MetricVariant } from './render-helpers';
+import { formatDelta, formatMegajoules, formatWatts } from './format';
+import { orientationToNormal, orientationToYaw } from './helpers';
+
+type HalOptions = BaseTerminalDisplayOptions<HalTerminalData>;
+
+export class HalTerminalDisplay extends BaseTerminalDisplay<HalTerminalData> {
+  constructor(options: HalOptions) {
+    super(options);
+    this.createColumn(options);
+  }
+
+  protected drawContent(activeTabId: string | null, data: HalTerminalData): void {
+    const { overview } = data;
+    const area = this.contentArea;
+    const ctx = this.ctx;
+    clearContent(ctx, area);
+
+    if (!overview) {
+      drawCenteredMessage(ctx, area, ['SEM REDE CONECTADA', 'APROXIME UM DECK CONDUTIVO']);
+      return;
+    }
+
+    switch (activeTabId) {
+      case 'overview':
+        this.drawOverview(ctx, area, data);
+        break;
+      case 'power':
+        this.drawPower(ctx, area, data);
+        break;
+      case 'devices':
+      default:
+        this.drawDevices(ctx, area, data);
+        break;
+    }
+  }
+
+  private drawOverview(ctx: CanvasRenderingContext2D, area: { x: number; y: number; width: number; height: number }, data: HalTerminalData): void {
+    const { overview, terminal } = data;
+    if (!overview || !terminal) {
+      drawCenteredMessage(ctx, area, ['HAL-9001', 'AGUARDANDO SINAL']);
+      return;
+    }
+
+    const deltaVariant: MetricVariant = overview.metrics.deltaW >= 0 ? 'positive' : 'negative';
+    const rows: MetricRow[] = [
+      { label: 'REDE', value: `#${overview.id.toString().padStart(4, '0')}`, variant: 'accent' },
+      { label: 'Δ ATUAL', value: formatDelta(overview.metrics.deltaW), variant: deltaVariant },
+      { label: 'GERAÇÃO', value: formatWatts(overview.metrics.totalGenW) },
+      { label: 'CONSUMO', value: formatWatts(overview.metrics.totalLoadW) },
+      { label: 'ARMAZENADO', value: formatMegajoules(overview.metrics.totalStoredMJ) },
+      { label: 'CAPACIDADE', value: formatMegajoules(overview.metrics.totalCapMJ) },
+    ];
+    drawMetricList(ctx, area, rows);
+  }
+
+  private drawPower(ctx: CanvasRenderingContext2D, area: { x: number; y: number; width: number; height: number }, data: HalTerminalData): void {
+    const { overview } = data;
+    if (!overview) {
+      drawCenteredMessage(ctx, area, ['SEM MÉTRICAS DISPONÍVEIS']);
+      return;
+    }
+
+    const deltaVariant: MetricVariant = overview.metrics.deltaW >= 0 ? 'positive' : 'negative';
+    const rows: MetricRow[] = [
+      { label: 'RESERVA TOTAL', value: formatMegajoules(overview.metrics.totalStoredMJ) },
+      { label: 'CAP MÁXIMA', value: formatMegajoules(overview.metrics.totalCapMJ) },
+      { label: 'GERAÇÃO INSTANTÂNEA', value: formatWatts(overview.metrics.totalGenW) },
+      { label: 'CONSUMO INSTANTÂNEO', value: formatWatts(overview.metrics.totalLoadW) },
+      { label: 'SALDO', value: formatDelta(overview.metrics.deltaW), variant: deltaVariant },
+    ];
+    drawMetricList(ctx, area, rows);
+  }
+
+  private drawDevices(ctx: CanvasRenderingContext2D, area: { x: number; y: number; width: number; height: number }, data: HalTerminalData): void {
+    const { overview } = data;
+    if (!overview) {
+      drawCenteredMessage(ctx, area, ['NENHUM DISPOSITIVO ENCONTRADO']);
+      return;
+    }
+    const rows: MetricRow[] = [
+      { label: 'PAINÉIS SOLARES', value: overview.panelCount.toString() },
+      { label: 'BATERIAS', value: overview.batteryCount.toString() },
+      { label: 'TERMINAIS', value: overview.terminalCount.toString() },
+    ];
+    drawMetricList(ctx, area, rows);
+  }
+
+  private createColumn(options: HalOptions): void {
+    const scene = options.scene;
+    const column = MeshBuilder.CreateBox(
+      `hal-terminal-column-${options.position.join(':')}`,
+      {
+        width: 0.7,
+        depth: 0.7,
+        height: 2,
+      },
+      scene,
+    );
+    column.isPickable = false;
+    column.position = new Vector3(options.position[0] + 0.5, options.position[1] + 1, options.position[2] + 0.5);
+    column.renderingGroupId = 1;
+    const columnMat = new StandardMaterial(`hal-terminal-column-mat-${options.position.join(':')}`, scene);
+    columnMat.diffuseColor = new Color3(0.1, 0.17, 0.28);
+    columnMat.emissiveColor = new Color3(0.02, 0.05, 0.12);
+    column.material = columnMat;
+    this.addDecoration(column);
+
+    const bezel = MeshBuilder.CreateBox(
+      `hal-terminal-bezel-${options.position.join(':')}`,
+      {
+        width: options.physicalWidth + 0.12,
+        height: options.physicalHeight + 0.12,
+        depth: 0.08,
+      },
+      scene,
+    );
+    bezel.isPickable = false;
+    const normal = orientationToNormal(options.orientation);
+    const screenPos = new Vector3(options.position[0] + 0.5, options.position[1] + options.elevation, options.position[2] + 0.5);
+    bezel.position = screenPos.add(normal.scale(options.mountOffset - 0.04));
+    bezel.rotation = new Vector3(0, orientationToYaw(options.orientation), 0);
+    bezel.renderingGroupId = 2;
+    const bezelMat = new StandardMaterial(`hal-terminal-bezel-mat-${options.position.join(':')}`, scene);
+    bezelMat.diffuseColor = new Color3(0.07, 0.12, 0.22);
+    bezelMat.emissiveColor = new Color3(0.05, 0.08, 0.16);
+    bezelMat.disableLighting = true;
+    bezel.material = bezelMat;
+    this.addDecoration(bezel);
+  }
+
+}
+````
+
+## File: src/systems/terminals/render-helpers.ts
+````typescript
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type MetricVariant = 'default' | 'positive' | 'negative' | 'muted' | 'accent';
+
+export interface MetricRow {
+  label: string;
+  value: string;
+  variant?: MetricVariant;
+}
+
+export function clearContent(ctx: CanvasRenderingContext2D, area: Rect): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(area.x, area.y, area.width, area.height);
+  ctx.clip();
+  ctx.clearRect(area.x, area.y, area.width, area.height);
+  ctx.fillStyle = 'rgba(6, 18, 40, 0.7)';
+  ctx.fillRect(area.x, area.y, area.width, area.height);
+  ctx.restore();
+}
+
+export function drawMetricList(ctx: CanvasRenderingContext2D, area: Rect, rows: MetricRow[]): void {
+  ctx.save();
+  ctx.font = '24px monospace';
+  ctx.textBaseline = 'middle';
+  const startY = area.y + 28;
+  const spacing = 34;
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    const centerY = startY + i * spacing;
+    ctx.fillStyle = variantToColor(row.variant ?? 'default');
+    ctx.textAlign = 'left';
+    ctx.fillText(row.label.toUpperCase(), area.x + 18, centerY);
+    ctx.textAlign = 'right';
+    ctx.fillText(row.value, area.x + area.width - 18, centerY);
+  }
+  ctx.restore();
+}
+
+export function drawCenteredMessage(ctx: CanvasRenderingContext2D, area: Rect, lines: string[]): void {
+  ctx.save();
+  ctx.font = '24px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(180, 210, 255, 0.75)';
+  const centerX = area.x + area.width / 2;
+  const centerY = area.y + area.height / 2;
+  const spacing = 32;
+  const totalHeight = spacing * (lines.length - 1);
+  lines.forEach((line, index) => {
+    const offset = -totalHeight / 2 + index * spacing;
+    ctx.fillText(line, centerX, centerY + offset);
+  });
+  ctx.restore();
+}
+
+export function drawProgressBar(
+  ctx: CanvasRenderingContext2D,
+  area: Rect,
+  value: number,
+  options?: { label?: string; color?: string },
+): void {
+  const clamped = Math.max(0, Math.min(1, value));
+  const height = 28;
+  const y = area.y + area.height / 2 - height / 2;
+  const padding = 18;
+  const width = area.width - padding * 2;
+  ctx.save();
+  ctx.fillStyle = 'rgba(24, 48, 94, 0.9)';
+  ctx.fillRect(area.x + padding, y, width, height);
+  const activeWidth = Math.max(4, width * clamped);
+  ctx.fillStyle = options?.color ?? 'rgba(120, 200, 255, 0.9)';
+  ctx.fillRect(area.x + padding, y, activeWidth, height);
+  ctx.strokeStyle = 'rgba(180, 220, 255, 0.8)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(area.x + padding, y, width, height);
+  if (options?.label) {
+    ctx.font = '22px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#06112a';
+    ctx.fillText(options.label, area.x + padding + width / 2, y + height / 2);
+  }
+  ctx.restore();
+}
+
+function variantToColor(variant: MetricVariant): string {
+  switch (variant) {
+    case 'positive':
+      return '#7ef0c6';
+    case 'negative':
+      return '#ff7b7b';
+    case 'muted':
+      return 'rgba(160, 200, 255, 0.55)';
+    case 'accent':
+      return 'rgba(225, 245, 255, 0.95)';
+    case 'default':
+    default:
+      return 'rgba(200, 225, 255, 0.85)';
+  }
+}
+````
+
+## File: src/systems/terminals/types.ts
+````typescript
+import type { Scene } from '@babylonjs/core/scene';
+import type { VoxelPosition } from '../energy/energy-network-manager';
+import type { BlockOrientation } from '../../blocks/types';
+import type { BatterySnapshot, NetworkOverview, SolarPanelSnapshot, TerminalSnapshot } from '../energy';
+
+export type TerminalDisplayKind = 'hal-terminal' | 'battery' | 'solar-panel';
+
+export interface TerminalDisplayKey {
+  kind: TerminalDisplayKind;
+  position: VoxelPosition;
+}
+
+export interface TerminalTab {
+  id: string;
+  label: string;
+}
+
+export interface TerminalPointerTarget {
+  tabIndex: number | null;
+}
+
+export interface TerminalPointerEvent {
+  uv: { u: number; v: number };
+  button: number;
+}
+
+export interface TerminalDisplayDependencies {
+  scene: Scene;
+  position: VoxelPosition;
+  orientation: BlockOrientation;
+  kind: TerminalDisplayKind;
+}
+
+export interface HalTerminalData {
+  terminal: TerminalSnapshot | null;
+  overview: NetworkOverview | null;
+}
+
+export interface BatteryTerminalData {
+  snapshot: BatterySnapshot | null;
+  overview: NetworkOverview | null;
+}
+
+export interface SolarTerminalData {
+  snapshot: SolarPanelSnapshot | null;
+  overview: NetworkOverview | null;
+}
+
+export type TerminalDisplayData = HalTerminalData | BatteryTerminalData | SolarTerminalData;
+````
+
+## File: src/types/assets.d.ts
+````typescript
+declare module '*.png' {
+  const url: string;
+  export default url;
+}
+````
+
+## File: src/utils/random.ts
+````typescript
+/**
+ * Coleção de utilitários determinísticos para geração procedural.
+ * Mantém um PRNG barato e hashes estáveis que evitam dependências extras.
+ */
+export function createSeededRng(seed: number): () => number {
+  let state = seed || 1;
+  return () => {
+    state = Math.imul(state ^ (state >>> 15), 2246822519) + 0x9e3779b9;
+    state >>>= 0;
+    return state / 0x100000000;
+  };
+}
+
+export function randomInt(rng: () => number, min: number, max: number): number {
+  return min + Math.floor(rng() * (max - min + 1));
+}
+
+export function hash2D(x: number, z: number): number {
+  let h = x * 374761393 + z * 668265263;
+  h = (h ^ (h >> 13)) * 1274126177;
+  h ^= h >> 16;
+  return h >>> 0;
+}
+
+export function hash3D(x: number, y: number, z: number): number {
+  let h = x * 374761393 + y * 668265263 + z * 144305901;
+  h = (h ^ (h >> 13)) * 1274126177;
+  h ^= h >> 16;
+  return h >>> 0;
+}
+````
+
+## File: src/utils/README.md
+````markdown
+# Shared Utilities
+
+Utility helpers shared across modules should live here.
+Favor small, pure functions and keep engine-specific code in the module that owns it.
+````
+
+## File: src/README.md
+````markdown
 # Starwatch Source Layout
 
 - `core/` — bootstrap logic (engine instantiation, wiring of systems).
@@ -7818,40 +9390,233 @@ export function sampleAsteroidNoise(x: number, scale: number): number {
 - `types/` — ambient type declarations and module shims.
 
 This mirrors the structure defined in `AGENTS.md`/`MANIFESTO.md` and keeps features encapsulated for future expansion.
-</file>
+````
 
-<file path="src/vite-env.d.ts">
+## File: src/vite-env.d.ts
+````typescript
 /// <reference types="vite/client" />
-</file>
+````
 
-<file path=".repomixignore">
+## File: .repomixignore
+````
 MANIFESTO.md
 AGENTS.md
-</file>
+````
 
-<file path="src/config/engine-options.ts">
-import type { Engine } from 'noa-engine';
-import { CHUNK_ADD_DISTANCE, CHUNK_SIZE } from './render-options';
-import { PLAYER_SPAWN_POSITION } from './world-options';
+## File: src/blocks/metadata-store.ts
+````typescript
+import type { BlockKind, BlockOrientation } from './types';
 
-export type EngineOptions = ConstructorParameters<typeof Engine>[0];
+interface BlockCoordinate {
+  x: number;
+  y: number;
+  z: number;
+}
 
-export const ENGINE_OPTIONS: EngineOptions = {
-  inverseY: false,
-  chunkSize: CHUNK_SIZE,
-  chunkAddDistance: CHUNK_ADD_DISTANCE,
-  playerStart: PLAYER_SPAWN_POSITION,
-  playerAutoStep: true,
-  playerShadowComponent: false,
-  originRebaseDistance: 32,
-  stickyPointerLock: true,
-  dragCameraOutsidePointerLock: false,
-  maxRenderRate: 0,
-  blockTestDistance: 16,
+interface OrientationKey extends BlockCoordinate {
+  kind: BlockKind;
+}
+
+function makeKey(coord: OrientationKey): string {
+  return `${coord.kind}:${coord.x}:${coord.y}:${coord.z}`;
+}
+
+class BlockMetadataStore {
+  private orientations = new Map<string, BlockOrientation>();
+
+  setOrientation(coord: OrientationKey, orientation: BlockOrientation): void {
+    this.orientations.set(makeKey(coord), orientation);
+  }
+
+  getOrientation(coord: OrientationKey): BlockOrientation | null {
+    return this.orientations.get(makeKey(coord)) ?? null;
+  }
+
+  deleteOrientation(coord: OrientationKey): void {
+    this.orientations.delete(makeKey(coord));
+  }
+
+  clear(): void {
+    this.orientations.clear();
+  }
+
+  listOrientations(): Array<{ kind: BlockKind; position: [number, number, number]; orientation: BlockOrientation }> {
+    const entries: Array<{ kind: BlockKind; position: [number, number, number]; orientation: BlockOrientation }> = [];
+    for (const [key, orientation] of this.orientations.entries()) {
+      const [kind, x, y, z] = key.split(':');
+      entries.push({
+        kind: kind as BlockKind,
+        position: [Number(x), Number(y), Number(z)],
+        orientation,
+      });
+    }
+    return entries;
+  }
+}
+
+export const blockMetadataStore = new BlockMetadataStore();
+````
+
+## File: src/config/README.md
+````markdown
+# Config Options
+
+Todos os parâmetros ajustáveis do jogo vivem em arquivos `*-options.ts` neste diretório. Cada arquivo documenta onde os valores são consumidos:
+
+- `engine-options.ts`: opções passadas diretamente ao `noa-engine` durante o bootstrap (spawn, pointer lock, chunk size, etc.).
+- `render-options.ts`: draw distance, tamanho de chunk e distâncias de add/remove.
+- `sector-options.ts`: plataforma inicial e cinturão de nuvens/asteroides do setor atual.
+- `player-options.ts`: limites de zoom e parâmetros de movimentação do jogador.
+
+Novas features devem introduzir seu próprio arquivo `foo-options.ts` e importar as constantes correspondentes a partir dele.
+````
+
+## File: src/config/sector-options.ts
+````typescript
+import { TARGET_VIEW_DISTANCE_BLOCKS } from './render-options';
+
+/** Identificador canônico do setor atual (single node do grafo). */
+export const DEFAULT_SECTOR_ID = 'sector-lyra-z7';
+
+/**
+ * Tamanho (meia extensão) da plataforma inicial onde o jogador nasce.
+ * Consumido em `sector/chunk-generator.ts` para definir o deck condutivo 10×10.
+ */
+export const PLATFORM_HALF_EXTENT = 5;
+
+/**
+ * Altura absoluta (eixo Y) da plataforma inicial.
+ * Utilizado pelo setor generator para colocar o grid no nível correto.
+ */
+export const PLATFORM_HEIGHT = 0;
+
+/**
+ * Posição inicial do jogador (usada pelo engine bootstrap).
+ * A altura deve manter o jogador levemente acima da plataforma.
+ */
+export const PLAYER_SPAWN_POSITION: [number, number, number] = [0.5, 2.5, 0.5];
+
+/**
+ * Altura média das rochas (asteroides) do anel distante.
+ */
+export const ASTEROID_LAYER_ALTITUDE = 52;
+
+/**
+ * Variação máxima (para cima/baixo) da altura dos asteroides.
+ */
+export const ASTEROID_HEIGHT_VARIATION = 12;
+
+/**
+ * Raio interno a partir do qual começam os asteroides.
+ */
+export const ASTEROID_RING_INNER_RADIUS = 90;
+
+/**
+ * Densidade mínima (0–1) do ruído procedural para instanciar um asteroide.
+ */
+export const ASTEROID_DENSITY_THRESHOLD = 0.4;
+
+/**
+ * Probabilidade base de spawn de um asteroide dentro de uma célula candidata.
+ */
+export const ASTEROID_CENTER_PROBABILITY = 0.18;
+
+/**
+ * Tamanho da célula (em blocos) usada para amostrar centros de asteroides.
+ */
+export const ASTEROID_CELL_SIZE = 48;
+
+/**
+ * Margem extra usada ao calcular células vizinhas que podem afetar o chunk.
+ */
+export const ASTEROID_CELL_MARGIN = 48;
+
+/**
+ * Alcance máximo ao longo do eixo principal do asteroide.
+ */
+export const ASTEROID_MAJOR_RADIUS = 14;
+
+/**
+ * Alcance transversal (eixo curto) do asteroide.
+ */
+export const ASTEROID_MINOR_RADIUS = 8;
+
+/**
+ * Alcance vertical (meia altura) do asteroide.
+ */
+export const ASTEROID_VERTICAL_RADIUS = 10;
+
+/**
+ * Quantidade total de blocos por asteroide (60–120 blocos, formando massas densas).
+ */
+export const ASTEROID_BLOCK_COUNT = {
+  min: 60,
+  max: 120,
+} as const;
+
+/**
+ * Número de asteroides em cada cluster (1–3 massas por centro).
+ */
+export const ASTEROID_CLUSTER_SIZE = {
+  min: 1,
+  max: 3,
+} as const;
+
+/**
+ * Distância (em blocos) para deslocar asteroides dentro do mesmo cluster.
+ */
+export const ASTEROID_CLUSTER_SPREAD = 24;
+
+/**
+ * Variedades de asteroide registradas como materiais/blocos, com pesos para distribuição.
+ */
+export const ASTEROID_VARIANTS = [
+  {
+    id: 'basalt',
+    color: [0.36, 0.38, 0.42, 1],
+    weight: 0.5,
+  },
+  {
+    id: 'nickel',
+    color: [0.56, 0.58, 0.62, 1],
+    weight: 0.3,
+  },
+  {
+    id: 'ice',
+    color: [0.74, 0.8, 0.85, 1],
+    weight: 0.2,
+  },
+] as const;
+
+/**
+ * Raio externo do cinturão de asteroides, ajustado conforme draw distance.
+ */
+export const ASTEROID_RING_OUTER_RADIUS = Math.max(
+  ASTEROID_RING_INNER_RADIUS + ASTEROID_MAJOR_RADIUS,
+  TARGET_VIEW_DISTANCE_BLOCKS - 40,
+);
+````
+
+## File: src/config/terminal-options.ts
+````typescript
+/** Req: manter thresholds de interação do terminal numa única fonte. */
+export interface TerminalInteractionOptions {
+  useRange: number;
+  proximityRange: number;
+  disengageRange: number;
+  disengageGraceTicks: number;
+}
+
+export const TERMINAL_INTERACTION_OPTIONS: TerminalInteractionOptions = {
+  useRange: 3,
+  proximityRange: 2.05,
+  disengageRange: 2.4,
+  disengageGraceTicks: 6,
 };
-</file>
+````
 
-<file path="src/engine/index.js">
+## File: src/engine/index.js
+````javascript
 /*!
  * noa: an experimental voxel game engine.
  * @url      github.com/fenomas/noa
@@ -8587,13 +10352,1270 @@ var profile_hook = (PROFILE > 0) ?
     makeProfileHook(PROFILE, 'tick   ') : () => { }
 var profile_hook_render = (PROFILE_RENDER > 0) ?
     makeProfileHook(PROFILE_RENDER, 'render ') : () => { }
-</file>
+````
 
-<file path="src/player/index.ts">
+## File: src/persistence/README.md
+````markdown
+# Persistence
+
+Camada responsável por salvar/carregar o estado do setor. Mantemos uma interface simples
+(`PersistenceAdapter`) para permitir trocar o backend sem tocar na lógica do jogo.
+
+## Componentes
+
+- `types.ts`: contratos do snapshot (`SectorSnapshot`, `ConstructionSnapshot`, etc.).
+- `adapter.ts`: interface padrão para bibliotecas de storage.
+- `local-storage-adapter.ts`: implementação local (browser) usando `localStorage`.
+- `snapshot.ts`: captura e reidrata o estado (blocos colocados, dispositivos de energia, hotbar).
+- `manager.ts`: orquestra autosave, beforeunload e geração de `playerId`.
+
+## Fluxo Atual
+
+1. **Bootstrap** cria `PersistenceManager` com o `LocalStorageAdapter`.
+2. `load()` reidrata o setor (recoloca decks/painéis/baterias/terminais, restaura hotbar e MJ armazenado).
+3. Autosave a cada 30 s + `beforeunload` garantem que o snapshot fique fresco.
+
+## Próximos Passos
+
+- Implementar `HttpAdapter` apontando para o backend real.
+- Migrar de `localStorage` para storage assíncrono quando rodarmos em Electron/native.
+- Validar snapshots com o schema em `data/schemas/sector-snapshot.schema.json` (AJV/Vitest).
+````
+
+## File: src/persistence/snapshot.ts
+````typescript
 import type { Engine } from 'noa-engine';
-import { CAMERA_ZOOM_LIMITS, PLAYER_MOVEMENT } from '../config/player-options';
+import type { HotbarApi } from '../player/hotbar';
+import { INITIAL_HOTBAR_ITEMS } from '../config/hud-options';
+import type { HotbarItemDefinition } from '../config/hud-options';
+import type { SectorResources } from '../sector';
+import type { EnergySystem } from '../systems/energy';
+import type { TerminalSystem } from '../systems/terminals';
+import { blockMetadataStore } from '../blocks/metadata-store';
+import type { BlockKind, BlockOrientation } from '../blocks/types';
+import type { VoxelPosition } from '../systems/energy/energy-network-manager';
+import {
+  SNAPSHOT_SCHEMA_VERSION,
+  type SectorSnapshot,
+  type SnapshotContextMeta,
+  type HotbarSnapshot,
+  type ConstructionSnapshot,
+} from './types';
 
-export function initializePlayer(noa: Engine): void {
+interface SnapshotContext {
+  noa: Engine;
+  sector: SectorResources;
+  energy: EnergySystem;
+  hotbar: HotbarApi;
+  terminals: TerminalSystem;
+}
+
+const HOTBAR_SLOT_LIMIT = 9;
+
+function clonePosition(position: VoxelPosition): VoxelPosition {
+  return [position[0], position[1], position[2]];
+}
+
+function captureHotbar(hotbar: HotbarApi): HotbarSnapshot {
+  const state = hotbar.controller.getState();
+  const slotItemIds = state.slots.map((slot) => slot.item?.id ?? null);
+  return {
+    activeIndex: state.activeIndex,
+    slotItemIds,
+  };
+}
+
+function captureConstruction(ctx: SnapshotContext): ConstructionSnapshot {
+  const decks = ctx.energy.listDecks().map((position) => ({ position: clonePosition(position) }));
+
+  const orientationFor = (kind: BlockKind, position: VoxelPosition): BlockOrientation | undefined => {
+    const value = blockMetadataStore.getOrientation({ kind, x: position[0], y: position[1], z: position[2] });
+    return value ?? undefined;
+  };
+
+  const solarPanels = ctx.energy.listSolarPanels().map((panel) => ({
+    position: clonePosition(panel.position),
+    orientation: orientationFor(ctx.sector.starwatchBlocks.solarPanel.kind, panel.position),
+  }));
+
+  const batteries = ctx.energy.listBatteries().map((battery) => ({
+    position: clonePosition(battery.position),
+    storedMJ: battery.storedMJ,
+    capacityMJ: battery.capacityMJ,
+    orientation: orientationFor(ctx.sector.starwatchBlocks.battery.kind, battery.position),
+  }));
+
+  const terminals = ctx.energy.listTerminals().map((terminal) => ({
+    position: clonePosition(terminal.position),
+    orientation: orientationFor(ctx.sector.starwatchBlocks.halTerminal.kind, terminal.position),
+  }));
+
+  return {
+    decks,
+    solarPanels,
+    batteries,
+    terminals,
+  };
+}
+
+export function captureSnapshot(ctx: SnapshotContext, meta: SnapshotContextMeta): SectorSnapshot {
+  return {
+    schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+    player: {
+      id: meta.playerId,
+      lastSeenIso: new Date().toISOString(),
+    },
+    sector: {
+      id: meta.sectorId,
+    },
+    construction: captureConstruction(ctx),
+    hotbar: captureHotbar(ctx.hotbar),
+  };
+}
+
+function rehydrateHotbar(hotbar: HotbarApi, snapshot: HotbarSnapshot): void {
+  const knownItems = new Map<string, HotbarItemDefinition>();
+  INITIAL_HOTBAR_ITEMS.forEach((item) => {
+    knownItems.set(item.id, item);
+  });
+  const currentState = hotbar.controller.getState();
+  currentState.slots.forEach((slot) => {
+    if (slot.item) {
+      knownItems.set(slot.item.id, slot.item);
+    }
+  });
+
+  for (let index = 0; index < HOTBAR_SLOT_LIMIT; index += 1) {
+    const itemId = snapshot.slotItemIds[index] ?? null;
+    const definition = itemId ? knownItems.get(itemId) ?? null : null;
+    hotbar.controller.setSlotItem(index, definition ?? null);
+  }
+
+  hotbar.controller.setActiveIndex(Math.max(0, Math.min(HOTBAR_SLOT_LIMIT - 1, snapshot.activeIndex)));
+}
+
+function placeBlock(noa: Engine, blockId: number, position: VoxelPosition): void {
+  noa.setBlock(blockId, position[0], position[1], position[2]);
+}
+
+export function restoreSnapshot(ctx: SnapshotContext, snapshot: SectorSnapshot): void {
+  blockMetadataStore.clear();
+
+  for (const deck of snapshot.construction.decks) {
+    placeBlock(ctx.noa, ctx.sector.starwatchBlocks.deck.id, deck.position);
+    ctx.energy.networks.addDeck(deck.position);
+  }
+
+  for (const panel of snapshot.construction.solarPanels) {
+    const orientation = panel.orientation ?? ctx.sector.starwatchBlocks.solarPanel.defaultOrientation;
+    blockMetadataStore.setOrientation(
+      {
+        kind: ctx.sector.starwatchBlocks.solarPanel.kind,
+        x: panel.position[0],
+        y: panel.position[1],
+        z: panel.position[2],
+      },
+      orientation,
+    );
+    placeBlock(ctx.noa, ctx.sector.starwatchBlocks.solarPanel.id, panel.position);
+    ctx.energy.registerSolarPanel(panel.position);
+    ctx.terminals.registerBlock(ctx.sector.starwatchBlocks.solarPanel.kind, panel.position);
+  }
+
+  for (const battery of snapshot.construction.batteries) {
+    const orientation = battery.orientation ?? ctx.sector.starwatchBlocks.battery.defaultOrientation;
+    blockMetadataStore.setOrientation(
+      {
+        kind: ctx.sector.starwatchBlocks.battery.kind,
+        x: battery.position[0],
+        y: battery.position[1],
+        z: battery.position[2],
+      },
+      orientation,
+    );
+    placeBlock(ctx.noa, ctx.sector.starwatchBlocks.battery.id, battery.position);
+    ctx.energy.registerBattery(battery.position);
+    ctx.energy.setBatteryStored(battery.position, battery.storedMJ);
+    ctx.terminals.registerBlock(ctx.sector.starwatchBlocks.battery.kind, battery.position);
+  }
+
+  for (const terminal of snapshot.construction.terminals) {
+    const orientation = terminal.orientation ?? ctx.sector.starwatchBlocks.halTerminal.defaultOrientation;
+    blockMetadataStore.setOrientation(
+      {
+        kind: ctx.sector.starwatchBlocks.halTerminal.kind,
+        x: terminal.position[0],
+        y: terminal.position[1],
+        z: terminal.position[2],
+      },
+      orientation,
+    );
+    placeBlock(ctx.noa, ctx.sector.starwatchBlocks.halTerminal.id, terminal.position);
+    ctx.energy.registerTerminal(terminal.position);
+    ctx.terminals.registerBlock(ctx.sector.starwatchBlocks.halTerminal.kind, terminal.position);
+  }
+
+  rehydrateHotbar(ctx.hotbar, snapshot.hotbar);
+}
+````
+
+## File: src/persistence/types.ts
+````typescript
+import type { BlockOrientation } from '../blocks/types';
+import type { VoxelPosition } from '../systems/energy/energy-network-manager';
+
+export const SNAPSHOT_SCHEMA_VERSION = 1;
+
+export interface SnapshotPlayer {
+  id: string;
+  lastSeenIso: string;
+}
+
+export interface SnapshotSector {
+  id: string;
+  seed?: number;
+}
+
+export interface DeckSnapshotEntry {
+  position: VoxelPosition;
+}
+
+export interface OrientedBlockSnapshotEntry {
+  position: VoxelPosition;
+  orientation?: BlockOrientation;
+}
+
+export interface BatterySnapshotEntry {
+  position: VoxelPosition;
+  storedMJ: number;
+  capacityMJ: number;
+  orientation?: BlockOrientation;
+}
+
+export interface ConstructionSnapshot {
+  decks: DeckSnapshotEntry[];
+  solarPanels: OrientedBlockSnapshotEntry[];
+  batteries: BatterySnapshotEntry[];
+  terminals: OrientedBlockSnapshotEntry[];
+}
+
+export interface HotbarSnapshot {
+  activeIndex: number;
+  slotItemIds: (string | null)[];
+}
+
+export interface SectorSnapshot {
+  schemaVersion: number;
+  player: SnapshotPlayer;
+  sector: SnapshotSector;
+  construction: ConstructionSnapshot;
+  hotbar: HotbarSnapshot;
+}
+
+export interface SnapshotContextMeta {
+  playerId: string;
+  sectorId: string;
+}
+````
+
+## File: src/sector/generation/platform.ts
+````typescript
+import { PLATFORM_HALF_EXTENT, PLATFORM_HEIGHT } from '../../config/sector-options';
+import type { ChunkGenerationContext } from './types';
+
+export function generateStartingPlatform(ctx: ChunkGenerationContext): void {
+  if (ctx.bounds.maxY < PLATFORM_HEIGHT || ctx.bounds.minY > PLATFORM_HEIGHT) {
+    return;
+  }
+
+  const deckBlockId = ctx.catalog.deck.id;
+
+  const platformMinX = -PLATFORM_HALF_EXTENT;
+  const platformMaxX = PLATFORM_HALF_EXTENT - 1;
+  const platformMinZ = -PLATFORM_HALF_EXTENT;
+  const platformMaxZ = PLATFORM_HALF_EXTENT - 1;
+
+  for (let localX = 0; localX < ctx.dimensions.sizeX; localX += 1) {
+    const worldX = ctx.bounds.minX + localX;
+    if (worldX < platformMinX || worldX > platformMaxX) continue;
+
+    for (let localZ = 0; localZ < ctx.dimensions.sizeZ; localZ += 1) {
+      const worldZ = ctx.bounds.minZ + localZ;
+      if (worldZ < platformMinZ || worldZ > platformMaxZ) continue;
+
+      ctx.writeBlock(worldX, PLATFORM_HEIGHT, worldZ, deckBlockId);
+    }
+  }
+}
+````
+
+## File: src/sector/generation/types.ts
+````typescript
+import type { SectorBlocks } from '../blocks';
+import type { BlockCatalog } from '../../blocks/types';
+
+export interface ChunkBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  minZ: number;
+  maxZ: number;
+}
+
+export interface ChunkDimensions {
+  sizeX: number;
+  sizeY: number;
+  sizeZ: number;
+}
+
+export interface ChunkGenerationContext {
+  blocks: SectorBlocks;
+  catalog: BlockCatalog;
+  bounds: ChunkBounds;
+  dimensions: ChunkDimensions;
+  writeBlock: (worldX: number, worldY: number, worldZ: number, blockId: number) => void;
+}
+````
+
+## File: src/sector/chunk-generator.ts
+````typescript
+import type { Engine } from 'noa-engine';
+import type { SectorBlocks } from './blocks';
+import { runGenerationPipeline } from './generation';
+import type { ChunkGenerationContext } from './generation/types';
+import type { BlockCatalog } from '../blocks/types';
+
+export function installChunkGenerator(noa: Engine, blocks: SectorBlocks, catalog: BlockCatalog): void {
+  console.log('[starwatch] chunk generator habilitado (pipeline modular)');
+
+  noa.world.on('worldDataNeeded', (requestID: number, data: any, x: number, y: number, z: number) => {
+    const sizeX = data.shape[0];
+    const sizeY = data.shape[1];
+    const sizeZ = data.shape[2];
+
+    const bounds = {
+      minX: x,
+      maxX: x + sizeX - 1,
+      minY: y,
+      maxY: y + sizeY - 1,
+      minZ: z,
+      maxZ: z + sizeZ - 1,
+    };
+
+    const writeBlock = (worldX: number, worldY: number, worldZ: number, blockId: number) => {
+      if (worldY < bounds.minY || worldY > bounds.maxY) return;
+      if (worldX < bounds.minX || worldX > bounds.maxX) return;
+      if (worldZ < bounds.minZ || worldZ > bounds.maxZ) return;
+      const ix = worldX - x;
+      const iy = worldY - y;
+      const iz = worldZ - z;
+      data.set(ix, iy, iz, blockId);
+    };
+
+    const context: ChunkGenerationContext = {
+      blocks,
+      catalog,
+      bounds,
+      dimensions: {
+        sizeX,
+        sizeY,
+        sizeZ,
+      },
+      writeBlock,
+    };
+
+    runGenerationPipeline(context);
+
+    noa.world.setChunkData(requestID, data);
+  });
+}
+````
+
+## File: src/sector/index.ts
+````typescript
+import type { Engine } from 'noa-engine';
+import { registerSectorMaterials, type SectorMaterials } from './materials';
+import { registerSectorBlocks, type SectorBlocks } from './blocks';
+import { installChunkGenerator } from './chunk-generator';
+import { CHUNK_ADD_DISTANCE, CHUNK_REMOVE_DISTANCE } from '../config/render-options';
+import { registerStarwatchBlocks } from '../blocks/register';
+import type { BlockCatalog } from '../blocks/types';
+
+export interface SectorResources {
+  materials: SectorMaterials;
+  terrainBlocks: SectorBlocks;
+  starwatchBlocks: BlockCatalog;
+}
+
+export function initializeSector(noa: Engine): SectorResources {
+  const materials = registerSectorMaterials(noa);
+  const terrainBlocks = registerSectorBlocks(noa, materials);
+  const starwatchBlocks = registerStarwatchBlocks(noa, materials, terrainBlocks.nextBlockId);
+  installChunkGenerator(noa, terrainBlocks, starwatchBlocks);
+
+  noa.world.setAddRemoveDistance(CHUNK_ADD_DISTANCE, CHUNK_REMOVE_DISTANCE);
+  console.log('[starwatch] distâncias de chunk configuradas');
+
+  return {
+    materials,
+    terrainBlocks,
+    starwatchBlocks,
+  };
+}
+````
+
+## File: src/systems/energy/energy-network-manager.ts
+````typescript
+export type VoxelPosition = [number, number, number];
+
+export interface EnergyNetworkMetrics {
+  totalGenW: number;
+  totalLoadW: number;
+  totalCapMJ: number;
+  totalStoredMJ: number;
+}
+
+export interface EnergyNetworkSnapshot {
+  id: number;
+  nodeCount: number;
+  metrics: EnergyNetworkMetrics;
+}
+
+interface DeckNode {
+  key: string;
+  position: VoxelPosition;
+  neighbors: Set<string>;
+  networkId: number;
+}
+
+interface EnergyNetwork {
+  id: number;
+  nodes: Set<string>;
+  metrics: EnergyNetworkMetrics;
+}
+
+const NEIGHBOR_OFFSETS: ReadonlyArray<VoxelPosition> = [
+  [1, 0, 0],
+  [-1, 0, 0],
+  [0, 1, 0],
+  [0, -1, 0],
+  [0, 0, 1],
+  [0, 0, -1],
+];
+
+function makeKey(position: VoxelPosition): string {
+  return `${position[0]}:${position[1]}:${position[2]}`;
+}
+
+function clonePosition(position: VoxelPosition): VoxelPosition {
+  return [position[0], position[1], position[2]];
+}
+
+function createEmptyMetrics(): EnergyNetworkMetrics {
+  return {
+    totalGenW: 0,
+    totalLoadW: 0,
+    totalCapMJ: 0,
+    totalStoredMJ: 0,
+  };
+}
+
+function addMetrics(target: EnergyNetworkMetrics, delta: EnergyNetworkMetrics): void {
+  target.totalGenW += delta.totalGenW;
+  target.totalLoadW += delta.totalLoadW;
+  target.totalCapMJ += delta.totalCapMJ;
+  target.totalStoredMJ += delta.totalStoredMJ;
+}
+
+function subtractMetrics(target: EnergyNetworkMetrics, delta: EnergyNetworkMetrics): void {
+  target.totalGenW -= delta.totalGenW;
+  target.totalLoadW -= delta.totalLoadW;
+  target.totalCapMJ -= delta.totalCapMJ;
+  target.totalStoredMJ -= delta.totalStoredMJ;
+}
+
+export class EnergyNetworkManager {
+  private readonly nodes = new Map<string, DeckNode>();
+  private readonly networks = new Map<number, EnergyNetwork>();
+  private nextNetworkId = 1;
+
+  getNetworkSnapshot(networkId: number): EnergyNetworkSnapshot | null {
+    const network = this.networks.get(networkId);
+    if (!network) {
+      return null;
+    }
+    return {
+      id: network.id,
+      nodeCount: network.nodes.size,
+      metrics: { ...network.metrics },
+    };
+  }
+
+  listNetworks(): EnergyNetworkSnapshot[] {
+    return Array.from(this.networks.values()).map((network) => ({
+      id: network.id,
+      nodeCount: network.nodes.size,
+      metrics: { ...network.metrics },
+    }));
+  }
+
+  getNetworkIdForPosition(position: VoxelPosition): number | null {
+    const key = makeKey(position);
+    const node = this.nodes.get(key);
+    return node ? node.networkId : null;
+  }
+
+  listDeckPositions(): VoxelPosition[] {
+    return Array.from(this.nodes.values()).map((node) => clonePosition(node.position));
+  }
+
+  addDeck(position: VoxelPosition): number {
+    const key = makeKey(position);
+    if (this.nodes.has(key)) {
+      return this.nodes.get(key)!.networkId;
+    }
+
+    const node: DeckNode = {
+      key,
+      position: clonePosition(position),
+      neighbors: new Set(),
+      networkId: -1,
+    };
+
+    const neighbors = this.getNeighborNodes(position);
+    const neighborNetworkIds = new Set<number>();
+
+    for (const neighbor of neighbors) {
+      neighbor.neighbors.add(key);
+      node.neighbors.add(neighbor.key);
+      neighborNetworkIds.add(neighbor.networkId);
+    }
+
+    this.nodes.set(key, node);
+
+    let assignedNetworkId: number;
+    if (neighborNetworkIds.size === 0) {
+      assignedNetworkId = this.createNetworkWithNodes([node]);
+    } else {
+      const [primaryNetworkId] = neighborNetworkIds;
+      assignedNetworkId = primaryNetworkId;
+      this.attachNodeToNetwork(node, primaryNetworkId);
+
+      for (const networkId of neighborNetworkIds) {
+        if (networkId !== primaryNetworkId) {
+          this.mergeNetworks(primaryNetworkId, networkId);
+        }
+      }
+    }
+
+    return assignedNetworkId;
+  }
+
+  removeDeck(position: VoxelPosition): void {
+    const key = makeKey(position);
+    const node = this.nodes.get(key);
+    if (!node) {
+      return;
+    }
+
+    const originalNetworkId = node.networkId;
+
+    for (const neighborKey of node.neighbors) {
+      const neighbor = this.nodes.get(neighborKey);
+      if (neighbor) {
+        neighbor.neighbors.delete(key);
+      }
+    }
+
+    this.nodes.delete(key);
+
+    const network = this.networks.get(originalNetworkId);
+    if (!network) {
+      return;
+    }
+
+    network.nodes.delete(key);
+
+    if (network.nodes.size === 0) {
+      this.networks.delete(originalNetworkId);
+      return;
+    }
+
+    this.rebuildNetwork(originalNetworkId, network.nodes);
+  }
+
+  adjustNetworkMetrics(networkId: number, delta: Partial<EnergyNetworkMetrics>): void {
+    const network = this.networks.get(networkId);
+    if (!network) {
+      return;
+    }
+
+    if (typeof delta.totalGenW === 'number') {
+      network.metrics.totalGenW += delta.totalGenW;
+    }
+    if (typeof delta.totalLoadW === 'number') {
+      network.metrics.totalLoadW += delta.totalLoadW;
+    }
+    if (typeof delta.totalCapMJ === 'number') {
+      network.metrics.totalCapMJ += delta.totalCapMJ;
+    }
+    if (typeof delta.totalStoredMJ === 'number') {
+      network.metrics.totalStoredMJ += delta.totalStoredMJ;
+    }
+  }
+
+  private createNetworkWithNodes(nodes: DeckNode[]): number {
+    const id = this.nextNetworkId++;
+    const network: EnergyNetwork = {
+      id,
+      nodes: new Set(nodes.map((node) => node.key)),
+      metrics: createEmptyMetrics(),
+    };
+    this.networks.set(id, network);
+
+    for (const node of nodes) {
+      node.networkId = id;
+    }
+
+    return id;
+  }
+
+  private attachNodeToNetwork(node: DeckNode, networkId: number): void {
+    const network = this.networks.get(networkId);
+    if (!network) {
+      throw new Error(`Rede ${networkId} inexistente ao anexar deck.`);
+    }
+    network.nodes.add(node.key);
+    node.networkId = networkId;
+  }
+
+  private mergeNetworks(targetNetworkId: number, sourceNetworkId: number): void {
+    if (targetNetworkId === sourceNetworkId) {
+      return;
+    }
+
+    const target = this.networks.get(targetNetworkId);
+    const source = this.networks.get(sourceNetworkId);
+    if (!target || !source) {
+      return;
+    }
+
+    for (const key of source.nodes) {
+      const node = this.nodes.get(key);
+      if (!node) {
+        continue;
+      }
+      node.networkId = targetNetworkId;
+      target.nodes.add(key);
+    }
+
+    addMetrics(target.metrics, source.metrics);
+
+    this.networks.delete(sourceNetworkId);
+  }
+
+  private rebuildNetwork(originalNetworkId: number, remainingKeys: Set<string>): void {
+    this.networks.delete(originalNetworkId);
+
+    const remaining = new Set(remainingKeys);
+    const visited = new Set<string>();
+
+    const queue: string[] = [];
+
+    const flushComponent = (startKey: string) => {
+      queue.length = 0;
+      queue.push(startKey);
+      visited.add(startKey);
+
+      const componentNodes: DeckNode[] = [];
+
+      while (queue.length > 0) {
+        const currentKey = queue.shift()!;
+        const node = this.nodes.get(currentKey);
+        if (!node) {
+          continue;
+        }
+        componentNodes.push(node);
+
+        for (const neighborKey of node.neighbors) {
+          if (!remaining.has(neighborKey) || visited.has(neighborKey)) {
+            continue;
+          }
+          visited.add(neighborKey);
+          queue.push(neighborKey);
+        }
+      }
+
+      if (componentNodes.length > 0) {
+        this.createNetworkWithNodes(componentNodes);
+      }
+    };
+
+    for (const key of remaining) {
+      if (visited.has(key)) {
+        continue;
+      }
+      flushComponent(key);
+    }
+  }
+
+  private getNeighborNodes(position: VoxelPosition): DeckNode[] {
+    const neighbors: DeckNode[] = [];
+    for (const offset of NEIGHBOR_OFFSETS) {
+      const neighborPos: VoxelPosition = [
+        position[0] + offset[0],
+        position[1] + offset[1],
+        position[2] + offset[2],
+      ];
+      const neighbor = this.nodes.get(makeKey(neighborPos));
+      if (neighbor) {
+        neighbors.push(neighbor);
+      }
+    }
+    return neighbors;
+  }
+}
+````
+
+## File: src/systems/terminals/battery-terminal-display.ts
+````typescript
+import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { BaseTerminalDisplay, type BaseTerminalDisplayOptions } from './terminal-display';
+import type { BatteryTerminalData } from './types';
+import { clearContent, drawCenteredMessage, drawMetricList, drawProgressBar, type MetricRow, type MetricVariant } from './render-helpers';
+import { formatDelta, formatMegajoules, formatWatts, formatPercent } from './format';
+
+type BatteryOptions = BaseTerminalDisplayOptions<BatteryTerminalData>;
+
+export class BatteryTerminalDisplay extends BaseTerminalDisplay<BatteryTerminalData> {
+  constructor(options: BatteryOptions) {
+    super(options);
+    this.createSupport(options);
+  }
+
+  protected drawContent(activeTabId: string | null, data: BatteryTerminalData): void {
+    const area = this.contentArea;
+    const ctx = this.ctx;
+    clearContent(ctx, area);
+
+    if (!data.snapshot) {
+      drawCenteredMessage(ctx, area, ['BATERIA OFFLINE', 'CONECTE AO DECK']);
+      return;
+    }
+
+    if (activeTabId === 'network') {
+      this.drawNetwork(ctx, area, data);
+    } else {
+      this.drawStatus(ctx, area, data);
+    }
+  }
+
+  private drawStatus(ctx: CanvasRenderingContext2D, area: { x: number; y: number; width: number; height: number }, data: BatteryTerminalData): void {
+    const { snapshot } = data;
+    if (!snapshot) {
+      drawCenteredMessage(ctx, area, ['SEM DADOS']);
+      return;
+    }
+    const fill = snapshot.storedMJ / snapshot.capacityMJ;
+    drawProgressBar(ctx, area, fill, {
+      label: `${formatPercent(fill)} (${formatMegajoules(snapshot.storedMJ)} / ${formatMegajoules(snapshot.capacityMJ)})`,
+      color: fill > 0.8 ? 'rgba(120, 225, 160, 0.9)' : 'rgba(120, 200, 255, 0.9)',
+    });
+  }
+
+  private drawNetwork(ctx: CanvasRenderingContext2D, area: { x: number; y: number; width: number; height: number }, data: BatteryTerminalData): void {
+    const { overview } = data;
+    if (!overview) {
+      drawCenteredMessage(ctx, area, ['REDE NÃO DETECTADA']);
+      return;
+    }
+    const deltaVariant: MetricVariant = overview.metrics.deltaW >= 0 ? 'positive' : 'negative';
+    const rows: MetricRow[] = [
+      { label: 'REDE', value: `#${overview.id.toString().padStart(4, '0')}`, variant: 'accent' },
+      { label: 'RESERVA TOTAL', value: formatMegajoules(overview.metrics.totalStoredMJ) },
+      { label: 'GERAÇÃO', value: formatWatts(overview.metrics.totalGenW) },
+      { label: 'CONSUMO', value: formatWatts(overview.metrics.totalLoadW) },
+      { label: 'Δ', value: formatDelta(overview.metrics.deltaW), variant: deltaVariant },
+    ];
+    drawMetricList(ctx, area, rows);
+  }
+
+  private createSupport(options: BatteryOptions): void {
+    const key = options.position.join(':');
+    this.createDecorBox(
+      `battery-terminal-frame-${key}`,
+      {
+        width: options.physicalWidth + 0.14,
+        height: options.physicalHeight + 0.14,
+        depth: 0.08,
+      },
+      {
+        distance: this.mountOffset - 0.04,
+        color: new Color3(0.07, 0.12, 0.22),
+        emissive: new Color3(0.05, 0.08, 0.16),
+        renderingGroupId: 2,
+      },
+    );
+
+    this.createDecorBox(
+      `battery-terminal-bracket-${key}`,
+      {
+        width: 0.2,
+        height: options.physicalHeight + 0.06,
+        depth: 0.18,
+      },
+      {
+        distance: this.mountOffset - 0.16,
+        color: new Color3(0.05, 0.09, 0.15),
+        emissive: new Color3(0.03, 0.05, 0.09),
+        renderingGroupId: 1,
+      },
+    );
+
+    this.createDecorBox(
+      `battery-terminal-backplate-${key}`,
+      {
+        width: options.physicalWidth + 0.22,
+        height: options.physicalHeight + 0.22,
+        depth: 0.06,
+      },
+      {
+        distance: this.mountOffset - 0.24,
+        color: new Color3(0.04, 0.07, 0.12),
+        emissive: new Color3(0.02, 0.04, 0.08),
+        renderingGroupId: 1,
+      },
+    );
+  }
+}
+````
+
+## File: src/systems/terminals/helpers.ts
+````typescript
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import type { BlockOrientation } from '../../blocks/types';
+
+export function orientationToYaw(orientation: BlockOrientation): number {
+  switch (orientation) {
+    case 'north':
+      return Math.PI;
+    case 'east':
+      return Math.PI / 2;
+    case 'south':
+      return 0;
+    case 'west':
+      return -Math.PI / 2;
+    default:
+      return 0;
+  }
+}
+
+export function orientationToNormal(orientation: BlockOrientation): Vector3 {
+  switch (orientation) {
+    case 'north':
+      return new Vector3(0, 0, -1);
+    case 'east':
+      return new Vector3(1, 0, 0);
+    case 'south':
+      return new Vector3(0, 0, 1);
+    case 'west':
+      return new Vector3(-1, 0, 0);
+    default:
+      return new Vector3(0, 0, 1);
+  }
+}
+````
+
+## File: src/systems/terminals/index.ts
+````typescript
+import type { Engine } from 'noa-engine';
+import type { OverlayApi } from '../../hud/overlay';
+import type { EnergySystem } from '../energy';
+import type { BlockKind } from '../../blocks/types';
+import type { VoxelPosition } from '../energy/energy-network-manager';
+import { TerminalDisplayManager } from './terminal-display-manager';
+
+export interface TerminalSystem {
+  registerBlock(kind: BlockKind, position: VoxelPosition): void;
+  unregisterBlock(kind: BlockKind, position: VoxelPosition): void;
+  openTerminal(kind: BlockKind, position: VoxelPosition): boolean;
+  closeActiveTerminal(): void;
+  getActiveTerminal(): { kind: BlockKind; position: VoxelPosition } | null;
+  isCapturingInput(): boolean;
+  setHighlightedTerminal(target: { kind: BlockKind; position: VoxelPosition } | null): void;
+  destroy(): void;
+}
+
+interface TerminalSystemOptions {
+  noa: Engine;
+  overlay: OverlayApi;
+  energy: EnergySystem;
+}
+
+export function initializeTerminalSystem(options: TerminalSystemOptions): TerminalSystem {
+  const manager = new TerminalDisplayManager({
+    noa: options.noa,
+    energy: options.energy,
+    overlay: options.overlay,
+  });
+
+  for (const terminal of options.energy.listTerminals()) {
+    manager.registerBlock('starwatch:hal-terminal', terminal.position);
+  }
+  for (const battery of options.energy.listBatteries()) {
+    manager.registerBlock('starwatch:battery', battery.position);
+  }
+  for (const panel of options.energy.listSolarPanels()) {
+    manager.registerBlock('starwatch:solar-panel', panel.position);
+  }
+
+  return {
+    registerBlock(kind, position) {
+      manager.registerBlock(kind, position);
+    },
+    unregisterBlock(kind, position) {
+      manager.unregisterBlock(kind, position);
+    },
+    openTerminal(kind, position) {
+      return manager.tryOpenTerminal(position, kind);
+    },
+    closeActiveTerminal() {
+      manager.closeActiveTerminal();
+    },
+    getActiveTerminal() {
+      return manager.getActiveTerminal();
+    },
+    isCapturingInput() {
+      return manager.isCapturingInput();
+    },
+    setHighlightedTerminal(target) {
+      manager.setHighlightedTerminal(target);
+    },
+    destroy() {
+      manager.destroy();
+    },
+  };
+}
+````
+
+## File: src/systems/terminals/solar-terminal-display.ts
+````typescript
+import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { BaseTerminalDisplay, type BaseTerminalDisplayOptions } from './terminal-display';
+import type { SolarTerminalData } from './types';
+import { clearContent, drawCenteredMessage, drawMetricList, type MetricRow, type MetricVariant } from './render-helpers';
+import { formatDelta, formatPercent, formatWatts } from './format';
+
+type SolarOptions = BaseTerminalDisplayOptions<SolarTerminalData>;
+
+export class SolarTerminalDisplay extends BaseTerminalDisplay<SolarTerminalData> {
+  constructor(options: SolarOptions) {
+    super(options);
+    this.createSupport(options);
+  }
+
+  protected drawContent(activeTabId: string | null, data: SolarTerminalData): void {
+    const area = this.contentArea;
+    const ctx = this.ctx;
+    clearContent(ctx, area);
+
+    if (!data.snapshot) {
+      drawCenteredMessage(ctx, area, ['PAINEL INATIVO', 'VERIFIQUE OBSTRUÇÕES']);
+      return;
+    }
+
+    if (activeTabId === 'network') {
+      this.drawNetwork(ctx, area, data);
+    } else {
+      this.drawStatus(ctx, area, data);
+    }
+  }
+
+  private drawStatus(ctx: CanvasRenderingContext2D, area: { x: number; y: number; width: number; height: number }, data: SolarTerminalData): void {
+    const { snapshot } = data;
+    if (!snapshot) {
+      drawCenteredMessage(ctx, area, ['SEM DADOS DISPONÍVEIS']);
+      return;
+    }
+    const rows: MetricRow[] = [
+      { label: 'SAÍDA ATUAL', value: formatWatts(snapshot.outputW), variant: 'accent' },
+      { label: 'SOMBREAMENTO', value: formatPercent(snapshot.shade) },
+    ];
+    drawMetricList(ctx, area, rows);
+  }
+
+  private drawNetwork(ctx: CanvasRenderingContext2D, area: { x: number; y: number; width: number; height: number }, data: SolarTerminalData): void {
+    const { overview } = data;
+    if (!overview) {
+      drawCenteredMessage(ctx, area, ['SEM REDE']);
+      return;
+    }
+    const deltaVariant: MetricVariant = overview.metrics.deltaW >= 0 ? 'positive' : 'negative';
+    const rows: MetricRow[] = [
+      { label: 'REDE', value: `#${overview.id.toString().padStart(4, '0')}`, variant: 'accent' },
+      { label: 'GERAÇÃO TOTAL', value: formatWatts(overview.metrics.totalGenW) },
+      { label: 'CONSUMO', value: formatWatts(overview.metrics.totalLoadW) },
+      { label: 'Δ', value: formatDelta(overview.metrics.deltaW), variant: deltaVariant },
+    ];
+    drawMetricList(ctx, area, rows);
+  }
+
+  private createSupport(options: SolarOptions): void {
+    const key = options.position.join(':');
+    this.createDecorBox(
+      `solar-terminal-frame-${key}`,
+      {
+        width: options.physicalWidth + 0.14,
+        height: options.physicalHeight + 0.14,
+        depth: 0.08,
+      },
+      {
+        distance: this.mountOffset - 0.04,
+        color: new Color3(0.07, 0.12, 0.22),
+        emissive: new Color3(0.05, 0.08, 0.16),
+        renderingGroupId: 2,
+      },
+    );
+
+    this.createDecorBox(
+      `solar-terminal-bracket-${key}`,
+      {
+        width: 0.18,
+        height: options.physicalHeight + 0.06,
+        depth: 0.18,
+      },
+      {
+        distance: this.mountOffset - 0.16,
+        color: new Color3(0.05, 0.09, 0.15),
+        emissive: new Color3(0.03, 0.05, 0.09),
+        renderingGroupId: 1,
+      },
+    );
+
+    this.createDecorBox(
+      `solar-terminal-backplate-${key}`,
+      {
+        width: options.physicalWidth + 0.22,
+        height: options.physicalHeight + 0.22,
+        depth: 0.06,
+      },
+      {
+        distance: this.mountOffset - 0.24,
+        color: new Color3(0.04, 0.07, 0.12),
+        emissive: new Color3(0.02, 0.04, 0.08),
+        renderingGroupId: 1,
+      },
+    );
+  }
+}
+````
+
+## File: src/systems/README.md
+````markdown
+# Runtime Systems
+
+Cada subsistema fica encapsulado em seu próprio diretório e expõe uma função
+`initializeX(noa, context)` consumida pelo bootstrap em `src/core/bootstrap.ts`.
+
+## Energia (`energy/`)
+
+- `index.ts` mantém o passo a 1 Hz, lida com sombreamento (`fast-voxel-raycast`) e agrega
+  métricas por rede (geração, consumo, capacidade, armazenamento).
+- `energy-network-manager.ts` implementa o DSU de decks (merge/split por adjacência ortogonal).
+- `debug-overlay.ts` é ativado quando `VITE_DEBUG_ENERGY=1` e renderiza métricas + log a cada 5 s.
+
+**Como testar**
+
+1. Inicie o jogo (`pnpm dev`).
+2. Construa uma malha de `Deck` ligando solares/baterias.
+3. Observe o HUD look-at (mirar painel/bateria ≤3 m) e abra o terminal `E` para validar agregados.
+4. Para debug, rode `VITE_DEBUG_ENERGY=1 pnpm dev`; o overlay aparece no canto superior direito e
+   a cada 5 s é impresso um snapshot em `console.log`.
+
+## Interactions (`interactions/`)
+
+- `use-system.ts` processa a entrada `E` com debounce, verifica alcance (3 m) e abre o overlay React
+  com os detalhes do terminal HAL.
+
+Adicione novos sistemas seguindo esse padrão modular, sempre retornando APIs explícitas e sem side
+effects globais escondidos.
+````
+
+## File: src/blocks/README.md
+````markdown
+# Custom Blocks
+
+Este diretório consolida todo o registro de blocos “de gameplay” do slice Energia & Terminal.
+
+- `register.ts` expõe `registerStarwatchBlocks()` que recebe a instância do NOA e os materiais
+  registrados em `world/materials.ts`. Ali ficam centralizados os IDs dos blocos Deck, Painel,
+  Bateria e Terminal.
+- `metadata-store.ts` mantém metadados adicionais (ex.: orientação) por voxel usando chaves
+  `${kind}:${x}:${y}:${z}`. Sempre use esse helper ao salvar/consultar orientações para evitar
+  vazamentos de detalhes na camada de systems.
+- `types.ts` define o contrato (`BlockCatalog`) que o mundo expõe para outros módulos.
+
+## Como testar
+
+1. Execute `pnpm dev` e entre no jogo.
+2. Use as teclas `1–4` ou scroll para selecionar um bloco da hotbar.
+3. Posicione o fantasma onde queira instanciar e clique para colocar.
+4. Remover blocos com `Mouse1` (segurar) ou `X` garante que o catálogo limpe as orientações registradas.
+
+Qualquer novo bloco deve ser adicionado aqui, mantendo o registro centralizado e documentado.
+````
+
+## File: src/blocks/register.ts
+````typescript
+import type { Engine } from 'noa-engine';
+import type { SectorMaterials } from '../sector/materials';
+import type { BlockCatalog, BlockDefinition, BlockKind } from './types';
+
+function registerSimpleBlock(
+  noa: Engine,
+  blockId: number,
+  options: {
+    material: string;
+    solid?: boolean;
+    opaque?: boolean;
+  },
+  definition: Omit<BlockDefinition, 'id'>,
+): BlockDefinition {
+  const id = noa.registry.registerBlock(blockId, {
+    material: options.material,
+    solid: options.solid ?? true,
+    opaque: options.opaque ?? true,
+  });
+
+  return {
+    ...definition,
+    id,
+  };
+}
+
+export function registerStarwatchBlocks(
+  noa: Engine,
+  materials: SectorMaterials,
+  startingBlockId: number,
+): BlockCatalog {
+  let nextId = startingBlockId;
+
+  const deck = registerSimpleBlock(
+    noa,
+    nextId,
+    { material: materials.deck.name, solid: true, opaque: true },
+    {
+      kind: 'starwatch:deck',
+      orientable: false,
+      defaultOrientation: 'north',
+    },
+  );
+  nextId += 1;
+
+  const solarPanel = registerSimpleBlock(
+    noa,
+    nextId,
+    { material: materials.solarPanel.name, solid: true, opaque: false },
+    {
+      kind: 'starwatch:solar-panel',
+      orientable: true,
+      defaultOrientation: 'south',
+    },
+  );
+  nextId += 1;
+
+  const battery = registerSimpleBlock(
+    noa,
+    nextId,
+    { material: materials.battery.name, solid: true, opaque: true },
+    {
+      kind: 'starwatch:battery',
+      orientable: true,
+      defaultOrientation: 'south',
+    },
+  );
+  nextId += 1;
+
+  const halTerminal = registerSimpleBlock(
+    noa,
+    nextId,
+    { material: materials.terminal.name, solid: true, opaque: true },
+    {
+      kind: 'starwatch:hal-terminal',
+      orientable: true,
+      defaultOrientation: 'south',
+    },
+  );
+
+  const byKind = new Map<BlockKind, BlockDefinition>([
+    [deck.kind, deck],
+    [solarPanel.kind, solarPanel],
+    [battery.kind, battery],
+    [halTerminal.kind, halTerminal],
+  ]);
+
+  const byId = new Map<number, BlockDefinition>([
+    [deck.id, deck],
+    [solarPanel.id, solarPanel],
+    [battery.id, battery],
+    [halTerminal.id, halTerminal],
+  ]);
+
+  console.log('[starwatch] blocos de gameplay registrados', {
+    deck: deck.id,
+    solarPanel: solarPanel.id,
+    battery: battery.id,
+    halTerminal: halTerminal.id,
+  });
+
+  return {
+    deck,
+    solarPanel,
+    battery,
+    halTerminal,
+    byKind,
+    byId,
+  };
+}
+````
+
+## File: src/config/engine-options.ts
+````typescript
+import type { Engine } from 'noa-engine';
+import { CHUNK_ADD_DISTANCE, CHUNK_SIZE } from './render-options';
+import { PLAYER_SPAWN_POSITION } from './sector-options';
+
+export type EngineOptions = ConstructorParameters<typeof Engine>[0];
+
+export const ENGINE_OPTIONS: EngineOptions = {
+  inverseY: false,
+  chunkSize: CHUNK_SIZE,
+  chunkAddDistance: CHUNK_ADD_DISTANCE,
+  playerStart: PLAYER_SPAWN_POSITION,
+  playerAutoStep: true,
+  playerShadowComponent: false,
+  originRebaseDistance: 32,
+  stickyPointerLock: true,
+  dragCameraOutsidePointerLock: false,
+  maxRenderRate: 0,
+  blockTestDistance: 16,
+};
+````
+
+## File: src/player/index.ts
+````typescript
+import type { Engine } from 'noa-engine';
+import { PLAYER_MOVEMENT } from '../config/player-options';
+import type { HotbarApi } from './hotbar';
+import type { OverlayApi } from '../hud/overlay';
+
+interface PlayerDependencies {
+  hotbar: HotbarApi;
+  overlay: OverlayApi;
+}
+
+export function initializePlayer(noa: Engine, { hotbar, overlay }: PlayerDependencies): void {
   const movement = noa.entities.getMovement(noa.playerEntity);
   movement.maxSpeed = PLAYER_MOVEMENT.maxSpeed;
   movement.moveForce = PLAYER_MOVEMENT.moveForce;
@@ -8601,241 +11623,542 @@ export function initializePlayer(noa: Engine): void {
   noa.inputs.bind('pause', 'KeyP');
   let paused = false;
   noa.inputs.down.on('pause', () => {
+    if (overlay.controller.getState().captureInput) {
+      return;
+    }
     paused = !paused;
     noa.setPaused(paused);
     console.log('[starwatch] jogo %s', paused ? 'pausado' : 'retomado');
   });
 
-  noa.on('tick', () => {
-    const scroll = noa.inputs.pointerState.scrolly;
-    if (scroll !== 0) {
-      noa.camera.zoomDistance += scroll > 0 ? CAMERA_ZOOM_LIMITS.step : -CAMERA_ZOOM_LIMITS.step;
-      noa.camera.zoomDistance = Math.min(Math.max(noa.camera.zoomDistance, CAMERA_ZOOM_LIMITS.min), CAMERA_ZOOM_LIMITS.max);
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).starwatchHotbar = hotbar.controller;
+  }
+}
+````
+
+## File: src/systems/terminals/terminal-display-manager.ts
+````typescript
+import type { Engine } from 'noa-engine';
+import type { Scene } from '@babylonjs/core/scene';
+import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import type { OverlayApi } from '../../hud/overlay';
+import type { EnergySystem } from '../energy';
+import type { VoxelPosition } from '../energy/energy-network-manager';
+import { blockMetadataStore } from '../../blocks/metadata-store';
+import type { BlockKind, BlockOrientation } from '../../blocks/types';
+import {
+  BatteryTerminalDisplay,
+} from './battery-terminal-display';
+import {
+  BaseTerminalDisplay,
+  type BaseTerminalDisplayOptions,
+} from './terminal-display';
+import {
+  HalTerminalDisplay,
+} from './hal-terminal-display';
+import {
+  SolarTerminalDisplay,
+} from './solar-terminal-display';
+import type {
+  BatteryTerminalData,
+  HalTerminalData,
+  SolarTerminalData,
+  TerminalDisplayKind,
+  TerminalPointerEvent,
+} from './types';
+
+type TerminalInstance = BaseTerminalDisplay<HalTerminalData | BatteryTerminalData | SolarTerminalData>;
+
+interface TerminalManagerOptions {
+  noa: Engine;
+  energy: EnergySystem;
+  overlay: OverlayApi;
+}
+
+interface DisplayEntry {
+  display: TerminalInstance;
+  blockKind: BlockKind;
+  position: VoxelPosition;
+}
+
+const BLOCK_KIND_TO_DISPLAY: Record<BlockKind, TerminalDisplayKind | null> = {
+  'starwatch:deck': null,
+  'starwatch:solar-panel': 'solar-panel',
+  'starwatch:battery': 'battery',
+  'starwatch:hal-terminal': 'hal-terminal',
+};
+
+function makePositionKey(position: VoxelPosition, kind: TerminalDisplayKind): string {
+  return `${kind}:${position[0]}:${position[1]}:${position[2]}`;
+}
+
+export class TerminalDisplayManager {
+  private readonly noa: Engine;
+  private readonly scene: Scene;
+  private readonly energy: EnergySystem;
+  private readonly overlay: OverlayApi;
+  private readonly displays = new Map<string, DisplayEntry>();
+
+  private disposeEnergyListener: (() => void) | null = null;
+  private activeKey: string | null = null;
+  private activeContext: { blockKind: BlockKind; position: VoxelPosition } | null = null;
+  private highlightedKey: string | null = null;
+
+  private readonly handlePointerDown = (event: PointerEvent) => this.onPointerDown(event);
+  private readonly handleKeyDown = (event: KeyboardEvent) => this.onKeyDown(event);
+  private readonly handleAimUpdate = () => this.updateAimHover();
+  private readonly handleFireDown = (event: MouseEvent) => this.onFireDown(event);
+  private detachFireListener: (() => void) | null = null;
+
+  constructor(options: TerminalManagerOptions) {
+    this.noa = options.noa;
+    this.energy = options.energy;
+    this.overlay = options.overlay;
+    this.scene = options.noa.rendering.getScene();
+
+    this.disposeEnergyListener = this.energy.subscribe(() => {
+      this.refreshAll();
+    });
+    this.noa.on('beforeRender', this.handleAimUpdate);
+    const fireDown = this.noa.inputs?.down as { on?: (action: string, handler: (...args: any[]) => void) => void; off?: (action: string, handler: (...args: any[]) => void) => void } | undefined;
+    if (fireDown?.on) {
+      fireDown.on('fire', this.handleFireDown);
+      this.detachFireListener = () => {
+        fireDown.off?.('fire', this.handleFireDown);
+      };
     }
-  });
-}
-</file>
+  }
 
-<file path="src/world/index.ts">
-import type { Engine } from 'noa-engine';
-import { registerWorldMaterials } from './materials';
-import { registerWorldBlocks } from './blocks';
-import { installChunkGenerator } from './chunk-generator';
-import { CHUNK_ADD_DISTANCE, CHUNK_REMOVE_DISTANCE } from '../config/render-options';
+  destroy(): void {
+    this.disposeEnergyListener?.();
+    this.disposeEnergyListener = null;
+    this.noa.off('beforeRender', this.handleAimUpdate);
+    this.detachFireListener?.();
+    this.detachFireListener = null;
+    this.endSession();
+    this.overlay.controller.setPointerPassthrough(false);
+    this.setHighlightKey(null);
+    for (const entry of this.displays.values()) {
+      entry.display.dispose();
+    }
+    this.displays.clear();
+  }
 
-export function initializeWorld(noa: Engine): void {
-  const materials = registerWorldMaterials(noa);
-  const blocks = registerWorldBlocks(noa, materials);
-  installChunkGenerator(noa, blocks);
-
-  noa.world.setAddRemoveDistance(CHUNK_ADD_DISTANCE, CHUNK_REMOVE_DISTANCE);
-  console.log('[starwatch] distâncias de chunk configuradas');
-}
-</file>
-
-<file path="src/config/world-options.ts">
-import { TARGET_VIEW_DISTANCE_BLOCKS } from './render-options';
-
-/**
- * Tamanho (meia extensão) da plataforma inicial onde o jogador nasce.
- * Consumido em `world/chunk-generator.ts` para definir o platô 10×10.
- */
-export const PLATFORM_HALF_EXTENT = 5;
-
-/**
- * Altura absoluta (eixo Y) da plataforma inicial.
- * Utilizado pelo worldgen para colocar o grid no nível correto.
- */
-export const PLATFORM_HEIGHT = 0;
-
-/**
- * Posição inicial do jogador (usada pelo engine bootstrap).
- * A altura deve manter o jogador levemente acima da plataforma.
- */
-export const PLAYER_SPAWN_POSITION: [number, number, number] = [0.5, 2.5, 0.5];
-
-/**
- * Altura média das rochas (asteroides) do anel distante.
- */
-export const ASTEROID_LAYER_ALTITUDE = 52;
-
-/**
- * Variação máxima (para cima/baixo) da altura dos asteroides.
- */
-export const ASTEROID_HEIGHT_VARIATION = 12;
-
-/**
- * Raio interno a partir do qual começam os asteroides.
- */
-export const ASTEROID_RING_INNER_RADIUS = 90;
-
-/**
- * Densidade mínima (0–1) do ruído procedural para instanciar um asteroide.
- */
-export const ASTEROID_DENSITY_THRESHOLD = 0.4;
-
-/**
- * Probabilidade base de spawn de um asteroide dentro de uma célula candidata.
- */
-export const ASTEROID_CENTER_PROBABILITY = 0.18;
-
-/**
- * Tamanho da célula (em blocos) usada para amostrar centros de asteroides.
- */
-export const ASTEROID_CELL_SIZE = 48;
-
-/**
- * Margem extra usada ao calcular células vizinhas que podem afetar o chunk.
- */
-export const ASTEROID_CELL_MARGIN = 48;
-
-/**
- * Alcance máximo ao longo do eixo principal do asteroide.
- */
-export const ASTEROID_MAJOR_RADIUS = 14;
-
-/**
- * Alcance transversal (eixo curto) do asteroide.
- */
-export const ASTEROID_MINOR_RADIUS = 8;
-
-/**
- * Alcance vertical (meia altura) do asteroide.
- */
-export const ASTEROID_VERTICAL_RADIUS = 10;
-
-/**
- * Quantidade total de blocos por asteroide (60–120 blocos, formando massas densas).
- */
-export const ASTEROID_BLOCK_COUNT = {
-  min: 60,
-  max: 120,
-} as const;
-
-/**
- * Número de asteroides em cada cluster (1–3 massas por centro).
- */
-export const ASTEROID_CLUSTER_SIZE = {
-  min: 1,
-  max: 3,
-} as const;
-
-/**
- * Distância (em blocos) para deslocar asteroides dentro do mesmo cluster.
- */
-export const ASTEROID_CLUSTER_SPREAD = 24;
-
-/**
- * Variedades de asteroide registradas como materiais/blocos, com pesos para distribuição.
- */
-export const ASTEROID_VARIANTS = [
-  {
-    id: 'basalt',
-    color: [0.36, 0.38, 0.42, 1],
-    weight: 0.5,
-  },
-  {
-    id: 'nickel',
-    color: [0.56, 0.58, 0.62, 1],
-    weight: 0.3,
-  },
-  {
-    id: 'ice',
-    color: [0.74, 0.8, 0.85, 1],
-    weight: 0.2,
-  },
-] as const;
-
-/**
- * Raio externo do cinturão de asteroides, ajustado conforme draw distance.
- */
-export const ASTEROID_RING_OUTER_RADIUS = Math.max(
-  ASTEROID_RING_INNER_RADIUS + ASTEROID_MAJOR_RADIUS,
-  TARGET_VIEW_DISTANCE_BLOCKS - 40,
-);
-</file>
-
-<file path="src/world/blocks.ts">
-import type { Engine } from 'noa-engine';
-import type { WorldMaterials } from './materials';
-import { ASTEROID_VARIANTS } from '../config/world-options';
-
-export interface WorldBlocks {
-  dirt: number;
-  asteroidVariants: number[];
-}
-
-export function registerWorldBlocks(noa: Engine, materials: WorldMaterials): WorldBlocks {
-  console.log('[starwatch] registrando blocos do mundo');
-
-  let blockId = 1;
-
-  const dirt = noa.registry.registerBlock(blockId++, {
-    material: materials.dirt,
-    solid: true,
-  });
-
-  const asteroidVariantBlocks = materials.asteroidVariants.map((materialName, index) => {
-    const blockName = `asteroid-${ASTEROID_VARIANTS[index]?.id ?? index}`;
-    return noa.registry.registerBlock(blockId++, {
-      material: materialName,
-      solid: true,
-      opaque: true,
-      blockLight: true,
-      hardness: 3,
-      displayName: blockName,
+  registerBlock(kind: BlockKind, position: VoxelPosition): void {
+    const displayKind = BLOCK_KIND_TO_DISPLAY[kind];
+    if (!displayKind) {
+      return;
+    }
+    const key = makePositionKey(position, displayKind);
+    if (this.displays.has(key)) {
+      return;
+    }
+    const orientation = this.resolveOrientation(kind, position);
+    const display = this.createDisplay(displayKind, {
+      position,
+      orientation,
     });
-  });
-
-  return {
-    dirt,
-    asteroidVariants: asteroidVariantBlocks,
-  };
-}
-</file>
-
-<file path="src/world/materials.ts">
-import type { Engine } from 'noa-engine';
-import terrainAtlasUrl from './assets/terrain_atlas.png';
-import { ASTEROID_VARIANTS } from '../config/world-options';
-
-export interface WorldMaterials {
-  dirt: string;
-  asteroidVariants: string[];
-}
-
-export function registerWorldMaterials(noa: Engine): WorldMaterials {
-  console.log('[starwatch] registrando materiais base do mundo');
-
-  noa.registry.registerMaterial('dirt', {
-    textureURL: terrainAtlasUrl,
-    atlasIndex: 2,
-  });
-
-  const asteroidMaterials = ASTEROID_VARIANTS.map((variant) => {
-    const materialName = `asteroid-${variant.id}`;
-    noa.registry.registerMaterial(materialName, {
-      color: variant.color,
+    if (!display) {
+      return;
+    }
+    for (const mesh of display.getMeshes()) {
+      const rendering: any = this.noa.rendering;
+      if (rendering && typeof rendering.addMeshToScene === 'function') {
+        rendering.addMeshToScene(mesh, false);
+      }
+    }
+    this.displays.set(key, {
+      display,
+      blockKind: kind,
+      position: [position[0], position[1], position[2]] as VoxelPosition,
     });
-    return materialName;
-  });
+    if (this.highlightedKey === key) {
+      display.setHighlighted(true);
+    }
+  }
 
-  return {
-    dirt: 'dirt',
-    asteroidVariants: asteroidMaterials,
-  };
+  unregisterBlock(kind: BlockKind, position: VoxelPosition): void {
+    const displayKind = BLOCK_KIND_TO_DISPLAY[kind];
+    if (!displayKind) {
+      return;
+    }
+    const key = makePositionKey(position, displayKind);
+    if (this.activeKey === key) {
+      this.endSession();
+    }
+    const entry = this.displays.get(key);
+    if (!entry) {
+      return;
+    }
+    entry.display.dispose();
+    this.displays.delete(key);
+    if (this.highlightedKey === key) {
+      this.highlightedKey = null;
+    }
+  }
+
+  refreshAll(): void {
+    for (const entry of this.displays.values()) {
+      entry.display.refresh();
+    }
+  }
+
+  tryOpenTerminal(position: VoxelPosition, kind: BlockKind): boolean {
+    const displayKind = BLOCK_KIND_TO_DISPLAY[kind];
+    if (!displayKind) {
+      return false;
+    }
+    const key = makePositionKey(position, displayKind);
+    const entry = this.displays.get(key);
+    if (!entry) {
+      return false;
+    }
+    this.setHighlightKey(key);
+    this.beginSession(key, entry);
+    return true;
+  }
+
+  isCapturingInput(): boolean {
+    return this.activeKey !== null;
+  }
+
+  closeActiveTerminal(): void {
+    this.endSession();
+  }
+
+  setHighlightedTerminal(target: { kind: BlockKind; position: VoxelPosition } | null): void {
+    if (!target) {
+      this.setHighlightKey(null);
+      return;
+    }
+    const displayKind = BLOCK_KIND_TO_DISPLAY[target.kind];
+    if (!displayKind) {
+      this.setHighlightKey(null);
+      return;
+    }
+    const key = makePositionKey(target.position, displayKind);
+    this.setHighlightKey(key);
+  }
+
+  getActiveTerminal(): { kind: BlockKind; position: VoxelPosition } | null {
+    if (!this.activeContext) {
+      return null;
+    }
+    return {
+      kind: this.activeContext.blockKind,
+      position: [
+        this.activeContext.position[0],
+        this.activeContext.position[1],
+        this.activeContext.position[2],
+      ] as VoxelPosition,
+    };
+  }
+
+  private beginSession(key: string, entry: DisplayEntry): void {
+    if (this.activeKey === key) {
+      entry.display.setSessionActive(true);
+      this.overlay.controller.setCapture(true);
+      this.overlay.controller.setPointerPassthrough(true);
+      this.activeContext = {
+        blockKind: entry.blockKind,
+        position: [
+          entry.position[0],
+          entry.position[1],
+          entry.position[2],
+        ] as VoxelPosition,
+      };
+      this.setHighlightKey(key);
+      entry.display.setHoverByUV(this.pickCrosshairUV(entry.display));
+      return;
+    }
+    this.endSession();
+    this.activeKey = key;
+    entry.display.setSessionActive(true);
+    this.overlay.controller.setCapture(true);
+    this.overlay.controller.setPointerPassthrough(true);
+    this.activeContext = {
+      blockKind: entry.blockKind,
+      position: [
+        entry.position[0],
+        entry.position[1],
+        entry.position[2],
+      ] as VoxelPosition,
+    };
+    this.setHighlightKey(key);
+    entry.display.setHoverByUV(this.pickCrosshairUV(entry.display));
+    const canvas = this.noa.container.canvas;
+    canvas.addEventListener('pointerdown', this.handlePointerDown, true);
+    window.addEventListener('keydown', this.handleKeyDown, true);
+  }
+
+  private endSession(): void {
+    if (!this.activeKey) {
+      return;
+    }
+    const canvas = this.noa.container.canvas;
+    canvas.removeEventListener('pointerdown', this.handlePointerDown, true);
+    window.removeEventListener('keydown', this.handleKeyDown, true);
+
+    const entry = this.displays.get(this.activeKey);
+    if (entry) {
+      entry.display.setHoverByUV(null);
+      entry.display.setSessionActive(false);
+    }
+    this.activeKey = null;
+    this.activeContext = null;
+    this.overlay.controller.setCapture(false);
+    this.overlay.controller.setPointerPassthrough(false);
+  }
+
+  private resolveOrientation(kind: BlockKind, position: VoxelPosition): BlockOrientation {
+    const stored = blockMetadataStore.getOrientation({ kind, x: position[0], y: position[1], z: position[2] });
+    return stored ?? 'south';
+  }
+
+  private createDisplay(displayKind: TerminalDisplayKind, params: { position: VoxelPosition; orientation: BlockOrientation }): TerminalInstance | null {
+    const { position, orientation } = params;
+    const scene = this.scene;
+    switch (displayKind) {
+      case 'hal-terminal':
+        return new HalTerminalDisplay(this.buildHalOptions(scene, position, orientation));
+      case 'battery':
+        return new BatteryTerminalDisplay(this.buildBatteryOptions(scene, position, orientation));
+      case 'solar-panel':
+        return new SolarTerminalDisplay(this.buildSolarOptions(scene, position, orientation));
+      default:
+        return null;
+    }
+  }
+
+  private buildHalOptions(scene: Scene, position: VoxelPosition, orientation: BlockOrientation): BaseTerminalDisplayOptions<HalTerminalData> {
+    return {
+      scene,
+      position,
+      orientation,
+      kind: 'hal-terminal',
+      physicalWidth: 0.8,
+      physicalHeight: 0.58,
+      textureWidth: 1024,
+      textureHeight: 768,
+      elevation: 1.5,
+      mountOffset: 0.52,
+      title: 'HAL-9001 // CRT',
+      accentColor: 'rgba(150, 220, 255, 0.9)',
+      dataProvider: () => this.collectHalData(position),
+      tabs: [
+        { id: 'overview', label: 'Rede' },
+        { id: 'power', label: 'Energia' },
+        { id: 'devices', label: 'Inventário' },
+      ],
+    };
+  }
+
+  private buildBatteryOptions(scene: Scene, position: VoxelPosition, orientation: BlockOrientation): BaseTerminalDisplayOptions<BatteryTerminalData> {
+    return {
+      scene,
+      position,
+      orientation,
+      kind: 'battery',
+      physicalWidth: 0.48,
+      physicalHeight: 0.32,
+      textureWidth: 640,
+      textureHeight: 420,
+      elevation: 0.8,
+      mountOffset: 0.51,
+      title: 'BTR NODE',
+      accentColor: 'rgba(120, 200, 255, 0.85)',
+      dataProvider: () => this.collectBatteryData(position),
+      tabs: [
+        { id: 'status', label: 'Status' },
+        { id: 'network', label: 'Rede' },
+      ],
+    };
+  }
+
+  private buildSolarOptions(scene: Scene, position: VoxelPosition, orientation: BlockOrientation): BaseTerminalDisplayOptions<SolarTerminalData> {
+    return {
+      scene,
+      position,
+      orientation,
+      kind: 'solar-panel',
+      physicalWidth: 0.52,
+      physicalHeight: 0.34,
+      textureWidth: 640,
+      textureHeight: 420,
+      elevation: 0.9,
+      mountOffset: 0.51,
+      title: 'SOL-LINK',
+      accentColor: 'rgba(120, 205, 255, 0.85)',
+      dataProvider: () => this.collectSolarData(position),
+      tabs: [
+        { id: 'status', label: 'Status' },
+        { id: 'network', label: 'Rede' },
+      ],
+    };
+  }
+
+  private collectHalData(position: VoxelPosition): HalTerminalData {
+    const terminal = this.energy.getTerminalSnapshot(position);
+    const overview = terminal?.networkId != null ? this.energy.getNetworkOverview(terminal.networkId) : null;
+    return { terminal, overview };
+  }
+
+  private collectBatteryData(position: VoxelPosition): BatteryTerminalData {
+    const snapshot = this.energy.getBatterySnapshot(position);
+    const overview = snapshot?.networkId != null ? this.energy.getNetworkOverview(snapshot.networkId) : null;
+    return { snapshot, overview };
+  }
+
+  private collectSolarData(position: VoxelPosition): SolarTerminalData {
+    const snapshot = this.energy.getSolarPanelSnapshot(position);
+    const overview = snapshot?.networkId != null ? this.energy.getNetworkOverview(snapshot.networkId) : null;
+    return { snapshot, overview };
+  }
+
+  private onPointerDown(event: PointerEvent): void {
+    const activeEntry = this.getActiveEntry();
+    if (!activeEntry) {
+      return;
+    }
+    const uv = this.pickCrosshairUV(activeEntry.entry.display);
+    if (!uv) {
+      activeEntry.entry.display.setHoverByUV(null);
+      return;
+    }
+    const handled = activeEntry.entry.display.handlePointer({
+      uv,
+      button: event.button,
+    });
+    if (handled) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  private onKeyDown(event: KeyboardEvent): void {
+    const activeEntry = this.getActiveEntry();
+    if (!activeEntry) {
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.endSession();
+      return;
+    }
+    const handled = activeEntry.entry.display.handleKeyDown(event);
+    if (handled) {
+      event.preventDefault();
+    }
+  }
+
+  private getActiveEntry(): { key: string; entry: DisplayEntry } | null {
+    if (!this.activeKey) {
+      return null;
+    }
+    const entry = this.displays.get(this.activeKey);
+    if (!entry) {
+      return null;
+    }
+    return { key: this.activeKey, entry };
+  }
+
+  private pickCrosshairUV(display: TerminalInstance): { u: number; v: number } | null {
+    const canvas = this.noa.container.canvas;
+    const rect = canvas.getBoundingClientRect();
+    const pointerX = rect.width / 2;
+    const pointerY = rect.height / 2;
+    const pick = this.scene.pick(pointerX, pointerY, (mesh) => mesh === display.getMesh());
+    if (!pick || !pick.hit) {
+      return null;
+    }
+    const coords = pick.getTextureCoordinates();
+    if (!coords) {
+      return null;
+    }
+    return { u: coords.x, v: coords.y };
+  }
+
+  private setHighlightKey(key: string | null): void {
+    if (this.highlightedKey === key) {
+      if (key) {
+        const entry = this.displays.get(key);
+        entry?.display.setHighlighted(true);
+      }
+      return;
+    }
+    if (this.highlightedKey) {
+      const previous = this.displays.get(this.highlightedKey);
+      if (previous && this.highlightedKey !== this.activeKey) {
+        previous.display.setHighlighted(false);
+      } else if (!previous) {
+        // nothing to do
+      }
+    }
+    this.highlightedKey = null;
+    if (!key) {
+      return;
+    }
+    const entry = this.displays.get(key);
+    if (!entry) {
+      return;
+    }
+    entry.display.setHighlighted(true);
+    this.highlightedKey = key;
+  }
+
+  private updateAimHover(): void {
+    if (!this.activeKey) {
+      return;
+    }
+    const entry = this.displays.get(this.activeKey);
+    if (!entry) {
+      return;
+    }
+    const uv = this.pickCrosshairUV(entry.display);
+    entry.display.setHoverByUV(uv);
+  }
+
+  private onFireDown(event: MouseEvent): void {
+    if (!this.activeKey) {
+      return;
+    }
+    if (!this.overlay.controller.getState().captureInput) {
+      return;
+    }
+    const entry = this.displays.get(this.activeKey);
+    if (!entry) {
+      return;
+    }
+    const uv = this.pickCrosshairUV(entry.display);
+    entry.display.setHoverByUV(uv);
+    if (!uv) {
+      return;
+    }
+    const handled = entry.display.handlePointer({
+      uv,
+      button: 0,
+    });
+    if (handled) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+    }
+  }
 }
-</file>
+````
 
-<file path=".gitignore">
+## File: .gitignore
+````
 node_modules/
 dist/
 .env
 docs/
 noa-examples/
-</file>
+````
 
-<file path="tsconfig.json">
+## File: tsconfig.json
+````json
 {
   "compilerOptions": {
     "target": "ES2020",
@@ -8856,16 +12179,998 @@ noa-examples/
   },
   "include": ["src"]
 }
-</file>
+````
 
-<file path="vite.config.ts">
+## File: src/hud/overlay/overlay-context.tsx
+````typescript
+import { createContext, useContext } from 'react';
+import type { OverlayController, OverlayState } from './overlay-controller';
+import type { EnergySystem } from '../../systems/energy';
+import type { RemovalHoldTracker } from '../removal-hold-tracker';
+
+export interface OverlayContextValue {
+  controller: OverlayController;
+  state: OverlayState;
+  energy: EnergySystem;
+  removal: RemovalHoldTracker;
+}
+
+export const OverlayContext = createContext<OverlayContextValue | null>(null);
+
+export function useOverlayContext(): OverlayContextValue {
+  const value = useContext(OverlayContext);
+  if (!value) {
+    throw new Error('useOverlayContext deve ser usado dentro de OverlayContext.Provider');
+  }
+  return value;
+}
+````
+
+## File: src/hud/overlay/overlay-controller.ts
+````typescript
+export interface OverlayState {
+  captureInput: boolean;
+  pointerPassthrough: boolean;
+}
+
+type Listener = () => void;
+
+export class OverlayController {
+  private state: OverlayState = {
+    captureInput: false,
+    pointerPassthrough: false,
+  };
+
+  private listeners = new Set<Listener>();
+  private onCaptureChange?: (state: OverlayState) => void;
+
+  subscribe(listener: Listener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  getState(): OverlayState {
+    return this.state;
+  }
+
+  setCapture(capture: boolean): void {
+    if (this.state.captureInput === capture) {
+      return;
+    }
+    this.setState({
+      captureInput: capture,
+      pointerPassthrough: this.state.pointerPassthrough,
+    });
+  }
+
+  registerCaptureHandler(handler: (state: OverlayState) => void): void {
+    this.onCaptureChange = handler;
+    handler(this.state);
+  }
+
+  setPointerPassthrough(pointerPassthrough: boolean): void {
+    if (this.state.pointerPassthrough === pointerPassthrough) {
+      return;
+    }
+    this.setState({
+      captureInput: this.state.captureInput,
+      pointerPassthrough,
+    });
+  }
+
+  reset(): void {
+    this.setState({
+      captureInput: false,
+      pointerPassthrough: false,
+    });
+    this.listeners.clear();
+  }
+
+  private setState(nextState: OverlayState): void {
+    const changedCapture = this.state.captureInput !== nextState.captureInput;
+    const changedPointer = this.state.pointerPassthrough !== nextState.pointerPassthrough;
+
+    this.state = nextState;
+
+    if ((changedCapture || changedPointer) && this.onCaptureChange) {
+      this.onCaptureChange(this.state);
+    }
+
+    if (changedCapture || changedPointer) {
+      this.emit();
+    }
+  }
+
+  private emit(): void {
+    for (const listener of this.listeners) {
+      listener();
+    }
+  }
+}
+````
+
+## File: src/systems/energy/index.ts
+````typescript
+import type { Engine } from 'noa-engine';
+import type { SectorResources } from '../../sector';
+import {
+  ENERGY_TICK_INTERVAL_SEC,
+  PANEL_BASE_W,
+  PANEL_RAY_COUNT,
+  PANEL_MAX_RAY_DISTANCE,
+  PANEL_RAY_STEP,
+  PANEL_SAMPLE_OFFSETS,
+  SUN_DIRECTION,
+  BATTERY_SMALL_MJ,
+  ENERGY_EPSILON,
+} from '../../config/energy-options';
+import { EnergyNetworkManager, type VoxelPosition } from './energy-network-manager';
+
+interface SolarPanelEntry {
+  key: string;
+  position: VoxelPosition;
+  networkId: number | null;
+  outputW: number;
+  shade: number;
+}
+
+interface BatteryEntry {
+  key: string;
+  position: VoxelPosition;
+  networkId: number | null;
+  capacityMJ: number;
+  storedMJ: number;
+}
+
+interface TerminalEntry {
+  key: string;
+  position: VoxelPosition;
+  networkId: number | null;
+}
+
+export interface SolarPanelSnapshot {
+  position: VoxelPosition;
+  networkId: number | null;
+  outputW: number;
+  shade: number;
+}
+
+export interface BatterySnapshot {
+  position: VoxelPosition;
+  networkId: number | null;
+  capacityMJ: number;
+  storedMJ: number;
+}
+
+export interface TerminalSnapshot {
+  position: VoxelPosition;
+  networkId: number | null;
+}
+
+export interface NetworkOverview {
+  id: number;
+  metrics: {
+    totalGenW: number;
+    totalLoadW: number;
+    totalCapMJ: number;
+    totalStoredMJ: number;
+    deltaW: number;
+  };
+  panelCount: number;
+  batteryCount: number;
+  terminalCount: number;
+}
+
+export interface EnergySystem {
+  networks: EnergyNetworkManager;
+  registerSolarPanel(position: VoxelPosition): void;
+  unregisterSolarPanel(position: VoxelPosition): void;
+  registerBattery(position: VoxelPosition): void;
+  unregisterBattery(position: VoxelPosition): void;
+  registerTerminal(position: VoxelPosition): void;
+  unregisterTerminal(position: VoxelPosition): void;
+  getSolarPanelSnapshot(position: VoxelPosition): SolarPanelSnapshot | null;
+  getBatterySnapshot(position: VoxelPosition): BatterySnapshot | null;
+  getTerminalSnapshot(position: VoxelPosition): TerminalSnapshot | null;
+  listSolarPanels(): SolarPanelSnapshot[];
+  listBatteries(): BatterySnapshot[];
+  listTerminals(): TerminalSnapshot[];
+  listDecks(): VoxelPosition[];
+  setBatteryStored(position: VoxelPosition, storedMJ: number): void;
+  getNetworkOverview(networkId: number): NetworkOverview | null;
+  subscribe(listener: () => void): () => void;
+  getVersion(): number;
+}
+
+const NEIGHBOR_OFFSETS: ReadonlyArray<VoxelPosition> = [
+  [1, 0, 0],
+  [-1, 0, 0],
+  [0, 1, 0],
+  [0, -1, 0],
+  [0, 0, 1],
+  [0, 0, -1],
+];
+
+function makeKey([x, y, z]: VoxelPosition): string {
+  return `${x}:${y}:${z}`;
+}
+
+export function initializeEnergySystem(noa: Engine, sector: SectorResources): EnergySystem {
+  const networks = new EnergyNetworkManager();
+  const solarPanels = new Map<string, SolarPanelEntry>();
+  const batteries = new Map<string, BatteryEntry>();
+  const terminals = new Map<string, TerminalEntry>();
+  const listeners = new Set<() => void>();
+  let version = 0;
+
+  const sampleCount = Math.min(PANEL_RAY_COUNT, PANEL_SAMPLE_OFFSETS.length);
+  const panelSamples = PANEL_SAMPLE_OFFSETS.slice(0, sampleCount);
+  const solarOpacityByBlockId = buildSolarOpacityLookup(sector);
+  const deckBlockId = sector.starwatchBlocks.deck.id;
+
+  let tickAccumulator = 0;
+
+  const registerDecksInChunk = (chunk: any) => {
+    if (!chunk || typeof chunk.size !== 'number' || !chunk.voxels) {
+      return;
+    }
+    const size = chunk.size;
+    const voxels = chunk.voxels;
+    for (let i = 0; i < size; i += 1) {
+      for (let j = 0; j < size; j += 1) {
+        for (let k = 0; k < size; k += 1) {
+          if (voxels.get(i, j, k) !== deckBlockId) continue;
+          const worldX = chunk.x + i;
+          const worldY = chunk.y + j;
+          const worldZ = chunk.z + k;
+          networks.addDeck([worldX, worldY, worldZ]);
+        }
+      }
+    }
+  };
+
+  noa.world.on('chunkAdded', registerDecksInChunk);
+
+  const emitUpdate = () => {
+    version += 1;
+    for (const listener of listeners) {
+      listener();
+    }
+  };
+
+  const resolveNetworkId = (position: VoxelPosition): number | null => {
+    for (const offset of NEIGHBOR_OFFSETS) {
+      const nx = position[0] + offset[0];
+      const ny = position[1] + offset[1];
+      const nz = position[2] + offset[2];
+      const blockId = noa.world.getBlockID(nx, ny, nz);
+      if (blockId === deckBlockId) {
+        const networkId = networks.getNetworkIdForPosition([nx, ny, nz]);
+        if (networkId !== null) {
+          return networkId;
+        }
+      }
+    }
+    return null;
+  };
+
+  const getSolarOpacity = (blockId: number): number => solarOpacityByBlockId.get(blockId) ?? 1;
+
+  const setBatteryStoredInternal = (entry: BatteryEntry, storedMJ: number): void => {
+    const clamped = Math.max(0, Math.min(entry.capacityMJ, storedMJ));
+    const delta = clamped - entry.storedMJ;
+    if (Math.abs(delta) < ENERGY_EPSILON) {
+      entry.storedMJ = clamped;
+      return;
+    }
+    entry.storedMJ = clamped;
+    if (entry.networkId !== null) {
+      networks.adjustNetworkMetrics(entry.networkId, { totalStoredMJ: delta });
+    }
+  };
+
+  const sampleSolarShade = (entry: SolarPanelEntry): number => {
+    let totalShade = 0;
+    const [baseX, baseY, baseZ] = entry.position;
+    const startY = baseY + 1;
+
+    for (const [offsetX, offsetZ] of panelSamples) {
+      const origin: [number, number, number] = [
+        baseX + 0.5 + offsetX,
+        startY + 0.01,
+        baseZ + 0.5 + offsetZ,
+      ];
+
+      let travelled = 0;
+      let transmittance = 1;
+      let lastKey: string | null = null;
+
+      while (travelled < PANEL_MAX_RAY_DISTANCE && transmittance > ENERGY_EPSILON) {
+        const sampleX = origin[0] + SUN_DIRECTION[0] * travelled;
+        const sampleY = origin[1] + SUN_DIRECTION[1] * travelled;
+        const sampleZ = origin[2] + SUN_DIRECTION[2] * travelled;
+
+        const voxelX = Math.floor(sampleX);
+        const voxelY = Math.floor(sampleY);
+        const voxelZ = Math.floor(sampleZ);
+        const currentKey = makeKey([voxelX, voxelY, voxelZ]);
+
+        if (currentKey !== lastKey) {
+          lastKey = currentKey;
+          const blockId = noa.world.getBlockID(voxelX, voxelY, voxelZ);
+          if (blockId !== 0) {
+            const opacity = getSolarOpacity(blockId);
+            transmittance *= 1 - opacity;
+            if (transmittance <= ENERGY_EPSILON) {
+              transmittance = 0;
+              break;
+            }
+          }
+        }
+
+        travelled += PANEL_RAY_STEP;
+      }
+
+      totalShade += 1 - transmittance;
+    }
+
+    return totalShade / panelSamples.length;
+  };
+
+  const updateSolarPanel = (entry: SolarPanelEntry): void => {
+    const previousNetworkId = entry.networkId;
+    const previousOutput = entry.outputW;
+
+    const networkId = resolveNetworkId(entry.position);
+    entry.networkId = networkId;
+
+    const shade = sampleSolarShade(entry);
+    entry.shade = shade;
+    const outputW = PANEL_BASE_W * Math.max(0, 1 - shade);
+    entry.outputW = outputW;
+
+    if (previousNetworkId !== null) {
+      networks.adjustNetworkMetrics(previousNetworkId, { totalGenW: -previousOutput });
+    }
+    if (networkId !== null) {
+      networks.adjustNetworkMetrics(networkId, { totalGenW: outputW });
+    }
+  };
+
+  const updateBatteryNetwork = (entry: BatteryEntry, nextNetworkId: number | null): void => {
+    if (entry.networkId === nextNetworkId) {
+      return;
+    }
+
+    if (entry.networkId !== null) {
+      networks.adjustNetworkMetrics(entry.networkId, {
+        totalCapMJ: -entry.capacityMJ,
+        totalStoredMJ: -entry.storedMJ,
+      });
+    }
+
+    entry.networkId = nextNetworkId;
+
+    if (entry.networkId !== null) {
+      networks.adjustNetworkMetrics(entry.networkId, {
+        totalCapMJ: entry.capacityMJ,
+        totalStoredMJ: entry.storedMJ,
+      });
+    }
+  };
+
+  const updateTerminalNetwork = (entry: TerminalEntry): void => {
+    entry.networkId = resolveNetworkId(entry.position);
+  };
+
+  const distributeEnergyToBatteries = (networkId: number, entries: BatteryEntry[], deltaMJ: number): void => {
+    if (entries.length === 0 || Math.abs(deltaMJ) < ENERGY_EPSILON) {
+      return;
+    }
+
+    let remaining = deltaMJ;
+
+    if (deltaMJ > 0) {
+      for (const battery of entries) {
+        if (remaining <= 0) break;
+        const space = battery.capacityMJ - battery.storedMJ;
+        if (space <= 0) continue;
+        const added = Math.min(space, remaining);
+        setBatteryStoredInternal(battery, battery.storedMJ + added);
+        remaining -= added;
+      }
+    } else {
+      remaining = Math.abs(deltaMJ);
+      for (const battery of entries) {
+        if (remaining <= 0) break;
+        if (battery.storedMJ <= 0) continue;
+        const consumed = Math.min(battery.storedMJ, remaining);
+        setBatteryStoredInternal(battery, battery.storedMJ - consumed);
+        remaining -= consumed;
+      }
+    }
+  };
+
+  const runEnergyTick = () => {
+    for (const entry of solarPanels.values()) {
+      updateSolarPanel(entry);
+    }
+
+    const batteriesByNetwork = new Map<number, BatteryEntry[]>();
+
+    for (const entry of batteries.values()) {
+      const nextNetworkId = resolveNetworkId(entry.position);
+      updateBatteryNetwork(entry, nextNetworkId);
+      if (entry.networkId !== null) {
+        const bucket = batteriesByNetwork.get(entry.networkId) ?? [];
+        bucket.push(entry);
+        batteriesByNetwork.set(entry.networkId, bucket);
+      }
+    }
+
+    for (const entry of terminals.values()) {
+      updateTerminalNetwork(entry);
+    }
+
+    for (const [networkId, batteryEntries] of batteriesByNetwork.entries()) {
+      const snapshot = networks.getNetworkSnapshot(networkId);
+      if (!snapshot) {
+        continue;
+      }
+      const deltaW = snapshot.metrics.totalGenW - snapshot.metrics.totalLoadW;
+      const deltaMJ = deltaW / 1_000_000;
+      distributeEnergyToBatteries(networkId, batteryEntries, deltaMJ);
+    }
+
+    emitUpdate();
+  };
+
+  noa.on('tick', (dt: number) => {
+    tickAccumulator += dt;
+    if (tickAccumulator >= ENERGY_TICK_INTERVAL_SEC) {
+      tickAccumulator -= ENERGY_TICK_INTERVAL_SEC;
+      runEnergyTick();
+    }
+  });
+
+  return {
+    networks,
+    registerSolarPanel(position) {
+      const key = makeKey(position);
+      if (solarPanels.has(key)) {
+        return;
+      }
+      const entry: SolarPanelEntry = {
+        key,
+        position: [...position],
+        networkId: null,
+        outputW: 0,
+        shade: 1,
+      };
+      solarPanels.set(key, entry);
+      updateSolarPanel(entry);
+      emitUpdate();
+    },
+    unregisterSolarPanel(position) {
+      const key = makeKey(position);
+      const entry = solarPanels.get(key);
+      if (!entry) {
+        return;
+      }
+      if (entry.networkId !== null && entry.outputW !== 0) {
+        networks.adjustNetworkMetrics(entry.networkId, { totalGenW: -entry.outputW });
+      }
+      solarPanels.delete(key);
+      emitUpdate();
+    },
+    registerBattery(position) {
+      const key = makeKey(position);
+      if (batteries.has(key)) {
+        return;
+      }
+      const entry: BatteryEntry = {
+        key,
+        position: [...position],
+        networkId: null,
+        capacityMJ: BATTERY_SMALL_MJ,
+        storedMJ: 0,
+      };
+      batteries.set(key, entry);
+      updateBatteryNetwork(entry, resolveNetworkId(entry.position));
+      emitUpdate();
+    },
+    unregisterBattery(position) {
+      const key = makeKey(position);
+      const entry = batteries.get(key);
+      if (!entry) {
+        return;
+      }
+      if (entry.networkId !== null) {
+        networks.adjustNetworkMetrics(entry.networkId, {
+          totalCapMJ: -entry.capacityMJ,
+          totalStoredMJ: -entry.storedMJ,
+        });
+      }
+      batteries.delete(key);
+      emitUpdate();
+    },
+    registerTerminal(position) {
+      const key = makeKey(position);
+      if (terminals.has(key)) {
+        return;
+      }
+      const entry: TerminalEntry = {
+        key,
+        position: [...position],
+        networkId: null,
+      };
+      terminals.set(key, entry);
+      updateTerminalNetwork(entry);
+      emitUpdate();
+    },
+    unregisterTerminal(position) {
+      const key = makeKey(position);
+      if (!terminals.has(key)) {
+        return;
+      }
+      terminals.delete(key);
+      emitUpdate();
+    },
+    getSolarPanelSnapshot(position) {
+      const entry = solarPanels.get(makeKey(position));
+      return entry
+        ? {
+            position: [...entry.position] as VoxelPosition,
+            networkId: entry.networkId,
+            outputW: entry.outputW,
+            shade: entry.shade,
+          }
+        : null;
+    },
+    getBatterySnapshot(position) {
+      const entry = batteries.get(makeKey(position));
+      return entry
+        ? {
+            position: [...entry.position] as VoxelPosition,
+            networkId: entry.networkId,
+            capacityMJ: entry.capacityMJ,
+            storedMJ: entry.storedMJ,
+          }
+        : null;
+    },
+    getTerminalSnapshot(position) {
+      const entry = terminals.get(makeKey(position));
+      return entry
+        ? {
+            position: [...entry.position] as VoxelPosition,
+            networkId: entry.networkId,
+          }
+        : null;
+    },
+    listSolarPanels() {
+      return Array.from(solarPanels.values()).map((entry) => ({
+        position: [...entry.position] as VoxelPosition,
+        networkId: entry.networkId,
+        outputW: entry.outputW,
+        shade: entry.shade,
+      }));
+    },
+    listBatteries() {
+      return Array.from(batteries.values()).map((entry) => ({
+        position: [...entry.position] as VoxelPosition,
+        networkId: entry.networkId,
+        capacityMJ: entry.capacityMJ,
+        storedMJ: entry.storedMJ,
+      }));
+    },
+    listTerminals() {
+      return Array.from(terminals.values()).map((entry) => ({
+        position: [...entry.position] as VoxelPosition,
+        networkId: entry.networkId,
+      }));
+    },
+    listDecks() {
+      return networks.listDeckPositions().map((position) => [...position] as VoxelPosition);
+    },
+    setBatteryStored(position, storedMJ) {
+      const entry = batteries.get(makeKey(position));
+      if (!entry) {
+        return;
+      }
+      setBatteryStoredInternal(entry, storedMJ);
+      emitUpdate();
+    },
+    getNetworkOverview(networkId) {
+      const snapshot = networks.getNetworkSnapshot(networkId);
+      if (!snapshot) {
+        return null;
+      }
+      let panelCount = 0;
+      let batteryCount = 0;
+      let terminalCount = 0;
+
+      for (const panel of solarPanels.values()) {
+        if (panel.networkId === networkId) panelCount += 1;
+      }
+      for (const battery of batteries.values()) {
+        if (battery.networkId === networkId) batteryCount += 1;
+      }
+      for (const terminal of terminals.values()) {
+        if (terminal.networkId === networkId) terminalCount += 1;
+      }
+
+      const deltaW = snapshot.metrics.totalGenW - snapshot.metrics.totalLoadW;
+
+      return {
+        id: snapshot.id,
+        metrics: {
+          totalGenW: snapshot.metrics.totalGenW,
+          totalLoadW: snapshot.metrics.totalLoadW,
+          totalCapMJ: snapshot.metrics.totalCapMJ,
+          totalStoredMJ: snapshot.metrics.totalStoredMJ,
+          deltaW,
+        },
+        panelCount,
+        batteryCount,
+        terminalCount,
+      };
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    getVersion() {
+      return version;
+    },
+  };
+}
+
+function buildSolarOpacityLookup(sector: SectorResources): Map<number, number> {
+  const lookup = new Map<number, number>();
+  lookup.set(0, 0);
+
+  lookup.set(sector.terrainBlocks.dirt, sector.materials.dirt.solarOpacity);
+
+  for (const block of sector.terrainBlocks.asteroidVariants) {
+    const material = sector.materials.asteroidVariants.find((variant) => variant.id === block.id);
+    if (material) {
+      lookup.set(block.blockId, material.material.solarOpacity);
+    }
+  }
+
+  lookup.set(sector.starwatchBlocks.deck.id, sector.materials.deck.solarOpacity);
+  lookup.set(sector.starwatchBlocks.solarPanel.id, sector.materials.solarPanel.solarOpacity);
+  lookup.set(sector.starwatchBlocks.battery.id, sector.materials.battery.solarOpacity);
+  lookup.set(sector.starwatchBlocks.halTerminal.id, sector.materials.terminal.solarOpacity);
+
+  return lookup;
+}
+````
+
+## File: src/systems/interactions/use-system.ts
+````typescript
+import type { Engine } from 'noa-engine';
+import type { OverlayApi } from '../../hud/overlay';
+import type { SectorResources } from '../../sector';
+import type { BlockKind } from '../../blocks/types';
+import type { TerminalSystem } from '../terminals';
+import { TERMINAL_INTERACTION_OPTIONS } from '../../config/terminal-options';
+
+interface UseSystemDependencies {
+  noa: Engine;
+  overlay: OverlayApi;
+  sector: SectorResources;
+  terminals: TerminalSystem;
+}
+
+const {
+  useRange,
+  proximityRange,
+  disengageRange,
+  disengageGraceTicks,
+} = TERMINAL_INTERACTION_OPTIONS;
+const USE_RANGE_SQ = useRange * useRange;
+const PROXIMITY_RANGE_SQ = proximityRange * proximityRange;
+const DISENGAGE_RANGE_SQ = disengageRange * disengageRange;
+
+type TargetedBlock = {
+  position: number[];
+  blockID: number;
+};
+
+export function initializeUseSystem({ noa, overlay, sector, terminals }: UseSystemDependencies): void {
+  const terminalId = sector.starwatchBlocks.halTerminal.id;
+  const batteryId = sector.starwatchBlocks.battery.id;
+  const panelId = sector.starwatchBlocks.solarPanel.id;
+  const interactiveIds = new Set([terminalId, batteryId, panelId]);
+  const interactivePriority = new Map([
+    [terminalId, 0],
+    [batteryId, 1],
+    [panelId, 2],
+  ]);
+
+  let highlighted: { position: [number, number, number]; blockID: number; kind: BlockKind } | null = null;
+  let disengageBuffer = 0;
+
+  const isInputCaptured = (): boolean => overlay.controller.getState().captureInput || terminals.isCapturingInput();
+
+  const getPlayerPosition = (): number[] | null => {
+    const data = noa.entities.getPositionData(noa.playerEntity);
+    return data?.position ?? null;
+  };
+
+  const distanceSqToBlock = (playerPos: number[], blockPosition: number[]): number => {
+    const dx = playerPos[0] - (blockPosition[0] + 0.5);
+    const dy = playerPos[1] - (blockPosition[1] + 0.5);
+    const dz = playerPos[2] - (blockPosition[2] + 0.5);
+    return dx * dx + dy * dy + dz * dz;
+  };
+
+  const getTargetedBlock = (): TargetedBlock | null => {
+    const targeted = noa.targetedBlock;
+    if (!targeted) {
+      return null;
+    }
+    return {
+      position: targeted.position,
+      blockID: targeted.blockID,
+    };
+  };
+
+  const findNearestInteractive = (
+    playerPos: number[],
+    maxDistance: number,
+    maxDistanceSq: number,
+  ): TargetedBlock | null => {
+    let best: { position: [number, number, number]; blockID: number; distanceSq: number; priority: number } | null = null;
+
+    const radius = Math.ceil(maxDistance);
+    const baseX = Math.floor(playerPos[0]);
+    const baseY = Math.floor(playerPos[1]);
+    const baseZ = Math.floor(playerPos[2]);
+
+    const minX = baseX - radius;
+    const maxX = baseX + radius;
+    const minY = baseY - 1;
+    const maxY = baseY + 1;
+    const minZ = baseZ - radius;
+    const maxZ = baseZ + radius;
+
+    for (let x = minX; x <= maxX; x += 1) {
+      for (let y = minY; y <= maxY; y += 1) {
+        for (let z = minZ; z <= maxZ; z += 1) {
+          const blockID = noa.world.getBlockID(x, y, z);
+          if (!interactiveIds.has(blockID)) {
+            continue;
+          }
+          const candidatePosition: [number, number, number] = [x, y, z];
+          const distanceSq = distanceSqToBlock(playerPos, candidatePosition);
+          if (distanceSq > maxDistanceSq) {
+            continue;
+          }
+          const priority = interactivePriority.get(blockID) ?? interactivePriority.size;
+          if (
+            !best
+            || priority < best.priority
+            || (priority === best.priority && distanceSq < best.distanceSq)
+          ) {
+            best = {
+              position: candidatePosition,
+              blockID,
+              distanceSq,
+              priority,
+            };
+          }
+        }
+      }
+    }
+
+    return best
+      ? {
+          position: best.position,
+          blockID: best.blockID,
+        }
+      : null;
+  };
+
+  const sameLocation = (a: [number, number, number], b: [number, number, number]): boolean => (
+    a[0] === b[0] && a[1] === b[1] && a[2] === b[2]
+  );
+
+  const updateHighlight = (candidate: TargetedBlock | null): void => {
+    if (!candidate) {
+      if (!highlighted) {
+        return;
+      }
+      highlighted = null;
+      terminals.setHighlightedTerminal(null);
+      return;
+    }
+    const definition = sector.starwatchBlocks.byId.get(candidate.blockID);
+    if (!definition) {
+      if (highlighted) {
+        highlighted = null;
+        terminals.setHighlightedTerminal(null);
+      }
+      return;
+    }
+    const nextPosition: [number, number, number] = [
+      candidate.position[0],
+      candidate.position[1],
+      candidate.position[2],
+    ];
+    if (
+      highlighted
+      && highlighted.blockID === candidate.blockID
+      && highlighted.kind === definition.kind
+      && sameLocation(highlighted.position, nextPosition)
+    ) {
+      return;
+    }
+    highlighted = {
+      position: nextPosition,
+      blockID: candidate.blockID,
+      kind: definition.kind,
+    };
+    terminals.setHighlightedTerminal({
+      kind: definition.kind,
+      position: nextPosition,
+    });
+  };
+
+  const handleUse = () => {
+    if (isInputCaptured()) {
+      return;
+    }
+
+    const playerPos = getPlayerPosition();
+    if (!playerPos) {
+      return;
+    }
+
+    let target: TargetedBlock | null = getTargetedBlock();
+    if (!target || !interactiveIds.has(target.blockID)) {
+      target = highlighted
+        ? {
+            position: [
+              highlighted.position[0],
+              highlighted.position[1],
+              highlighted.position[2],
+            ],
+            blockID: highlighted.blockID,
+          }
+        : null;
+    }
+
+    if (!target) {
+      const nearest = findNearestInteractive(playerPos, useRange, USE_RANGE_SQ);
+      if (nearest) {
+        target = nearest;
+      }
+    }
+
+    if (!target) {
+      return;
+    }
+
+    if (!interactiveIds.has(target.blockID)) {
+      return;
+    }
+
+    if (distanceSqToBlock(playerPos, target.position) > USE_RANGE_SQ) {
+      return;
+    }
+
+    const blockDefinition = sector.starwatchBlocks.byId.get(target.blockID);
+    if (!blockDefinition) {
+      return;
+    }
+
+    const position: [number, number, number] = [
+      target.position[0],
+      target.position[1],
+      target.position[2],
+    ];
+
+    terminals.openTerminal(blockDefinition.kind, position);
+  };
+
+  const handleCancel = () => {
+    if (!terminals.isCapturingInput()) {
+      return;
+    }
+    terminals.closeActiveTerminal();
+  };
+
+  const handleProximityTick = () => {
+    const playerPos = getPlayerPosition();
+    if (!playerPos) {
+      if (!terminals.isCapturingInput()) {
+        updateHighlight(null);
+      }
+      return;
+    }
+
+    if (terminals.isCapturingInput()) {
+      const active = terminals.getActiveTerminal();
+      if (!active) {
+        disengageBuffer = 0;
+        return;
+      }
+      const distanceSq = distanceSqToBlock(playerPos, active.position);
+      if (distanceSq > DISENGAGE_RANGE_SQ) {
+        disengageBuffer += 1;
+        if (disengageBuffer >= disengageGraceTicks) {
+          terminals.closeActiveTerminal();
+          disengageBuffer = 0;
+        }
+      } else {
+        disengageBuffer = 0;
+      }
+      return;
+    }
+
+    disengageBuffer = 0;
+
+    if (overlay.controller.getState().captureInput) {
+      updateHighlight(null);
+      return;
+    }
+
+    const nearby = findNearestInteractive(playerPos, proximityRange, PROXIMITY_RANGE_SQ);
+    updateHighlight(nearby);
+
+    if (!nearby) {
+      return;
+    }
+
+    const definition = sector.starwatchBlocks.byId.get(nearby.blockID);
+    if (!definition) {
+      return;
+    }
+
+    terminals.openTerminal(
+      definition.kind,
+      [
+        nearby.position[0],
+        nearby.position[1],
+        nearby.position[2],
+      ] as [number, number, number],
+    );
+  };
+
+  noa.inputs.bind('use', ['KeyE']);
+  noa.inputs.down.on('use', handleUse);
+  noa.inputs.bind('terminal-cancel', ['Escape']);
+  noa.inputs.down.on('terminal-cancel', handleCancel);
+  if (noa.inputs.up && typeof noa.inputs.up.on === 'function') {
+    noa.inputs.up.on('use', () => {
+      /* noop */
+    });
+    noa.inputs.up.on('terminal-cancel', () => {
+      /* noop */
+    });
+  }
+
+  noa.on('tick', handleProximityTick);
+}
+````
+
+## File: vite.config.ts
+````typescript
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
+  plugins: [react()],
   resolve: {
     alias: {
       'noa-engine': resolve(projectRoot, 'src/engine/index.js'),
@@ -8880,280 +13185,1146 @@ export default defineConfig({
     port: 4173,
   },
 });
-</file>
+````
 
-<file path="src/world/chunk-generator.ts">
+## File: src/hud/overlay/index.tsx
+````typescript
+import { createRoot, type Root } from 'react-dom/client';
 import type { Engine } from 'noa-engine';
-import type { WorldBlocks } from './blocks';
-import { sampleAsteroidNoise } from './asteroid-noise';
-import {
-  PLATFORM_HALF_EXTENT,
-  PLATFORM_HEIGHT,
-  ASTEROID_LAYER_ALTITUDE,
-  ASTEROID_HEIGHT_VARIATION,
-  ASTEROID_RING_INNER_RADIUS,
-  ASTEROID_RING_OUTER_RADIUS,
-  ASTEROID_DENSITY_THRESHOLD,
-  ASTEROID_CENTER_PROBABILITY,
-  ASTEROID_CELL_SIZE,
-  ASTEROID_CELL_MARGIN,
-  ASTEROID_MAJOR_RADIUS,
-  ASTEROID_MINOR_RADIUS,
-  ASTEROID_VERTICAL_RADIUS,
-  ASTEROID_BLOCK_COUNT,
-  ASTEROID_CLUSTER_SIZE,
-  ASTEROID_CLUSTER_SPREAD,
-  ASTEROID_VARIANTS,
-} from '../config/world-options';
+import { OverlayController } from './overlay-controller';
+import { OverlayApp } from './OverlayApp';
+import type { HotbarController } from '../../player/hotbar-controller';
+import type { EnergySystem } from '../../systems/energy';
+import { RemovalHoldTracker } from '../removal-hold-tracker';
 
-const ASTEROID_WEIGHT_SUM = ASTEROID_VARIANTS.reduce((sum, variant) => sum + variant.weight, 0);
+export interface OverlayApi {
+  controller: OverlayController;
+  removalHold: RemovalHoldTracker;
+  destroy(): void;
+}
 
-export function installChunkGenerator(noa: Engine, blocks: WorldBlocks): void {
-  console.log('[starwatch] chunk generator habilitado (plataforma + campo de asteroides)');
+export interface OverlayDependencies {
+  hotbarController: HotbarController;
+  energy: EnergySystem;
+}
 
-  noa.world.on('worldDataNeeded', (requestID: number, data: any, x: number, y: number, z: number) => {
-    const sizeX = data.shape[0];
-    const sizeY = data.shape[1];
-    const sizeZ = data.shape[2];
+export function initializeOverlay(noa: Engine, deps: OverlayDependencies): OverlayApi {
+  const mountNode = document.getElementById('starwatch-overlay-root');
+  if (!mountNode) {
+    throw new Error('Host DOM node #starwatch-overlay-root não encontrado.');
+  }
 
-    const chunkMinX = x;
-    const chunkMaxX = x + sizeX - 1;
-    const chunkMinY = y;
-    const chunkMaxY = y + sizeY - 1;
-    const chunkMinZ = z;
-    const chunkMaxZ = z + sizeZ - 1;
+  const controller = new OverlayController();
+  const root: Root = createRoot(mountNode);
+  const removalHold = new RemovalHoldTracker();
 
-    const writeBlock = (wx: number, wy: number, wz: number, blockId: number) => {
-      if (wy < chunkMinY || wy > chunkMaxY) return;
-      if (wx < chunkMinX || wx > chunkMaxX) return;
-      if (wz < chunkMinZ || wz > chunkMaxZ) return;
-      const ix = wx - x;
-      const iy = wy - y;
-      const iz = wz - z;
-      data.set(ix, iy, iz, blockId);
-    };
-
-    // Plataforma inicial 10x10 (1 bloco de profundidade)
-    const platformMinX = -PLATFORM_HALF_EXTENT;
-    const platformMaxX = PLATFORM_HALF_EXTENT - 1;
-    const platformMinZ = -PLATFORM_HALF_EXTENT;
-    const platformMaxZ = PLATFORM_HALF_EXTENT - 1;
-
-    for (let ix = 0; ix < sizeX; ix += 1) {
-      const worldX = x + ix;
-      if (worldX < platformMinX || worldX > platformMaxX) continue;
-      for (let iz = 0; iz < sizeZ; iz += 1) {
-        const worldZ = z + iz;
-        if (worldZ < platformMinZ || worldZ > platformMaxZ) continue;
-        const iy = PLATFORM_HEIGHT - y;
-        if (iy >= 0 && iy < sizeY) {
-          data.set(ix, iy, iz, blocks.dirt);
-        }
+  controller.registerCaptureHandler((capture) => {
+    const canvas = noa.container.canvas;
+    if (capture) {
+      noa.container.setPointerLock(false);
+      if (typeof canvas.blur === 'function') {
+        canvas.blur();
+      }
+    } else {
+      noa.container.setPointerLock(true);
+      if (typeof canvas.focus === 'function') {
+        canvas.focus();
       }
     }
-
-    generateAsteroidsForChunk({
-      blocks,
-      chunkMinX,
-      chunkMaxX,
-      chunkMinY,
-      chunkMaxY,
-      chunkMinZ,
-      chunkMaxZ,
-      writeBlock,
-    });
-
-    noa.world.setChunkData(requestID, data);
   });
+
+  root.render(
+    <OverlayApp
+      controller={controller}
+      hotbarController={deps.hotbarController}
+      energy={deps.energy}
+      removalHold={removalHold}
+    />,
+  );
+
+  const api: OverlayApi = {
+    controller,
+    removalHold,
+    destroy() {
+      controller.reset();
+      root.unmount();
+    },
+  };
+
+  return api;
+}
+````
+
+## File: src/hud/overlay/OverlayApp.tsx
+````typescript
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { OverlayContext } from './overlay-context';
+import type { OverlayController, OverlayState } from './overlay-controller';
+import type { HotbarController } from '../../player/hotbar-controller';
+import { HotbarHud } from '../components/hotbar-hud';
+import type { EnergySystem } from '../../systems/energy';
+import type { RemovalHoldTracker } from '../removal-hold-tracker';
+import { Crosshair } from '../components/crosshair';
+
+interface OverlayAppProps {
+  controller: OverlayController;
+  hotbarController: HotbarController;
+  energy: EnergySystem;
+  removalHold: RemovalHoldTracker;
 }
 
-interface ChunkContext {
-  blocks: WorldBlocks;
-  chunkMinX: number;
-  chunkMaxX: number;
-  chunkMinY: number;
-  chunkMaxY: number;
-  chunkMinZ: number;
-  chunkMaxZ: number;
-  writeBlock: (wx: number, wy: number, wz: number, blockId: number) => void;
+function useOverlayState(controller: OverlayController): OverlayState {
+  return useSyncExternalStore(
+    (listener) => controller.subscribe(listener),
+    () => controller.getState(),
+  );
 }
 
-function generateAsteroidsForChunk(ctx: ChunkContext): void {
-  const {
-    blocks,
-    chunkMinX,
-    chunkMaxX,
-    chunkMinZ,
-    chunkMaxZ,
-    writeBlock,
-  } = ctx;
+export function OverlayApp({ controller, hotbarController, energy, removalHold }: OverlayAppProps): JSX.Element {
+  const state = useOverlayState(controller);
+  const focusRef = useRef<HTMLDivElement>(null);
 
-  const minCellX = Math.floor((chunkMinX - ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
-  const maxCellX = Math.floor((chunkMaxX + ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
-  const minCellZ = Math.floor((chunkMinZ - ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
-  const maxCellZ = Math.floor((chunkMaxZ + ASTEROID_CELL_MARGIN) / ASTEROID_CELL_SIZE);
+  useEffect(() => {
+    const node = focusRef.current;
+    if (!node) {
+      return;
+    }
+    if (state.captureInput) {
+      node.focus({ preventScroll: true });
+    } else {
+      node.blur();
+    }
+  }, [state.captureInput]);
 
-  for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
-    for (let cellZ = minCellZ; cellZ <= maxCellZ; cellZ += 1) {
-      const baseSeed = hash2D(cellX, cellZ);
-      const baseRand = createRandom(baseSeed);
+  const contextValue = useMemo(
+    () => ({
+      controller,
+      state,
+      energy,
+      removal: removalHold,
+    }),
+    [controller, state, energy, removalHold],
+  );
 
-      const offsetX = Math.round((baseRand() - 0.5) * (ASTEROID_CELL_SIZE - 1));
-      const offsetZ = Math.round((baseRand() - 0.5) * (ASTEROID_CELL_SIZE - 1));
+  return (
+    <OverlayContext.Provider value={contextValue}>
+      <div
+        ref={focusRef}
+        className="overlay-root"
+        tabIndex={-1}
+        data-capture={state.captureInput ? 'true' : 'false'}
+        data-pointer-pass={state.pointerPassthrough ? 'true' : 'false'}
+      >
+        <div className="overlay-hud-layer" data-visible="true">
+          <Crosshair />
+          <HotbarHud controller={hotbarController} />
+        </div>
+      </div>
+    </OverlayContext.Provider>
+  );
+}
+````
 
-      const baseCenterX = cellX * ASTEROID_CELL_SIZE + offsetX;
-      const baseCenterZ = cellZ * ASTEROID_CELL_SIZE + offsetZ;
-      const baseRadius = Math.hypot(baseCenterX, baseCenterZ);
+## File: src/persistence/manager.ts
+````typescript
+import type { Engine } from 'noa-engine';
+import type { HotbarApi } from '../player/hotbar';
+import type { SectorResources } from '../sector';
+import type { EnergySystem } from '../systems/energy';
+import type { TerminalSystem } from '../systems/terminals';
+import type { PersistenceAdapter } from './adapter';
+import type { SectorSnapshot } from './types';
+import { captureSnapshot, restoreSnapshot } from './snapshot';
+import { SNAPSHOT_SCHEMA_VERSION, type SnapshotContextMeta } from './types';
 
-      if (
-        baseRadius < ASTEROID_RING_INNER_RADIUS ||
-        baseRadius > ASTEROID_RING_OUTER_RADIUS
-      ) {
-        continue;
-      }
+interface ManagerContext {
+  noa: Engine;
+  sector: SectorResources;
+  energy: EnergySystem;
+  hotbar: HotbarApi;
+  terminals: TerminalSystem;
+}
 
-      const density = sampleAsteroidDensity(baseCenterX, baseCenterZ);
-      const normalizedDensity = (density + 1) * 0.5; // [-1,1] → [0,1]
-      if (normalizedDensity < ASTEROID_DENSITY_THRESHOLD) {
-        continue;
-      }
+interface PersistenceManagerOptions {
+  adapter: PersistenceAdapter;
+  playerId: string;
+  sectorId: string;
+  context: ManagerContext;
+  autosaveIntervalMs?: number;
+}
 
-      if (baseRand() > ASTEROID_CENTER_PROBABILITY) {
-        continue;
-      }
+export class PersistenceManager {
+  private readonly adapter: PersistenceAdapter;
+  private readonly meta: SnapshotContextMeta;
+  private readonly ctx: ManagerContext;
+  private autosaveHandle: ReturnType<typeof setInterval> | null = null;
 
-      const clusterCount = randomInt(baseRand, ASTEROID_CLUSTER_SIZE.min, ASTEROID_CLUSTER_SIZE.max);
-      for (let clusterIndex = 0; clusterIndex < clusterCount; clusterIndex += 1) {
-        const clusterAngle = baseRand() * Math.PI * 2;
-        const clusterDistance = clusterIndex === 0
-          ? 0
-          : ASTEROID_CLUSTER_SPREAD * (0.5 + baseRand() * 0.5);
+  constructor(options: PersistenceManagerOptions) {
+    this.adapter = options.adapter;
+    this.meta = {
+      playerId: options.playerId,
+      sectorId: options.sectorId,
+    };
+    this.ctx = options.context;
 
-        const clusterCenterX = Math.round(baseCenterX + Math.cos(clusterAngle) * clusterDistance);
-        const clusterCenterZ = Math.round(baseCenterZ + Math.sin(clusterAngle) * clusterDistance);
-        const clusterCenterY = ASTEROID_LAYER_ALTITUDE + Math.round((baseRand() - 0.5) * 2 * ASTEROID_HEIGHT_VARIATION);
+    if (options.autosaveIntervalMs && options.autosaveIntervalMs > 0) {
+      this.startAutoSave(options.autosaveIntervalMs);
+    }
 
-        const clusterRadius = Math.hypot(clusterCenterX, clusterCenterZ);
-        if (
-          clusterRadius < ASTEROID_RING_INNER_RADIUS ||
-          clusterRadius > ASTEROID_RING_OUTER_RADIUS
-        ) {
-          continue;
-        }
-
-        const clusterSeed = hash3D(cellX, cellZ, clusterIndex);
-        const clusterRand = createRandom(clusterSeed);
-        const blockId = pickAsteroidBlockId(clusterRand, blocks);
-        const offsets = buildAsteroidOffsets(clusterRand);
-
-        for (const [ox, oy, oz] of offsets) {
-          const wx = clusterCenterX + ox;
-          const wy = clusterCenterY + oy;
-          const wz = clusterCenterZ + oz;
-          const radialDistance = Math.hypot(wx, wz);
-          if (
-            radialDistance < ASTEROID_RING_INNER_RADIUS ||
-            radialDistance > ASTEROID_RING_OUTER_RADIUS + ASTEROID_MAJOR_RADIUS
-          ) {
-            continue;
-          }
-          writeBlock(wx, wy, wz, blockId);
-        }
-      }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', this.handleBeforeUnload);
     }
   }
-}
 
-function sampleAsteroidDensity(x: number, z: number): number {
-  const a = sampleAsteroidNoise(x, 160) * 0.6;
-  const b = sampleAsteroidNoise(z + 51.37, 120) * 0.25;
-  const c = sampleAsteroidNoise(x - z - 97.53, 90) * 0.15;
-  return a + b + c;
-}
-
-function buildAsteroidOffsets(rand: () => number): Array<[number, number, number]> {
-  const totalBlocks = randomInt(rand, ASTEROID_BLOCK_COUNT.min, ASTEROID_BLOCK_COUNT.max);
-  const majorRadius = ASTEROID_MAJOR_RADIUS * (0.8 + rand() * 0.4);
-  const minorRadius = ASTEROID_MINOR_RADIUS * (0.8 + rand() * 0.4);
-  const verticalRadius = ASTEROID_VERTICAL_RADIUS * (0.8 + rand() * 0.4);
-  const orientation = rand() * Math.PI * 2;
-
-  const offsets: Array<[number, number, number]> = [];
-  const used = new Set<string>();
-  let attempts = 0;
-  const maxAttempts = totalBlocks * 30;
-
-  while (offsets.length < totalBlocks && attempts < maxAttempts) {
-    attempts += 1;
-    const along = (rand() * 2 - 1) * majorRadius;
-    const lateral = (rand() * 2 - 1) * minorRadius;
-    const vertical = (rand() * 2 - 1) * verticalRadius;
-
-    const norm = (along * along) / (majorRadius * majorRadius)
-      + (lateral * lateral) / (minorRadius * minorRadius)
-      + (vertical * vertical) / (verticalRadius * verticalRadius);
-    if (norm > 1) continue;
-
-    const rotX = Math.round(Math.cos(orientation) * along - Math.sin(orientation) * lateral);
-    const rotZ = Math.round(Math.sin(orientation) * along + Math.cos(orientation) * lateral);
-    const rotY = Math.round(vertical);
-
-    const key = `${rotX},${rotY},${rotZ}`;
-    if (used.has(key)) continue;
-    used.add(key);
-    offsets.push([rotX, rotY, rotZ]);
+  load(): void {
+    const snapshot = this.adapter.loadSnapshot(this.meta.playerId, this.meta.sectorId);
+    if (!snapshot) {
+      return;
+    }
+    if (snapshot.schemaVersion !== SNAPSHOT_SCHEMA_VERSION) {
+      console.warn('[starwatch:persistence] versão de snapshot incompatível, ignorando.');
+      return;
+    }
+    restoreSnapshot(
+      {
+        noa: this.ctx.noa,
+        sector: this.ctx.sector,
+        energy: this.ctx.energy,
+        hotbar: this.ctx.hotbar,
+        terminals: this.ctx.terminals,
+      },
+      snapshot,
+    );
   }
 
-  if (offsets.length === 0) {
-    offsets.push([0, 0, 0]);
+  save(): void {
+    const snapshot: SectorSnapshot = captureSnapshot(
+      {
+        noa: this.ctx.noa,
+        sector: this.ctx.sector,
+        energy: this.ctx.energy,
+        hotbar: this.ctx.hotbar,
+        terminals: this.ctx.terminals,
+      },
+      this.meta,
+    );
+    this.adapter.saveSnapshot(snapshot);
   }
 
-  return offsets;
-}
-
-function pickAsteroidBlockId(rand: () => number, blocks: WorldBlocks): number {
-  if (blocks.asteroidVariants.length === 0) {
-    return blocks.dirt;
+  clear(): void {
+    this.adapter.clearSnapshot(this.meta.playerId, this.meta.sectorId);
   }
-  let r = rand() * ASTEROID_WEIGHT_SUM;
-  for (let i = 0; i < ASTEROID_VARIANTS.length && i < blocks.asteroidVariants.length; i += 1) {
-    r -= ASTEROID_VARIANTS[i].weight;
-    if (r <= 0) {
-      return blocks.asteroidVariants[i];
+
+  startAutoSave(intervalMs: number): void {
+    if (this.autosaveHandle) {
+      clearInterval(this.autosaveHandle);
+    }
+    this.autosaveHandle = setInterval(() => {
+      try {
+        this.save();
+      } catch (error) {
+        console.warn('[starwatch:persistence] falha no autosave', error);
+      }
+    }, intervalMs);
+  }
+
+  dispose(): void {
+    if (this.autosaveHandle) {
+      clearInterval(this.autosaveHandle);
+      this.autosaveHandle = null;
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', this.handleBeforeUnload);
     }
   }
-  return blocks.asteroidVariants[blocks.asteroidVariants.length - 1];
-}
 
-function hash2D(x: number, z: number): number {
-  let h = x * 374761393 + z * 668265263;
-  h = (h ^ (h >> 13)) * 1274126177;
-  h = h ^ (h >> 16);
-  return h >>> 0;
-}
-
-function hash3D(x: number, y: number, z: number): number {
-  let h = x * 374761393 + y * 668265263 + z * 144305901;
-  h = (h ^ (h >> 13)) * 1274126177;
-  h = h ^ (h >> 16);
-  return h >>> 0;
-}
-
-function createRandom(seed: number): () => number {
-  let state = seed || 1;
-  return () => {
-    state = Math.imul(state ^ (state >>> 15), 2246822519) + 0x9e3779b9;
-    state = state >>> 0;
-    return state / 0x100000000;
+  private handleBeforeUnload = () => {
+    try {
+      this.save();
+    } catch (error) {
+      console.warn('[starwatch:persistence] erro ao salvar no beforeunload', error);
+    }
   };
 }
 
-function randomInt(rand: () => number, min: number, max: number): number {
-  return min + Math.floor(rand() * (max - min + 1));
+export function ensurePlayerId(): string {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return generateId();
+  }
+  const key = 'starwatch/playerId';
+  const existing = window.localStorage.getItem(key);
+  if (existing) {
+    return existing;
+  }
+  const fresh = generateId();
+  window.localStorage.setItem(key, fresh);
+  return fresh;
 }
-</file>
 
-<file path="src/main.ts">
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `player-${Math.random().toString(36).slice(2, 11)}`;
+}
+````
+
+## File: src/systems/building/placement-system.ts
+````typescript
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import type { Engine } from 'noa-engine';
+import type { OverlayApi } from '../../hud/overlay';
+import type { HotbarApi } from '../../player/hotbar';
+import type { SectorResources } from '../../sector';
+import type { BlockCatalog, BlockDefinition, BlockKind, BlockOrientation } from '../../blocks/types';
+import { blockMetadataStore } from '../../blocks/metadata-store';
+import type { EnergySystem } from '../energy';
+import type { TerminalSystem } from '../terminals';
+
+const ORIENTATIONS: BlockOrientation[] = ['north', 'east', 'south', 'west'];
+const REMOVE_HOLD_DURATION_MS = 1000;
+
+interface PlacementSystemDependencies {
+  noa: Engine;
+  overlay: OverlayApi;
+  hotbar: HotbarApi;
+  sector: SectorResources;
+  energy: EnergySystem;
+  terminals: TerminalSystem;
+}
+
+interface NoaTargetBlock {
+  position: number[];
+  normal: number[];
+  adjacent: number[];
+  blockID: number;
+}
+
+interface PlacementTarget {
+  position: [number, number, number];
+  normal: [number, number, number];
+  adjacent: [number, number, number];
+}
+
+interface GhostResources {
+  materialValid: StandardMaterial;
+  materialInvalid: StandardMaterial;
+  meshes: Map<BlockKind, Mesh>;
+}
+
+function createGhostResources(noa: Engine): GhostResources {
+  const scene = noa.rendering.getScene();
+
+  const materialValid = new StandardMaterial('placement-ghost-valid', scene);
+  materialValid.diffuseColor = Color3.FromHexString('#4ade80').scale(0.6);
+  materialValid.alpha = 0.35;
+  materialValid.emissiveColor = Color3.FromHexString('#22c55e').scale(0.5);
+
+  const materialInvalid = new StandardMaterial('placement-ghost-invalid', scene);
+  materialInvalid.diffuseColor = Color3.FromHexString('#f87171').scale(0.7);
+  materialInvalid.alpha = 0.35;
+  materialInvalid.emissiveColor = Color3.FromHexString('#dc2626').scale(0.5);
+
+  const meshes = new Map<BlockKind, Mesh>();
+
+  const createBox = (key: BlockKind, height = 1) => {
+    const mesh = MeshBuilder.CreateBox(`ghost-${key}`, { width: 1, depth: 1, height }, scene);
+    mesh.isVisible = false;
+    mesh.isPickable = false;
+    mesh.alwaysSelectAsActiveMesh = true;
+    mesh.rotationQuaternion = null;
+    meshes.set(key, mesh);
+  };
+
+  createBox('starwatch:deck');
+  createBox('starwatch:solar-panel');
+  createBox('starwatch:battery');
+  createBox('starwatch:hal-terminal');
+
+  return {
+    materialValid,
+    materialInvalid,
+    meshes,
+  };
+}
+
+function getActiveBlockDefinition(hotbar: HotbarApi, catalog: BlockCatalog): BlockDefinition | null {
+  const slot = hotbar.controller.getActiveSlot();
+  if (!slot.item) {
+    return null;
+  }
+  return catalog.byKind.get(slot.item.blockKind as BlockKind) ?? null;
+}
+
+function getPlacementTarget(noa: Engine): PlacementTarget | null {
+  const targeted = noa.targetedBlock as NoaTargetBlock | null;
+  if (!targeted) {
+    return null;
+  }
+  return {
+    position: [targeted.position[0], targeted.position[1], targeted.position[2]],
+    normal: [targeted.normal[0], targeted.normal[1], targeted.normal[2]],
+    adjacent: [targeted.adjacent[0], targeted.adjacent[1], targeted.adjacent[2]],
+  };
+}
+
+function nextOrientation(current: BlockOrientation): BlockOrientation {
+  const index = ORIENTATIONS.indexOf(current);
+  const nextIndex = (index + 1) % ORIENTATIONS.length;
+  return ORIENTATIONS[nextIndex];
+}
+
+function orientationToRadians(orientation: BlockOrientation): number {
+  switch (orientation) {
+    case 'north':
+      return 0;
+    case 'east':
+      return Math.PI / 2;
+    case 'south':
+      return Math.PI;
+    case 'west':
+      return (3 * Math.PI) / 2;
+    default:
+      return 0;
+  }
+}
+
+function setGhostTransform(mesh: Mesh, target: PlacementTarget, orientation: BlockOrientation): void {
+  mesh.position.x = target.adjacent[0] + 0.5;
+  mesh.position.y = target.adjacent[1] + 0.5;
+  mesh.position.z = target.adjacent[2] + 0.5;
+  mesh.rotation.y = orientationToRadians(orientation);
+}
+
+export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy, terminals }: PlacementSystemDependencies): void {
+  const ghost = createGhostResources(noa);
+  let activeGhost: Mesh | null = null;
+  let currentDefinition: BlockDefinition | null = null;
+  const orientationByKind = new Map<BlockKind, BlockOrientation>();
+  let lastHotbarIndex = hotbar.controller.getState().activeIndex;
+  let removeHoldTarget: PlacementTarget | null = null;
+  let removeHoldTriggered = false;
+  let removeHoldActive = false;
+  let removeHoldElapsed = 0;
+  let removalHoldResetTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  const removalHold = overlay.removalHold;
+
+  const updateActiveDefinition = () => {
+    currentDefinition = getActiveBlockDefinition(hotbar, sector.starwatchBlocks);
+    if (currentDefinition && !orientationByKind.has(currentDefinition.kind)) {
+      orientationByKind.set(currentDefinition.kind, currentDefinition.defaultOrientation);
+    }
+  };
+
+  hotbar.controller.subscribe(() => {
+    const state = hotbar.controller.getState();
+    if (state.activeIndex !== lastHotbarIndex) {
+      lastHotbarIndex = state.activeIndex;
+      updateActiveDefinition();
+    }
+  });
+
+  updateActiveDefinition();
+
+  const hideGhost = () => {
+    if (activeGhost) {
+      activeGhost.isVisible = false;
+    }
+    activeGhost = null;
+  };
+
+  const canPlaceAt = (position: [number, number, number]): boolean => {
+    const blockId = noa.world.getBlockID(position[0], position[1], position[2]);
+    return blockId === 0;
+  };
+
+  const placeBlock = (target: PlacementTarget, definition: BlockDefinition, orientation: BlockOrientation) => {
+    const [x, y, z] = target.adjacent;
+    noa.setBlock(definition.id, x, y, z);
+    if (definition.orientable) {
+      blockMetadataStore.setOrientation({ kind: definition.kind, x, y, z }, orientation);
+    }
+    if (definition.kind === 'starwatch:deck') {
+      energy.networks.addDeck([x, y, z]);
+    } else if (definition.kind === 'starwatch:solar-panel') {
+      energy.registerSolarPanel([x, y, z]);
+    } else if (definition.kind === 'starwatch:battery') {
+      energy.registerBattery([x, y, z]);
+    } else if (definition.kind === 'starwatch:hal-terminal') {
+      energy.registerTerminal([x, y, z]);
+    }
+    terminals.registerBlock(definition.kind, [x, y, z]);
+  };
+
+  const removeBlock = (target: PlacementTarget) => {
+    const [x, y, z] = target.position;
+    const existingId = noa.world.getBlockID(x, y, z);
+    if (existingId !== 0) {
+      const def = sector.starwatchBlocks.byId.get(existingId);
+      noa.setBlock(0, x, y, z);
+      if (def?.orientable) {
+        blockMetadataStore.deleteOrientation({ kind: def.kind, x, y, z });
+      }
+      if (def?.kind === 'starwatch:deck') {
+        energy.networks.removeDeck([x, y, z]);
+      } else if (def?.kind === 'starwatch:solar-panel') {
+        energy.unregisterSolarPanel([x, y, z]);
+      } else if (def?.kind === 'starwatch:battery') {
+        energy.unregisterBattery([x, y, z]);
+      } else if (def?.kind === 'starwatch:hal-terminal') {
+        energy.unregisterTerminal([x, y, z]);
+      }
+      if (def) {
+        terminals.unregisterBlock(def.kind, [x, y, z]);
+      }
+    }
+  };
+
+  const clearRemovalHoldReset = () => {
+    if (removalHoldResetTimeout !== null) {
+      clearTimeout(removalHoldResetTimeout);
+      removalHoldResetTimeout = null;
+    }
+  };
+
+  const cancelRemoveHold = (preserveTriggered = false, emitIdle = true) => {
+    removeHoldActive = false;
+    removeHoldElapsed = 0;
+    removeHoldTarget = null;
+    if (!preserveTriggered) {
+      removeHoldTriggered = false;
+    }
+    clearRemovalHoldReset();
+    if (emitIdle) {
+      removalHold.setState({ active: false, progress: 0 });
+    }
+  };
+
+  const scheduleRemoveHold = (target: PlacementTarget) => {
+    removeHoldTarget = {
+      position: [...target.position],
+      normal: [...target.normal],
+      adjacent: [...target.adjacent],
+    };
+    removeHoldTriggered = false;
+    removeHoldActive = true;
+    removeHoldElapsed = 0;
+    clearRemovalHoldReset();
+    removalHold.setState({ active: true, progress: 0 });
+  };
+
+  const handleRemoveHoldStart = () => {
+    cancelRemoveHold();
+    if (overlay.controller.getState().captureInput) {
+      return;
+    }
+    const target = getPlacementTarget(noa);
+    if (!target) {
+      return;
+    }
+    scheduleRemoveHold(target);
+  };
+
+  const handleRemoveHoldEnd = () => {
+    const wasTriggered = removeHoldTriggered;
+    cancelRemoveHold();
+    if (!wasTriggered) {
+      return;
+    }
+  };
+
+  const handlePlace = () => {
+    if (overlay.controller.getState().captureInput) {
+      return;
+    }
+    if (!currentDefinition) {
+      return;
+    }
+    const target = getPlacementTarget(noa);
+    if (!target) {
+      return;
+    }
+    const orientation = orientationByKind.get(currentDefinition.kind) ?? currentDefinition.defaultOrientation;
+    if (!canPlaceAt(target.adjacent)) {
+      return;
+    }
+    placeBlock(target, currentDefinition, orientation);
+  };
+
+  const handleRemove = () => {
+    cancelRemoveHold();
+    if (overlay.controller.getState().captureInput) {
+      return;
+    }
+    const target = getPlacementTarget(noa);
+    if (!target) {
+      return;
+    }
+    removeBlock(target);
+  };
+
+  noa.inputs.bind('build-place', ['Mouse3']);
+  noa.inputs.bind('build-place-alt', ['Enter']);
+  noa.inputs.bind('build-remove-hold', ['Mouse1']);
+  noa.inputs.bind('build-remove-alt', ['KeyX']);
+  noa.inputs.bind('build-rotate', ['KeyR']);
+
+  noa.inputs.down.on('build-place', handlePlace);
+  noa.inputs.down.on('build-place-alt', handlePlace);
+  noa.inputs.down.on('build-remove-alt', handleRemove);
+  noa.inputs.down.on('build-remove-hold', handleRemoveHoldStart);
+  noa.inputs.up.on('build-remove-hold', handleRemoveHoldEnd);
+
+  noa.inputs.down.on('build-rotate', () => {
+    if (overlay.controller.getState().captureInput) {
+      return;
+    }
+    if (!currentDefinition || !currentDefinition.orientable) {
+      return;
+    }
+    const next = nextOrientation(orientationByKind.get(currentDefinition.kind) ?? currentDefinition.defaultOrientation);
+    orientationByKind.set(currentDefinition.kind, next);
+  });
+
+  noa.on('beforeRender', () => {
+    if (overlay.controller.getState().captureInput) {
+      hideGhost();
+      return;
+    }
+
+    const definition = getActiveBlockDefinition(hotbar, sector.starwatchBlocks);
+    if (!definition) {
+      hideGhost();
+      return;
+    }
+
+    const target = getPlacementTarget(noa);
+    if (!target) {
+      hideGhost();
+      return;
+    }
+
+    const orientation = orientationByKind.get(definition.kind) ?? definition.defaultOrientation;
+    const available = canPlaceAt(target.adjacent);
+
+    const mesh = ghost.meshes.get(definition.kind) ?? null;
+    if (!mesh) {
+      hideGhost();
+      return;
+    }
+
+    if (activeGhost && activeGhost !== mesh) {
+      activeGhost.isVisible = false;
+    }
+    activeGhost = mesh;
+    mesh.isVisible = true;
+    mesh.material = available ? ghost.materialValid : ghost.materialInvalid;
+    setGhostTransform(mesh, target, orientation);
+  });
+
+  noa.on('tick', (dt: number) => {
+    // `dt` is provided in milliseconds by MicroGameShell's fixed tick loop.
+    if (!removeHoldActive || !removeHoldTarget) {
+      return;
+    }
+    if (overlay.controller.getState().captureInput) {
+      cancelRemoveHold();
+      return;
+    }
+    const [x, y, z] = removeHoldTarget.position;
+    if (noa.world.getBlockID(x, y, z) === 0) {
+      cancelRemoveHold();
+      return;
+    }
+    removeHoldElapsed += dt;
+    const progress = Math.min(1, removeHoldElapsed / REMOVE_HOLD_DURATION_MS);
+    removalHold.setState({ active: true, progress });
+    if (removeHoldElapsed < REMOVE_HOLD_DURATION_MS) {
+      return;
+    }
+    removeBlock(removeHoldTarget);
+    removeHoldTriggered = true;
+    cancelRemoveHold(true, false);
+    removalHold.setState({ active: false, progress: 1 });
+    removalHoldResetTimeout = setTimeout(() => {
+      removalHold.setState({ active: false, progress: 0 });
+      removalHoldResetTimeout = null;
+    }, 160);
+  });
+}
+````
+
+## File: src/systems/terminals/terminal-display.ts
+````typescript
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import type { Scene } from '@babylonjs/core/scene';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import type { VoxelPosition } from '../energy/energy-network-manager';
+import type { BlockOrientation } from '../../blocks/types';
+import { orientationToNormal, orientationToYaw } from './helpers';
+import type {
+  TerminalDisplayKind,
+  TerminalPointerEvent,
+  TerminalTab,
+} from './types';
+
+const BORDER = 32;
+const HEADER_HEIGHT = 64;
+const TAB_BAR_HEIGHT = 80;
+const FOOTER_HEIGHT = 64;
+const SCREEN_SURFACE_BIAS = 0.002;
+
+export interface BaseTerminalDisplayOptions<TData> {
+  scene: Scene;
+  position: VoxelPosition;
+  orientation: BlockOrientation;
+  kind: TerminalDisplayKind;
+  physicalWidth: number;
+  physicalHeight: number;
+  textureWidth: number;
+  textureHeight: number;
+  elevation: number;
+  mountOffset: number;
+  title: string;
+  accentColor: string;
+  dataProvider: () => TData;
+  tabs: TerminalTab[];
+}
+
+interface TabRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export abstract class BaseTerminalDisplay<TData> {
+  readonly kind: TerminalDisplayKind;
+  readonly position: VoxelPosition;
+
+  protected readonly dataProvider: () => TData;
+  protected readonly tabs: TerminalTab[];
+  protected readonly scene: Scene;
+  protected readonly orientation: BlockOrientation;
+  protected readonly textureWidth: number;
+  protected readonly textureHeight: number;
+  protected readonly accentColor: string;
+  protected readonly title: string;
+  protected readonly mesh: Mesh;
+  protected readonly texture: DynamicTexture;
+  protected readonly ctx: CanvasRenderingContext2D;
+  protected readonly contentArea: { x: number; y: number; width: number; height: number };
+  protected readonly baseCenter: Vector3;
+  protected readonly mountOffset: number;
+
+  private readonly surfaceNormal: Vector3;
+  private readonly material: StandardMaterial;
+  private readonly tabRects: TabRect[] = [];
+  private readonly decorations: Mesh[] = [];
+  private readonly allMeshes: Mesh[] = [];
+
+  private sessionActive = false;
+  private highlighted = false;
+  private hoverTabIndex: number | null = null;
+  private activeTabIndex = 0;
+
+  constructor(options: BaseTerminalDisplayOptions<TData>) {
+    this.scene = options.scene;
+    this.kind = options.kind;
+    this.position = options.position;
+    this.orientation = options.orientation;
+    this.dataProvider = options.dataProvider;
+    this.tabs = options.tabs;
+    this.textureWidth = options.textureWidth;
+    this.textureHeight = options.textureHeight;
+    this.accentColor = options.accentColor;
+    this.title = options.title;
+
+    this.baseCenter = new Vector3(
+      options.position[0] + 0.5,
+      options.position[1] + options.elevation,
+      options.position[2] + 0.5,
+    );
+    this.surfaceNormal = orientationToNormal(options.orientation);
+    this.mountOffset = options.mountOffset;
+
+    this.mesh = MeshBuilder.CreatePlane(
+      `terminal-screen-${options.position.join(':')}`,
+      {
+        width: options.physicalWidth,
+        height: options.physicalHeight,
+      },
+      this.scene,
+    );
+    this.mesh.alwaysSelectAsActiveMesh = true;
+    this.mesh.isPickable = true;
+    this.mesh.metadata = { terminalScreen: true, key: this.makeKey() };
+    this.allMeshes.push(this.mesh);
+
+    const anchor = this.getSurfacePosition(this.mountOffset + SCREEN_SURFACE_BIAS);
+    this.mesh.position = anchor;
+    this.mesh.lookAt(anchor.add(this.surfaceNormal));
+    this.mesh.rotate(Vector3.Up(), Math.PI);
+
+    this.texture = new DynamicTexture(
+      `terminal-texture-${options.position.join(':')}`,
+      { width: options.textureWidth, height: options.textureHeight },
+      this.scene,
+      false,
+    );
+    this.texture.hasAlpha = true;
+    const context = this.texture.getContext() as CanvasRenderingContext2D;
+    context.imageSmoothingEnabled = false;
+    this.ctx = context;
+
+    this.material = new StandardMaterial(`terminal-material-${options.position.join(':')}`, this.scene);
+    this.material.diffuseColor = Color3.White();
+    this.material.emissiveColor = new Color3(0.32, 0.38, 0.52);
+    this.material.specularColor = Color3.Black();
+    this.material.backFaceCulling = true;
+    this.material.disableLighting = true;
+    this.material.diffuseTexture = this.texture;
+    this.material.emissiveTexture = this.texture;
+    this.mesh.material = this.material;
+    this.mesh.renderingGroupId = 2;
+
+    this.contentArea = {
+      x: BORDER,
+      y: BORDER + HEADER_HEIGHT + TAB_BAR_HEIGHT,
+      width: this.textureWidth - BORDER * 2,
+      height: this.textureHeight - BORDER * 2 - HEADER_HEIGHT - TAB_BAR_HEIGHT - FOOTER_HEIGHT,
+    };
+
+    this.updateMaterialGlow();
+    this.refresh();
+  }
+
+  dispose(): void {
+    this.mesh.dispose(false, true);
+    this.texture.dispose();
+    for (const mesh of this.decorations) {
+      mesh.dispose(false, true);
+    }
+  }
+
+  getMesh(): Mesh {
+    return this.mesh;
+  }
+
+  protected addDecoration(mesh: Mesh): void {
+    this.decorations.push(mesh);
+    this.allMeshes.push(mesh);
+  }
+
+  getMeshes(): Mesh[] {
+    return this.allMeshes;
+  }
+
+  protected getSurfaceNormal(): Vector3 {
+    return this.surfaceNormal.clone();
+  }
+
+  protected getSurfacePosition(offset = this.mountOffset): Vector3 {
+    const displacement = this.surfaceNormal.clone().scaleInPlace(offset);
+    return this.baseCenter.add(displacement);
+  }
+
+  protected createDecorBox(
+    name: string,
+    size: { width: number; height: number; depth: number },
+    options?: {
+      distance?: number;
+      verticalOffset?: number;
+      color?: Color3;
+      emissive?: Color3;
+      renderingGroupId?: number;
+    },
+  ): Mesh {
+    const mesh = MeshBuilder.CreateBox(name, size, this.scene);
+    mesh.isPickable = false;
+    const anchor = this.getSurfacePosition(options?.distance ?? this.mountOffset - 0.04);
+    mesh.position = new Vector3(anchor.x, anchor.y + (options?.verticalOffset ?? 0), anchor.z);
+    mesh.rotation = new Vector3(0, orientationToYaw(this.orientation), 0);
+    mesh.renderingGroupId = options?.renderingGroupId ?? 2;
+
+    const material = new StandardMaterial(`${name}-mat`, this.scene);
+    const diffuse = options?.color ?? new Color3(0.07, 0.12, 0.22);
+    const emissive = options?.emissive ?? diffuse.scale(0.6);
+    material.diffuseColor = diffuse;
+    material.emissiveColor = emissive;
+    material.disableLighting = true;
+    mesh.material = material;
+
+    this.addDecoration(mesh);
+    return mesh;
+  }
+
+  refresh(): void {
+    const data = this.dataProvider();
+    this.drawBase();
+    this.drawHeader();
+    this.drawTabs();
+    this.drawContent(this.tabs[this.activeTabIndex]?.id ?? null, data);
+    this.drawFooter();
+    this.texture.update();
+  }
+
+  setSessionActive(active: boolean): void {
+    if (this.sessionActive === active) {
+      return;
+    }
+    this.sessionActive = active;
+    if (active) {
+      this.highlighted = true;
+    } else {
+      if (this.hoverTabIndex !== null) {
+        this.hoverTabIndex = null;
+      }
+    }
+    this.updateMaterialGlow();
+    this.refresh();
+  }
+
+  setHighlighted(highlighted: boolean): void {
+    if (this.highlighted === highlighted) {
+      return;
+    }
+    this.highlighted = highlighted;
+    if (!this.sessionActive) {
+      this.updateMaterialGlow();
+    }
+    this.refresh();
+  }
+
+  setHoverByUV(uv: { u: number; v: number } | null): void {
+    const next = uv ? this.tabIndexFromUV(uv) : null;
+    if (this.hoverTabIndex === next) {
+      return;
+    }
+    this.hoverTabIndex = next;
+    this.refresh();
+  }
+
+  handleKeyDown(event: KeyboardEvent): boolean {
+    return this.onKeyDown(event);
+  }
+
+  handlePointer(event: TerminalPointerEvent): boolean {
+    this.setHoverByUV(event.uv);
+    const tabIndex = this.tabIndexFromUV(event.uv);
+    if (tabIndex !== null) {
+      this.setActiveTab(tabIndex);
+      return true;
+    }
+    return this.onPointer(event);
+  }
+
+  protected onPointer(_event: TerminalPointerEvent): boolean {
+    return false;
+  }
+
+  protected onKeyDown(_event: KeyboardEvent): boolean {
+    return false;
+  }
+
+  protected abstract drawContent(activeTabId: string | null, data: TData): void;
+
+  protected setActiveTab(index: number): void {
+    if (index < 0 || index >= this.tabs.length) {
+      return;
+    }
+    if (this.activeTabIndex === index) {
+      return;
+    }
+    this.activeTabIndex = index;
+    this.refresh();
+  }
+
+  private makeKey(): string {
+    return `${this.kind}:${this.position.join(':')}`;
+  }
+
+  private shiftTab(delta: number): void {
+    if (this.tabs.length === 0) {
+      return;
+    }
+    const next = (this.activeTabIndex + delta + this.tabs.length) % this.tabs.length;
+    this.setActiveTab(next);
+  }
+
+  private drawBase(): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.clearRect(0, 0, this.textureWidth, this.textureHeight);
+    ctx.fillStyle = '#050f2a';
+    ctx.fillRect(0, 0, this.textureWidth, this.textureHeight);
+
+    const innerX = BORDER;
+    const innerY = BORDER;
+    const innerW = this.textureWidth - BORDER * 2;
+    const innerH = this.textureHeight - BORDER * 2;
+
+    const gradient = ctx.createLinearGradient(innerX, innerY, innerX, innerY + innerH);
+    if (this.sessionActive) {
+      gradient.addColorStop(0, 'rgba(55, 140, 255, 0.32)');
+      gradient.addColorStop(1, 'rgba(14, 38, 88, 0.92)');
+    } else if (this.highlighted) {
+      gradient.addColorStop(0, 'rgba(40, 110, 230, 0.24)');
+      gradient.addColorStop(1, 'rgba(12, 30, 64, 0.9)');
+    } else {
+      gradient.addColorStop(0, 'rgba(26, 62, 150, 0.16)');
+      gradient.addColorStop(1, 'rgba(10, 24, 54, 0.9)');
+    }
+    ctx.fillStyle = gradient;
+    ctx.fillRect(innerX, innerY, innerW, innerH);
+
+    if (this.sessionActive) {
+      ctx.strokeStyle = 'rgba(155, 215, 255, 0.95)';
+    } else if (this.highlighted) {
+      ctx.strokeStyle = 'rgba(120, 185, 250, 0.85)';
+    } else {
+      ctx.strokeStyle = 'rgba(80, 125, 200, 0.7)';
+    }
+    ctx.lineWidth = 6;
+    ctx.strokeRect(innerX, innerY, innerW, innerH);
+
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = '#5a7bcf';
+    for (let y = innerY; y < innerY + innerH; y += 4) {
+      ctx.fillRect(innerX, y, innerW, 1);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  private tabIndexFromUV(uv: { u: number; v: number }): number | null {
+    if (this.tabRects.length === 0) {
+      return null;
+    }
+    const x = uv.u * this.textureWidth;
+    const y = (1 - uv.v) * this.textureHeight;
+    for (let i = 0; i < this.tabRects.length; i += 1) {
+      const rect = this.tabRects[i];
+      if (x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height) {
+        return i;
+      }
+    }
+    return null;
+  }
+
+  private drawHeader(): void {
+    const ctx = this.ctx;
+    const headerY = BORDER + 42;
+    ctx.save();
+    ctx.font = '32px monospace';
+    ctx.fillStyle = 'rgba(185, 216, 255, 0.9)';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(this.title.toUpperCase(), BORDER + 8, headerY);
+    ctx.font = '20px monospace';
+    ctx.textAlign = 'right';
+    if (this.sessionActive) {
+      ctx.fillStyle = 'rgba(144, 220, 255, 0.9)';
+      ctx.fillText('SESSION ONLINE', this.textureWidth - BORDER - 8, headerY);
+    } else if (this.highlighted) {
+      ctx.fillStyle = 'rgba(136, 200, 255, 0.85)';
+      ctx.fillText('PRESSIONE [E] PARA ACESSAR', this.textureWidth - BORDER - 8, headerY);
+    } else {
+      ctx.fillStyle = 'rgba(120, 160, 220, 0.7)';
+      ctx.fillText('STANDBY', this.textureWidth - BORDER - 8, headerY);
+    }
+    ctx.restore();
+  }
+
+  private drawTabs(): void {
+    const ctx = this.ctx;
+    const tabCount = this.tabs.length;
+    const originX = BORDER + 8;
+    const top = BORDER + HEADER_HEIGHT + 12;
+    const height = TAB_BAR_HEIGHT - 24;
+    const spacing = 14;
+    const available = this.textureWidth - BORDER * 2 - 16;
+    const tabWidth = tabCount > 0 ? (available - (tabCount - 1) * spacing) / tabCount : available;
+
+    this.tabRects.length = 0;
+
+    ctx.save();
+    ctx.textBaseline = 'middle';
+    ctx.font = '24px monospace';
+
+    for (let i = 0; i < tabCount; i += 1) {
+      const tab = this.tabs[i];
+      const x = originX + i * (tabWidth + spacing);
+      const isActive = i === this.activeTabIndex;
+      const isHover = i === this.hoverTabIndex;
+      const idleColor = this.highlighted ? 'rgba(45, 90, 170, 0.6)' : 'rgba(40, 70, 110, 0.55)';
+      const hoverColor = this.highlighted ? 'rgba(70, 130, 230, 0.7)' : 'rgba(70, 120, 220, 0.6)';
+      const baseColor = isActive
+        ? this.accentColor
+        : isHover
+          ? hoverColor
+          : idleColor;
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(x, top, tabWidth, height);
+
+      ctx.strokeStyle = isActive ? 'rgba(180, 230, 255, 0.8)' : 'rgba(80, 120, 190, 0.6)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, top, tabWidth, height);
+
+      ctx.fillStyle = isActive ? '#06112a' : 'rgba(200, 220, 255, 0.82)';
+      ctx.textAlign = 'center';
+      ctx.fillText(tab.label.toUpperCase(), x + tabWidth / 2, top + height / 2);
+
+      this.tabRects.push({ x, y: top, width: tabWidth, height });
+    }
+    ctx.restore();
+  }
+
+  private drawFooter(): void {
+    const ctx = this.ctx;
+    const baseY = this.textureHeight - BORDER - FOOTER_HEIGHT / 2;
+    ctx.save();
+    ctx.font = '20px monospace';
+    ctx.fillStyle = this.sessionActive ? 'rgba(140, 205, 255, 0.85)' : 'rgba(130, 170, 240, 0.75)';
+    ctx.textBaseline = 'middle';
+    if (this.sessionActive) {
+      ctx.textAlign = 'left';
+      ctx.fillText('[ESC] FECHAR', BORDER + 8, baseY);
+      ctx.textAlign = 'center';
+      ctx.fillText('CLIQUE NAS ABAS PARA MUDAR', this.textureWidth / 2, baseY);
+      ctx.textAlign = 'right';
+      ctx.fillText('CLIQUE NOS PAINÉIS PARA INTERAGIR', this.textureWidth - BORDER - 8, baseY);
+    } else if (this.highlighted) {
+      ctx.textAlign = 'center';
+      ctx.fillText('PRESSIONE [E] PARA ACESSAR', this.textureWidth / 2, baseY);
+    } else {
+      ctx.textAlign = 'center';
+      ctx.fillText('APROXIME-SE PARA ACESSAR', this.textureWidth / 2, baseY);
+    }
+    ctx.restore();
+  }
+
+  private updateMaterialGlow(): void {
+    if (this.sessionActive) {
+      this.material.emissiveColor.set(0.55, 0.7, 1);
+    } else if (this.highlighted) {
+      this.material.emissiveColor.set(0.4, 0.55, 0.85);
+    } else {
+      this.material.emissiveColor.set(0.26, 0.32, 0.48);
+    }
+  }
+}
+````
+
+## File: src/main.ts
+````typescript
 import './styles.css';
 import { bootstrapStarwatch } from './core/bootstrap';
 
@@ -9169,9 +14340,10 @@ const context = bootstrapStarwatch();
 window.starwatch = context;
 
 console.log('[starwatch] bootstrap concluído');
-</file>
+````
 
-<file path="src/types/noa-engine.d.ts">
+## File: src/types/noa-engine.d.ts
+````typescript
 declare module 'noa-engine' {
   export class Engine {
     constructor(opts?: Record<string, unknown>);
@@ -9180,7 +14352,12 @@ declare module 'noa-engine' {
     setPaused(paused: boolean): void;
     render(dt: number): void;
     tick(dt: number): void;
-    getTargetBlock(): unknown;
+    targetedBlock: {
+      position: number[];
+      normal: number[];
+      adjacent: number[];
+      blockID: number;
+    } | null;
     setBlock(id: number, x: number, y: number, z: number): void;
     registry: {
       registerMaterial(name: string, options: Record<string, unknown>): number;
@@ -9191,6 +14368,7 @@ declare module 'noa-engine' {
       on(event: string, handler: (...args: any[]) => void): void;
       setChunkData(requestID: number, voxelData: any, voxelIDs?: any, fillID?: number): void;
       setBlock(id: number, x: number, y: number, z: number): void;
+      getBlockID(x: number, y: number, z: number): number;
       _chunkSize: number;
       setAddRemoveDistance(addDist: [number, number], removeDist?: [number, number]): void;
     };
@@ -9211,11 +14389,12 @@ declare module 'noa-engine' {
     inputs: {
       bind(action: string, bindings: string | string[]): void;
       down: { on(action: string, handler: (...args: any[]) => void): void };
+      up: { on(action: string, handler: (...args: any[]) => void): void };
       pointerState: { scrolly: number };
     };
     playerEntity: number;
     entities: {
-      getPositionData(id: number): { width: number; height: number };
+      getPositionData(id: number): { width: number; height: number; position: [number, number, number] };
       getMovement(id: number): { maxSpeed: number; moveForce: number };
       addComponent(id: number, name: string, data: Record<string, unknown>): void;
       names: Record<string, string>;
@@ -9223,9 +14402,10 @@ declare module 'noa-engine' {
     version: string;
   }
 }
-</file>
+````
 
-<file path="src/styles.css">
+## File: src/styles.css
+````css
 :root {
   color-scheme: dark;
   font-family: 'Inter', system-ui, sans-serif;
@@ -9247,6 +14427,12 @@ body {
   height: 100%;
 }
 
+#starwatch-overlay-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 canvas {
   display: block;
   width: 100% !important;
@@ -9261,16 +14447,432 @@ canvas {
   font-size: 1rem;
   letter-spacing: 0.05em;
 }
-</file>
 
-<file path="src/core/bootstrap.ts">
+.overlay-root {
+  position: absolute;
+  inset: 0;
+  outline: none;
+  pointer-events: none;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.overlay-root[data-capture='true'][data-pointer-pass='false'] {
+  pointer-events: auto;
+}
+
+.overlay-root[data-pointer-pass='true'] {
+  pointer-events: none;
+}
+
+.overlay-hud-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hotbar-root {
+  position: absolute;
+  left: 50%;
+  bottom: 32px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.hotbar-slots {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 6px;
+  padding: 10px;
+  background: rgba(8, 12, 22, 0.65);
+  border: 1px solid rgba(102, 140, 255, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+}
+
+.hotbar-slot {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(96, 124, 201, 0.5);
+  border-radius: 8px;
+  background: rgba(10, 18, 34, 0.9);
+  color: #d6e4ff;
+  cursor: pointer;
+  transition: transform 80ms ease-out, border-color 80ms ease-out, box-shadow 80ms ease-out;
+}
+
+.hotbar-slot[data-active='true'] {
+  border-color: rgba(130, 188, 255, 0.95);
+  box-shadow: 0 0 12px rgba(102, 179, 255, 0.65);
+  transform: translateY(-4px);
+}
+
+.hotbar-slot:hover {
+  border-color: rgba(130, 188, 255, 0.6);
+}
+
+.hotbar-slot:focus {
+  outline: none;
+  border-color: rgba(148, 208, 255, 0.85);
+}
+
+.hotbar-slot-index {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+}
+
+.hotbar-slot-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  opacity: 0.15;
+}
+
+.hotbar-slot-icon[data-has-item='true'] {
+  opacity: 1;
+}
+
+.hotbar-tooltip {
+  min-width: 260px;
+  padding: 12px 16px;
+  background: rgba(9, 13, 24, 0.8);
+  border: 1px solid rgba(90, 130, 210, 0.45);
+  border-radius: 8px;
+  color: #e0ecff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 120ms ease-out, transform 120ms ease-out;
+  pointer-events: none;
+}
+
+.hotbar-tooltip[data-visible='true'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.hotbar-tooltip h2 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.hotbar-tooltip p {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: rgba(205, 224, 255, 0.85);
+}
+
+.lookat-badge {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  min-width: 240px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(102, 140, 255, 0.4);
+  background: rgba(9, 13, 24, 0.82);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  color: #e3edff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.lookat-badge[data-visible='true'] {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.lookat-badge__title {
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  color: rgba(166, 207, 255, 0.95);
+}
+
+.lookat-badge__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  margin-bottom: 4px;
+}
+
+.lookat-badge .label {
+  color: rgba(170, 192, 230, 0.75);
+  letter-spacing: 0.05em;
+}
+
+.lookat-badge .value {
+  font-weight: 600;
+  color: rgba(226, 240, 255, 0.95);
+}
+
+.lookat-badge .value.is-positive {
+  color: #7ef0c6;
+}
+
+.lookat-badge .value.is-negative {
+  color: #ff7b7b;
+}
+
+.lookat-badge__hint {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: rgba(168, 196, 238, 0.7);
+}
+
+.crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 48px;
+  height: 48px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  mix-blend-mode: screen;
+}
+
+.crosshair__progress {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+}
+
+.crosshair__progress-bg {
+  stroke: rgba(100, 140, 210, 0.25);
+  stroke-width: 2;
+  fill: none;
+}
+
+.crosshair__progress-ring {
+  stroke: rgba(122, 172, 255, 0.85);
+  stroke-width: 3;
+  stroke-linecap: round;
+  fill: none;
+  opacity: 0;
+  transition: opacity 120ms ease, stroke 120ms ease;
+}
+
+.crosshair[data-progress='true'] .crosshair__progress-ring {
+  opacity: 1;
+}
+
+.crosshair[data-removing='true'] .crosshair__progress-ring {
+  stroke: rgba(255, 125, 125, 0.95);
+}
+
+.crosshair__reticle {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+}
+
+.crosshair__line {
+  position: absolute;
+  background: rgba(173, 199, 255, 0.6);
+  transition: background 120ms ease;
+}
+
+.crosshair__line--horizontal {
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+.crosshair__line--vertical {
+  left: 50%;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+
+.crosshair__dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(205, 220, 255, 0.8);
+  transform: translate(-50%, -50%);
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.crosshair[data-removing='true'] .crosshair__line,
+.crosshair[data-removing='true'] .crosshair__dot {
+  background: rgba(255, 140, 140, 0.9);
+}
+
+.crosshair[data-removing='true'] .crosshair__dot {
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+#energy-debug-overlay {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 320px;
+  max-height: 70vh;
+  overflow: auto;
+  z-index: 9999;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.energy-debug {
+  background: rgba(10, 16, 28, 0.92);
+  border: 1px solid rgba(120, 180, 255, 0.45);
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: #d8efff;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.energy-debug h2 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.energy-debug h3 {
+  margin: 10px 0 6px;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(180, 210, 255, 0.85);
+}
+
+.energy-debug ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+````
+
+## File: index.html
+````html
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Starwatch — Grid Prototype</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <main id="app-root">
+      <div id="starwatch-canvas-host"></div>
+      <div id="starwatch-overlay-root"></div>
+      <section id="boot-status" hidden>
+        <p>Inicializando Starwatch…</p>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+````
+
+## File: package.json
+````json
+{
+  "name": "starwatch",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "vite",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit && vite build --emptyOutDir false"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^6.49.0",
+    "aabb-3d": "github:fenomas/aabb-3d",
+    "box-intersect": "github:fenomas/box-intersect",
+    "ent-comp": "^0.11.0",
+    "events": "^3.3.0",
+    "fast-voxel-raycast": "^0.1.1",
+    "game-inputs": "^0.8.0",
+    "gl-vec3": "^1.2.0",
+    "micro-game-shell": "^0.9.0",
+    "ndarray": "^1.0.19",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "repomix": "^1.8.0",
+    "voxel-aabb-sweep": "^0.5.0",
+    "voxel-physics-engine": "^0.13.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.26",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21"
+  }
+}
+````
+
+## File: src/core/bootstrap.ts
+````typescript
 import { Engine } from 'noa-engine';
-import { initializeWorld } from '../world';
+import { initializeSector, type SectorResources } from '../sector';
 import { initializePlayer } from '../player';
 import { ENGINE_OPTIONS } from '../config/engine-options';
+import { initializeOverlay, type OverlayApi } from '../hud/overlay';
+import { initializeHotbar, type HotbarApi } from '../player/hotbar';
+import { initializePlacementSystem } from '../systems/building/placement-system';
+import { initializeEnergySystem, type EnergySystem } from '../systems/energy';
+import { initializeUseSystem } from '../systems/interactions/use-system';
+import { initializeTerminalSystem, type TerminalSystem } from '../systems/terminals';
+import { EnergyDebugOverlay } from '../systems/energy/debug-overlay';
+import { LocalStorageAdapter } from '../persistence/local-storage-adapter';
+import { ensurePlayerId, PersistenceManager } from '../persistence/manager';
+import { DEFAULT_SECTOR_ID } from '../config/sector-options';
 
 export interface StarwatchContext {
   noa: Engine;
+  sector: SectorResources;
+  world: SectorResources; // @deprecated manter até migrarmos tooling externo
+  energy: EnergySystem;
+  terminals: TerminalSystem;
+  overlay: OverlayApi;
+  hotbar: HotbarApi;
+  debug?: {
+    energyOverlay?: EnergyDebugOverlay;
+  };
+  persistence?: PersistenceManager;
 }
 
 export function bootstrapStarwatch(): StarwatchContext {
@@ -9286,8 +14888,36 @@ export function bootstrapStarwatch(): StarwatchContext {
     showFPS: import.meta.env.DEV,
   });
 
-  initializeWorld(noa);
-  initializePlayer(noa);
+  const sector = initializeSector(noa);
+  const energy = initializeEnergySystem(noa, sector);
+
+  const hotbar = initializeHotbar();
+  const overlay = initializeOverlay(noa, { hotbarController: hotbar.controller, energy });
+  const terminals = initializeTerminalSystem({ noa, overlay, energy });
+  hotbar.attachOverlay(overlay);
+
+  initializePlayer(noa, { hotbar, overlay });
+  initializePlacementSystem({ noa, overlay, hotbar, sector, energy, terminals });
+  initializeUseSystem({ noa, overlay, sector, terminals });
+
+  const playerId = ensurePlayerId();
+  const persistence = new PersistenceManager({
+    adapter: new LocalStorageAdapter(),
+    playerId,
+    sectorId: DEFAULT_SECTOR_ID,
+    context: { noa, sector, energy, hotbar, terminals },
+    autosaveIntervalMs: 30000,
+  });
+  persistence.load();
+
+  let energyDebug: EnergyDebugOverlay | undefined;
+  if (import.meta.env.VITE_DEBUG_ENERGY === '1') {
+    energyDebug = new EnergyDebugOverlay(energy);
+    energyDebug.setVisible(true);
+    noa.on('tick', (dt: number) => {
+      energyDebug?.handleTick(dt);
+    });
+  }
 
   noa.container.setPointerLock(true);
   noa.container.on('DOMready', () => {
@@ -9297,63 +14927,23 @@ export function bootstrapStarwatch(): StarwatchContext {
 
   console.log(`[starwatch] noa-engine inicializada v${noa.version}`);
 
-  return { noa };
-}
-</file>
-
-<file path="index.html">
-<!doctype html>
-<html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Starwatch — Grid Prototype</title>
-    <link rel="stylesheet" href="/src/styles.css" />
-  </head>
-  <body>
-    <main id="app-root">
-      <div id="starwatch-canvas-host"></div>
-      <section id="boot-status" hidden>
-        <p>Inicializando Starwatch…</p>
-      </section>
-    </main>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
-</html>
-</file>
-
-<file path="package.json">
-{
-  "name": "starwatch",
-  "version": "0.2.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "start": "vite",
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "check": "tsc --noEmit && vite build --emptyOutDir false"
-  },
-  "dependencies": {
-    "@babylonjs/core": "^6.1.0",
-    "aabb-3d": "github:fenomas/aabb-3d",
-    "box-intersect": "github:fenomas/box-intersect",
-    "ent-comp": "^0.11.0",
-    "events": "^3.3.0",
-    "fast-voxel-raycast": "^0.1.1",
-    "game-inputs": "^0.8.0",
-    "gl-vec3": "^1.1.3",
-    "micro-game-shell": "^0.9.0",
-    "ndarray": "^1.0.19",
-    "voxel-aabb-sweep": "^0.5.0",
-    "voxel-physics-engine": "^0.13.0"
-  },
-  "devDependencies": {
-    "typescript": "^5.6.3",
-    "vite": "^5.4.8"
+  if (typeof window !== 'undefined') {
+    // Expor para debug manual.
+    (window as any).starwatchPersistence = persistence;
   }
-}
-</file>
 
-</files>
+  return {
+    noa,
+    sector,
+    world: sector,
+    energy,
+    terminals,
+    overlay,
+    hotbar,
+    debug: {
+      energyOverlay: energyDebug,
+    },
+    persistence,
+  };
+}
+````

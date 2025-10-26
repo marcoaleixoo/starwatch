@@ -1,0 +1,461 @@
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import type { Scene } from '@babylonjs/core/scene';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import type { VoxelPosition } from '../energy/energy-network-manager';
+import type { BlockOrientation } from '../../blocks/types';
+import { orientationToNormal, orientationToYaw } from './helpers';
+import type {
+  TerminalDisplayKind,
+  TerminalPointerEvent,
+  TerminalTab,
+} from './types';
+
+const BORDER = 32;
+const HEADER_HEIGHT = 64;
+const TAB_BAR_HEIGHT = 80;
+const FOOTER_HEIGHT = 64;
+const SCREEN_SURFACE_BIAS = 0.002;
+
+export interface BaseTerminalDisplayOptions<TData> {
+  scene: Scene;
+  position: VoxelPosition;
+  orientation: BlockOrientation;
+  kind: TerminalDisplayKind;
+  physicalWidth: number;
+  physicalHeight: number;
+  textureWidth: number;
+  textureHeight: number;
+  elevation: number;
+  mountOffset: number;
+  title: string;
+  accentColor: string;
+  dataProvider: () => TData;
+  tabs: TerminalTab[];
+}
+
+interface TabRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export abstract class BaseTerminalDisplay<TData> {
+  readonly kind: TerminalDisplayKind;
+  readonly position: VoxelPosition;
+
+  protected readonly dataProvider: () => TData;
+  protected readonly tabs: TerminalTab[];
+  protected readonly scene: Scene;
+  protected readonly orientation: BlockOrientation;
+  protected readonly textureWidth: number;
+  protected readonly textureHeight: number;
+  protected readonly accentColor: string;
+  protected readonly title: string;
+  protected readonly mesh: Mesh;
+  protected readonly texture: DynamicTexture;
+  protected readonly ctx: CanvasRenderingContext2D;
+  protected readonly contentArea: { x: number; y: number; width: number; height: number };
+  protected readonly baseCenter: Vector3;
+  protected readonly mountOffset: number;
+
+  private readonly surfaceNormal: Vector3;
+  private readonly material: StandardMaterial;
+  private readonly tabRects: TabRect[] = [];
+  private readonly decorations: Mesh[] = [];
+  private readonly allMeshes: Mesh[] = [];
+
+  private sessionActive = false;
+  private highlighted = false;
+  private hoverTabIndex: number | null = null;
+  private activeTabIndex = 0;
+
+  constructor(options: BaseTerminalDisplayOptions<TData>) {
+    this.scene = options.scene;
+    this.kind = options.kind;
+    this.position = options.position;
+    this.orientation = options.orientation;
+    this.dataProvider = options.dataProvider;
+    this.tabs = options.tabs;
+    this.textureWidth = options.textureWidth;
+    this.textureHeight = options.textureHeight;
+    this.accentColor = options.accentColor;
+    this.title = options.title;
+
+    this.baseCenter = new Vector3(
+      options.position[0] + 0.5,
+      options.position[1] + options.elevation,
+      options.position[2] + 0.5,
+    );
+    this.surfaceNormal = orientationToNormal(options.orientation);
+    this.mountOffset = options.mountOffset;
+
+    this.mesh = MeshBuilder.CreatePlane(
+      `terminal-screen-${options.position.join(':')}`,
+      {
+        width: options.physicalWidth,
+        height: options.physicalHeight,
+      },
+      this.scene,
+    );
+    this.mesh.alwaysSelectAsActiveMesh = true;
+    this.mesh.isPickable = true;
+    this.mesh.metadata = { terminalScreen: true, key: this.makeKey() };
+    this.allMeshes.push(this.mesh);
+
+    const anchor = this.getSurfacePosition(this.mountOffset + SCREEN_SURFACE_BIAS);
+    this.mesh.position = anchor;
+    this.mesh.lookAt(anchor.add(this.surfaceNormal));
+    this.mesh.rotate(Vector3.Up(), Math.PI);
+
+    this.texture = new DynamicTexture(
+      `terminal-texture-${options.position.join(':')}`,
+      { width: options.textureWidth, height: options.textureHeight },
+      this.scene,
+      false,
+    );
+    this.texture.hasAlpha = true;
+    const context = this.texture.getContext() as CanvasRenderingContext2D;
+    context.imageSmoothingEnabled = false;
+    this.ctx = context;
+
+    this.material = new StandardMaterial(`terminal-material-${options.position.join(':')}`, this.scene);
+    this.material.diffuseColor = Color3.White();
+    this.material.emissiveColor = new Color3(0.32, 0.38, 0.52);
+    this.material.specularColor = Color3.Black();
+    this.material.backFaceCulling = true;
+    this.material.disableLighting = true;
+    this.material.diffuseTexture = this.texture;
+    this.material.emissiveTexture = this.texture;
+    this.mesh.material = this.material;
+    this.mesh.renderingGroupId = 2;
+
+    this.contentArea = {
+      x: BORDER,
+      y: BORDER + HEADER_HEIGHT + TAB_BAR_HEIGHT,
+      width: this.textureWidth - BORDER * 2,
+      height: this.textureHeight - BORDER * 2 - HEADER_HEIGHT - TAB_BAR_HEIGHT - FOOTER_HEIGHT,
+    };
+
+    this.updateMaterialGlow();
+    this.refresh();
+  }
+
+  dispose(): void {
+    this.mesh.dispose(false, true);
+    this.texture.dispose();
+    for (const mesh of this.decorations) {
+      mesh.dispose(false, true);
+    }
+  }
+
+  getMesh(): Mesh {
+    return this.mesh;
+  }
+
+  protected addDecoration(mesh: Mesh): void {
+    this.decorations.push(mesh);
+    this.allMeshes.push(mesh);
+  }
+
+  getMeshes(): Mesh[] {
+    return this.allMeshes;
+  }
+
+  protected getSurfaceNormal(): Vector3 {
+    return this.surfaceNormal.clone();
+  }
+
+  protected getSurfacePosition(offset = this.mountOffset): Vector3 {
+    const displacement = this.surfaceNormal.clone().scaleInPlace(offset);
+    return this.baseCenter.add(displacement);
+  }
+
+  protected createDecorBox(
+    name: string,
+    size: { width: number; height: number; depth: number },
+    options?: {
+      distance?: number;
+      verticalOffset?: number;
+      color?: Color3;
+      emissive?: Color3;
+      renderingGroupId?: number;
+    },
+  ): Mesh {
+    const mesh = MeshBuilder.CreateBox(name, size, this.scene);
+    mesh.isPickable = false;
+    const anchor = this.getSurfacePosition(options?.distance ?? this.mountOffset - 0.04);
+    mesh.position = new Vector3(anchor.x, anchor.y + (options?.verticalOffset ?? 0), anchor.z);
+    mesh.rotation = new Vector3(0, orientationToYaw(this.orientation), 0);
+    mesh.renderingGroupId = options?.renderingGroupId ?? 2;
+
+    const material = new StandardMaterial(`${name}-mat`, this.scene);
+    const diffuse = options?.color ?? new Color3(0.07, 0.12, 0.22);
+    const emissive = options?.emissive ?? diffuse.scale(0.6);
+    material.diffuseColor = diffuse;
+    material.emissiveColor = emissive;
+    material.disableLighting = true;
+    mesh.material = material;
+
+    this.addDecoration(mesh);
+    return mesh;
+  }
+
+  refresh(): void {
+    const data = this.dataProvider();
+    this.drawBase();
+    this.drawHeader();
+    this.drawTabs();
+    this.drawContent(this.tabs[this.activeTabIndex]?.id ?? null, data);
+    this.drawFooter();
+    this.texture.update();
+  }
+
+  setSessionActive(active: boolean): void {
+    if (this.sessionActive === active) {
+      return;
+    }
+    this.sessionActive = active;
+    if (active) {
+      this.highlighted = true;
+    } else {
+      if (this.hoverTabIndex !== null) {
+        this.hoverTabIndex = null;
+      }
+    }
+    this.updateMaterialGlow();
+    this.refresh();
+  }
+
+  setHighlighted(highlighted: boolean): void {
+    if (this.highlighted === highlighted) {
+      return;
+    }
+    this.highlighted = highlighted;
+    if (!this.sessionActive) {
+      this.updateMaterialGlow();
+    }
+    this.refresh();
+  }
+
+  setHoverByUV(uv: { u: number; v: number } | null): void {
+    const next = uv ? this.tabIndexFromUV(uv) : null;
+    if (this.hoverTabIndex === next) {
+      return;
+    }
+    this.hoverTabIndex = next;
+    this.refresh();
+  }
+
+  handleKeyDown(event: KeyboardEvent): boolean {
+    return this.onKeyDown(event);
+  }
+
+  handlePointer(event: TerminalPointerEvent): boolean {
+    this.setHoverByUV(event.uv);
+    const tabIndex = this.tabIndexFromUV(event.uv);
+    if (tabIndex !== null) {
+      this.setActiveTab(tabIndex);
+      return true;
+    }
+    return this.onPointer(event);
+  }
+
+  protected onPointer(_event: TerminalPointerEvent): boolean {
+    return false;
+  }
+
+  protected onKeyDown(_event: KeyboardEvent): boolean {
+    return false;
+  }
+
+  protected abstract drawContent(activeTabId: string | null, data: TData): void;
+
+  protected setActiveTab(index: number): void {
+    if (index < 0 || index >= this.tabs.length) {
+      return;
+    }
+    if (this.activeTabIndex === index) {
+      return;
+    }
+    this.activeTabIndex = index;
+    this.refresh();
+  }
+
+  private makeKey(): string {
+    return `${this.kind}:${this.position.join(':')}`;
+  }
+
+  private shiftTab(delta: number): void {
+    if (this.tabs.length === 0) {
+      return;
+    }
+    const next = (this.activeTabIndex + delta + this.tabs.length) % this.tabs.length;
+    this.setActiveTab(next);
+  }
+
+  private drawBase(): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.clearRect(0, 0, this.textureWidth, this.textureHeight);
+    ctx.fillStyle = '#050f2a';
+    ctx.fillRect(0, 0, this.textureWidth, this.textureHeight);
+
+    const innerX = BORDER;
+    const innerY = BORDER;
+    const innerW = this.textureWidth - BORDER * 2;
+    const innerH = this.textureHeight - BORDER * 2;
+
+    const gradient = ctx.createLinearGradient(innerX, innerY, innerX, innerY + innerH);
+    if (this.sessionActive) {
+      gradient.addColorStop(0, 'rgba(55, 140, 255, 0.32)');
+      gradient.addColorStop(1, 'rgba(14, 38, 88, 0.92)');
+    } else if (this.highlighted) {
+      gradient.addColorStop(0, 'rgba(40, 110, 230, 0.24)');
+      gradient.addColorStop(1, 'rgba(12, 30, 64, 0.9)');
+    } else {
+      gradient.addColorStop(0, 'rgba(26, 62, 150, 0.16)');
+      gradient.addColorStop(1, 'rgba(10, 24, 54, 0.9)');
+    }
+    ctx.fillStyle = gradient;
+    ctx.fillRect(innerX, innerY, innerW, innerH);
+
+    if (this.sessionActive) {
+      ctx.strokeStyle = 'rgba(155, 215, 255, 0.95)';
+    } else if (this.highlighted) {
+      ctx.strokeStyle = 'rgba(120, 185, 250, 0.85)';
+    } else {
+      ctx.strokeStyle = 'rgba(80, 125, 200, 0.7)';
+    }
+    ctx.lineWidth = 6;
+    ctx.strokeRect(innerX, innerY, innerW, innerH);
+
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = '#5a7bcf';
+    for (let y = innerY; y < innerY + innerH; y += 4) {
+      ctx.fillRect(innerX, y, innerW, 1);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  private tabIndexFromUV(uv: { u: number; v: number }): number | null {
+    if (this.tabRects.length === 0) {
+      return null;
+    }
+    const x = uv.u * this.textureWidth;
+    const y = (1 - uv.v) * this.textureHeight;
+    for (let i = 0; i < this.tabRects.length; i += 1) {
+      const rect = this.tabRects[i];
+      if (x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height) {
+        return i;
+      }
+    }
+    return null;
+  }
+
+  private drawHeader(): void {
+    const ctx = this.ctx;
+    const headerY = BORDER + 42;
+    ctx.save();
+    ctx.font = '32px monospace';
+    ctx.fillStyle = 'rgba(185, 216, 255, 0.9)';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(this.title.toUpperCase(), BORDER + 8, headerY);
+    ctx.font = '20px monospace';
+    ctx.textAlign = 'right';
+    if (this.sessionActive) {
+      ctx.fillStyle = 'rgba(144, 220, 255, 0.9)';
+      ctx.fillText('SESSION ONLINE', this.textureWidth - BORDER - 8, headerY);
+    } else if (this.highlighted) {
+      ctx.fillStyle = 'rgba(136, 200, 255, 0.85)';
+      ctx.fillText('PRESSIONE [E] PARA ACESSAR', this.textureWidth - BORDER - 8, headerY);
+    } else {
+      ctx.fillStyle = 'rgba(120, 160, 220, 0.7)';
+      ctx.fillText('STANDBY', this.textureWidth - BORDER - 8, headerY);
+    }
+    ctx.restore();
+  }
+
+  private drawTabs(): void {
+    const ctx = this.ctx;
+    const tabCount = this.tabs.length;
+    const originX = BORDER + 8;
+    const top = BORDER + HEADER_HEIGHT + 12;
+    const height = TAB_BAR_HEIGHT - 24;
+    const spacing = 14;
+    const available = this.textureWidth - BORDER * 2 - 16;
+    const tabWidth = tabCount > 0 ? (available - (tabCount - 1) * spacing) / tabCount : available;
+
+    this.tabRects.length = 0;
+
+    ctx.save();
+    ctx.textBaseline = 'middle';
+    ctx.font = '24px monospace';
+
+    for (let i = 0; i < tabCount; i += 1) {
+      const tab = this.tabs[i];
+      const x = originX + i * (tabWidth + spacing);
+      const isActive = i === this.activeTabIndex;
+      const isHover = i === this.hoverTabIndex;
+      const idleColor = this.highlighted ? 'rgba(45, 90, 170, 0.6)' : 'rgba(40, 70, 110, 0.55)';
+      const hoverColor = this.highlighted ? 'rgba(70, 130, 230, 0.7)' : 'rgba(70, 120, 220, 0.6)';
+      const baseColor = isActive
+        ? this.accentColor
+        : isHover
+          ? hoverColor
+          : idleColor;
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(x, top, tabWidth, height);
+
+      ctx.strokeStyle = isActive ? 'rgba(180, 230, 255, 0.8)' : 'rgba(80, 120, 190, 0.6)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, top, tabWidth, height);
+
+      ctx.fillStyle = isActive ? '#06112a' : 'rgba(200, 220, 255, 0.82)';
+      ctx.textAlign = 'center';
+      ctx.fillText(tab.label.toUpperCase(), x + tabWidth / 2, top + height / 2);
+
+      this.tabRects.push({ x, y: top, width: tabWidth, height });
+    }
+    ctx.restore();
+  }
+
+  private drawFooter(): void {
+    const ctx = this.ctx;
+    const baseY = this.textureHeight - BORDER - FOOTER_HEIGHT / 2;
+    ctx.save();
+    ctx.font = '20px monospace';
+    ctx.fillStyle = this.sessionActive ? 'rgba(140, 205, 255, 0.85)' : 'rgba(130, 170, 240, 0.75)';
+    ctx.textBaseline = 'middle';
+    if (this.sessionActive) {
+      ctx.textAlign = 'left';
+      ctx.fillText('[ESC] FECHAR', BORDER + 8, baseY);
+      ctx.textAlign = 'center';
+      ctx.fillText('CLIQUE NAS ABAS PARA MUDAR', this.textureWidth / 2, baseY);
+      ctx.textAlign = 'right';
+      ctx.fillText('CLIQUE NOS PAINÉIS PARA INTERAGIR', this.textureWidth - BORDER - 8, baseY);
+    } else if (this.highlighted) {
+      ctx.textAlign = 'center';
+      ctx.fillText('PRESSIONE [E] PARA ACESSAR', this.textureWidth / 2, baseY);
+    } else {
+      ctx.textAlign = 'center';
+      ctx.fillText('APROXIME-SE PARA ACESSAR', this.textureWidth / 2, baseY);
+    }
+    ctx.restore();
+  }
+
+  private updateMaterialGlow(): void {
+    if (this.sessionActive) {
+      this.material.emissiveColor.set(0.55, 0.7, 1);
+    } else if (this.highlighted) {
+      this.material.emissiveColor.set(0.4, 0.55, 0.85);
+    } else {
+      this.material.emissiveColor.set(0.26, 0.32, 0.48);
+    }
+  }
+}

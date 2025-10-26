@@ -2,12 +2,8 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { OverlayContext } from './overlay-context';
 import type { OverlayController, OverlayState } from './overlay-controller';
 import type { HotbarController } from '../../player/hotbar-controller';
-import { DummyPanel } from './panels/dummy-panel';
 import { HotbarHud } from '../components/hotbar-hud';
 import type { EnergySystem } from '../../systems/energy';
-import { TerminalPanel } from './panels/terminal-panel';
-import type { LookAtTracker } from '../look-at-tracker';
-import { LookAtBadge } from '../components/look-at-badge';
 import type { RemovalHoldTracker } from '../removal-hold-tracker';
 import { Crosshair } from '../components/crosshair';
 
@@ -15,7 +11,6 @@ interface OverlayAppProps {
   controller: OverlayController;
   hotbarController: HotbarController;
   energy: EnergySystem;
-  lookAt: LookAtTracker;
   removalHold: RemovalHoldTracker;
 }
 
@@ -26,28 +21,7 @@ function useOverlayState(controller: OverlayController): OverlayState {
   );
 }
 
-function renderModal(state: OverlayState, energy: EnergySystem): JSX.Element | null {
-  if (!state.modal) {
-    return null;
-  }
-
-  switch (state.modal.id) {
-    case 'dummy':
-      return <DummyPanel />;
-    case 'terminal':
-      return <TerminalPanel energy={energy} position={state.modal.position} />;
-    default:
-      return null;
-  }
-}
-
-export function OverlayApp({
-  controller,
-  hotbarController,
-  energy,
-  lookAt,
-  removalHold,
-}: OverlayAppProps): JSX.Element {
+export function OverlayApp({ controller, hotbarController, energy, removalHold }: OverlayAppProps): JSX.Element {
   const state = useOverlayState(controller);
   const focusRef = useRef<HTMLDivElement>(null);
 
@@ -68,10 +42,9 @@ export function OverlayApp({
       controller,
       state,
       energy,
-      lookAt,
       removal: removalHold,
     }),
-    [controller, state, energy, lookAt, removalHold],
+    [controller, state, energy, removalHold],
   );
 
   return (
@@ -81,14 +54,11 @@ export function OverlayApp({
         className="overlay-root"
         tabIndex={-1}
         data-capture={state.captureInput ? 'true' : 'false'}
+        data-pointer-pass={state.pointerPassthrough ? 'true' : 'false'}
       >
         <div className="overlay-hud-layer" data-visible="true">
           <Crosshair />
           <HotbarHud controller={hotbarController} />
-          <LookAtBadge lookAt={lookAt} energy={energy} />
-        </div>
-        <div className="overlay-modal-layer" data-visible={state.modal ? 'true' : 'false'}>
-          {renderModal(state, energy)}
         </div>
       </div>
     </OverlayContext.Provider>

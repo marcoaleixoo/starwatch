@@ -9,6 +9,7 @@ import type { SectorResources } from '../../sector';
 import type { BlockCatalog, BlockDefinition, BlockKind, BlockOrientation } from '../../blocks/types';
 import { blockMetadataStore } from '../../blocks/metadata-store';
 import type { EnergySystem } from '../energy';
+import type { TerminalSystem } from '../terminals';
 
 const ORIENTATIONS: BlockOrientation[] = ['north', 'east', 'south', 'west'];
 const REMOVE_HOLD_DURATION_MS = 1000;
@@ -19,6 +20,7 @@ interface PlacementSystemDependencies {
   hotbar: HotbarApi;
   sector: SectorResources;
   energy: EnergySystem;
+  terminals: TerminalSystem;
 }
 
 interface NoaTargetBlock {
@@ -124,7 +126,7 @@ function setGhostTransform(mesh: Mesh, target: PlacementTarget, orientation: Blo
   mesh.rotation.y = orientationToRadians(orientation);
 }
 
-export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy }: PlacementSystemDependencies): void {
+export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy, terminals }: PlacementSystemDependencies): void {
   const ghost = createGhostResources(noa);
   let activeGhost: Mesh | null = null;
   let currentDefinition: BlockDefinition | null = null;
@@ -182,6 +184,7 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
     } else if (definition.kind === 'starwatch:hal-terminal') {
       energy.registerTerminal([x, y, z]);
     }
+    terminals.registerBlock(definition.kind, [x, y, z]);
   };
 
   const removeBlock = (target: PlacementTarget) => {
@@ -201,6 +204,9 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
         energy.unregisterBattery([x, y, z]);
       } else if (def?.kind === 'starwatch:hal-terminal') {
         energy.unregisterTerminal([x, y, z]);
+      }
+      if (def) {
+        terminals.unregisterBlock(def.kind, [x, y, z]);
       }
     }
   };

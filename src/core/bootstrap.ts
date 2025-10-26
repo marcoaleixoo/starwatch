@@ -7,6 +7,7 @@ import { initializeHotbar, type HotbarApi } from '../player/hotbar';
 import { initializePlacementSystem } from '../systems/building/placement-system';
 import { initializeEnergySystem, type EnergySystem } from '../systems/energy';
 import { initializeUseSystem } from '../systems/interactions/use-system';
+import { initializeTerminalSystem, type TerminalSystem } from '../systems/terminals';
 import { EnergyDebugOverlay } from '../systems/energy/debug-overlay';
 import { LocalStorageAdapter } from '../persistence/local-storage-adapter';
 import { ensurePlayerId, PersistenceManager } from '../persistence/manager';
@@ -17,6 +18,7 @@ export interface StarwatchContext {
   sector: SectorResources;
   world: SectorResources; // @deprecated manter até migrarmos tooling externo
   energy: EnergySystem;
+  terminals: TerminalSystem;
   overlay: OverlayApi;
   hotbar: HotbarApi;
   debug?: {
@@ -42,19 +44,20 @@ export function bootstrapStarwatch(): StarwatchContext {
   const energy = initializeEnergySystem(noa, sector);
 
   const hotbar = initializeHotbar();
-  const overlay = initializeOverlay(noa, { hotbarController: hotbar.controller, sector, energy });
+  const overlay = initializeOverlay(noa, { hotbarController: hotbar.controller, energy });
+  const terminals = initializeTerminalSystem({ noa, overlay, energy });
   hotbar.attachOverlay(overlay);
 
   initializePlayer(noa, { hotbar, overlay });
-  initializePlacementSystem({ noa, overlay, hotbar, sector, energy });
-  initializeUseSystem({ noa, overlay, sector });
+  initializePlacementSystem({ noa, overlay, hotbar, sector, energy, terminals });
+  initializeUseSystem({ noa, overlay, sector, terminals });
 
   const playerId = ensurePlayerId();
   const persistence = new PersistenceManager({
     adapter: new LocalStorageAdapter(),
     playerId,
     sectorId: DEFAULT_SECTOR_ID,
-    context: { noa, sector, energy, hotbar },
+    context: { noa, sector, energy, hotbar, terminals },
     autosaveIntervalMs: 30000,
   });
   persistence.load();
@@ -86,6 +89,7 @@ export function bootstrapStarwatch(): StarwatchContext {
     sector,
     world: sector,
     energy,
+    terminals,
     overlay,
     hotbar,
     debug: {

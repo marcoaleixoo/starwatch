@@ -1,14 +1,12 @@
 import { createContext, useContext } from 'react';
 import type { OverlayController, OverlayState } from './overlay-controller';
 import type { EnergySystem } from '../../systems/energy';
-import type { LookAtTracker } from '../look-at-tracker';
 import type { RemovalHoldTracker } from '../removal-hold-tracker';
 
 export interface OverlayContextValue {
   controller: OverlayController;
   state: OverlayState;
   energy: EnergySystem;
-  lookAt: LookAtTracker;
   removal: RemovalHoldTracker;
 }
 
