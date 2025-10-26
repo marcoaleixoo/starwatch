@@ -70,6 +70,7 @@ export abstract class BaseTerminalDisplay<TData> {
   private readonly allMeshes: Mesh[] = [];
 
   private sessionActive = false;
+  private highlighted = false;
   private hoverTabIndex: number | null = null;
   private activeTabIndex = 0;
 
@@ -124,7 +125,7 @@ export abstract class BaseTerminalDisplay<TData> {
 
     this.material = new StandardMaterial(`terminal-material-${options.position.join(':')}`, this.scene);
     this.material.diffuseColor = Color3.White();
-    this.material.emissiveColor = new Color3(0.85, 0.9, 1);
+    this.material.emissiveColor = new Color3(0.32, 0.38, 0.52);
     this.material.specularColor = Color3.Black();
     this.material.backFaceCulling = true;
     this.material.disableLighting = true;
@@ -140,6 +141,7 @@ export abstract class BaseTerminalDisplay<TData> {
       height: this.textureHeight - BORDER * 2 - HEADER_HEIGHT - TAB_BAR_HEIGHT - FOOTER_HEIGHT,
     };
 
+    this.updateMaterialGlow();
     this.refresh();
   }
 
@@ -218,23 +220,44 @@ export abstract class BaseTerminalDisplay<TData> {
       return;
     }
     this.sessionActive = active;
+    if (active) {
+      this.highlighted = true;
+    } else {
+      if (this.hoverTabIndex !== null) {
+        this.hoverTabIndex = null;
+      }
+    }
+    this.updateMaterialGlow();
+    this.refresh();
+  }
+
+  setHighlighted(highlighted: boolean): void {
+    if (this.highlighted === highlighted) {
+      return;
+    }
+    this.highlighted = highlighted;
+    if (!this.sessionActive) {
+      this.updateMaterialGlow();
+    }
+    this.refresh();
+  }
+
+  setHoverByUV(uv: { u: number; v: number } | null): void {
+    const next = uv ? this.tabIndexFromUV(uv) : null;
+    if (this.hoverTabIndex === next) {
+      return;
+    }
+    this.hoverTabIndex = next;
     this.refresh();
   }
 
   handleKeyDown(event: KeyboardEvent): boolean {
-    if (event.key === 'ArrowRight') {
-      this.shiftTab(1);
-      return true;
-    }
-    if (event.key === 'ArrowLeft') {
-      this.shiftTab(-1);
-      return true;
-    }
     return this.onKeyDown(event);
   }
 
   handlePointer(event: TerminalPointerEvent): boolean {
-    const tabIndex = this.pickTab(event);
+    this.setHoverByUV(event.uv);
+    const tabIndex = this.tabIndexFromUV(event.uv);
     if (tabIndex !== null) {
       this.setActiveTab(tabIndex);
       return true;
@@ -275,23 +298,6 @@ export abstract class BaseTerminalDisplay<TData> {
     this.setActiveTab(next);
   }
 
-  private pickTab(event: TerminalPointerEvent): number | null {
-    if (this.tabRects.length === 0) {
-      return null;
-    }
-    const x = event.uv.u * this.textureWidth;
-    const y = (1 - event.uv.v) * this.textureHeight;
-    for (let i = 0; i < this.tabRects.length; i += 1) {
-      const rect = this.tabRects[i];
-      if (x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height) {
-        this.hoverTabIndex = i;
-        return i;
-      }
-    }
-    this.hoverTabIndex = null;
-    return null;
-  }
-
   private drawBase(): void {
     const ctx = this.ctx;
     ctx.save();
@@ -305,12 +311,26 @@ export abstract class BaseTerminalDisplay<TData> {
     const innerH = this.textureHeight - BORDER * 2;
 
     const gradient = ctx.createLinearGradient(innerX, innerY, innerX, innerY + innerH);
-    gradient.addColorStop(0, this.sessionActive ? 'rgba(40, 110, 230, 0.25)' : 'rgba(30, 80, 180, 0.18)');
-    gradient.addColorStop(1, 'rgba(12, 30, 64, 0.9)');
+    if (this.sessionActive) {
+      gradient.addColorStop(0, 'rgba(55, 140, 255, 0.32)');
+      gradient.addColorStop(1, 'rgba(14, 38, 88, 0.92)');
+    } else if (this.highlighted) {
+      gradient.addColorStop(0, 'rgba(40, 110, 230, 0.24)');
+      gradient.addColorStop(1, 'rgba(12, 30, 64, 0.9)');
+    } else {
+      gradient.addColorStop(0, 'rgba(26, 62, 150, 0.16)');
+      gradient.addColorStop(1, 'rgba(10, 24, 54, 0.9)');
+    }
     ctx.fillStyle = gradient;
     ctx.fillRect(innerX, innerY, innerW, innerH);
 
-    ctx.strokeStyle = this.sessionActive ? 'rgba(140, 200, 255, 0.95)' : 'rgba(90, 140, 220, 0.75)';
+    if (this.sessionActive) {
+      ctx.strokeStyle = 'rgba(155, 215, 255, 0.95)';
+    } else if (this.highlighted) {
+      ctx.strokeStyle = 'rgba(120, 185, 250, 0.85)';
+    } else {
+      ctx.strokeStyle = 'rgba(80, 125, 200, 0.7)';
+    }
     ctx.lineWidth = 6;
     ctx.strokeRect(innerX, innerY, innerW, innerH);
 
@@ -323,6 +343,21 @@ export abstract class BaseTerminalDisplay<TData> {
     ctx.restore();
   }
 
+  private tabIndexFromUV(uv: { u: number; v: number }): number | null {
+    if (this.tabRects.length === 0) {
+      return null;
+    }
+    const x = uv.u * this.textureWidth;
+    const y = (1 - uv.v) * this.textureHeight;
+    for (let i = 0; i < this.tabRects.length; i += 1) {
+      const rect = this.tabRects[i];
+      if (x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height) {
+        return i;
+      }
+    }
+    return null;
+  }
+
   private drawHeader(): void {
     const ctx = this.ctx;
     const headerY = BORDER + 42;
@@ -333,8 +368,16 @@ export abstract class BaseTerminalDisplay<TData> {
     ctx.fillText(this.title.toUpperCase(), BORDER + 8, headerY);
     ctx.font = '20px monospace';
     ctx.textAlign = 'right';
-    ctx.fillStyle = this.sessionActive ? 'rgba(144, 220, 255, 0.9)' : 'rgba(120, 160, 220, 0.7)';
-    ctx.fillText(this.sessionActive ? 'SESSION ONLINE' : 'STANDBY', this.textureWidth - BORDER - 8, headerY);
+    if (this.sessionActive) {
+      ctx.fillStyle = 'rgba(144, 220, 255, 0.9)';
+      ctx.fillText('SESSION ONLINE', this.textureWidth - BORDER - 8, headerY);
+    } else if (this.highlighted) {
+      ctx.fillStyle = 'rgba(136, 200, 255, 0.85)';
+      ctx.fillText('PRESSIONE [E] PARA ACESSAR', this.textureWidth - BORDER - 8, headerY);
+    } else {
+      ctx.fillStyle = 'rgba(120, 160, 220, 0.7)';
+      ctx.fillText('STANDBY', this.textureWidth - BORDER - 8, headerY);
+    }
     ctx.restore();
   }
 
@@ -359,11 +402,13 @@ export abstract class BaseTerminalDisplay<TData> {
       const x = originX + i * (tabWidth + spacing);
       const isActive = i === this.activeTabIndex;
       const isHover = i === this.hoverTabIndex;
+      const idleColor = this.highlighted ? 'rgba(45, 90, 170, 0.6)' : 'rgba(40, 70, 110, 0.55)';
+      const hoverColor = this.highlighted ? 'rgba(70, 130, 230, 0.7)' : 'rgba(70, 120, 220, 0.6)';
       const baseColor = isActive
         ? this.accentColor
         : isHover
-          ? 'rgba(70, 120, 220, 0.6)'
-          : 'rgba(40, 70, 110, 0.55)';
+          ? hoverColor
+          : idleColor;
       ctx.fillStyle = baseColor;
       ctx.fillRect(x, top, tabWidth, height);
 
@@ -385,13 +430,32 @@ export abstract class BaseTerminalDisplay<TData> {
     const baseY = this.textureHeight - BORDER - FOOTER_HEIGHT / 2;
     ctx.save();
     ctx.font = '20px monospace';
-    ctx.fillStyle = 'rgba(130, 170, 240, 0.75)';
+    ctx.fillStyle = this.sessionActive ? 'rgba(140, 205, 255, 0.85)' : 'rgba(130, 170, 240, 0.75)';
     ctx.textBaseline = 'middle';
-    ctx.fillText('[ESC] SAIR', BORDER + 8, baseY);
-    ctx.textAlign = 'center';
-    ctx.fillText('← → TABS', this.textureWidth / 2, baseY);
-    ctx.textAlign = 'right';
-    ctx.fillText('CLIQUE PARA SELECIONAR', this.textureWidth - BORDER - 8, baseY);
+    if (this.sessionActive) {
+      ctx.textAlign = 'left';
+      ctx.fillText('[ESC] FECHAR', BORDER + 8, baseY);
+      ctx.textAlign = 'center';
+      ctx.fillText('CLIQUE NAS ABAS PARA MUDAR', this.textureWidth / 2, baseY);
+      ctx.textAlign = 'right';
+      ctx.fillText('CLIQUE NOS PAINÉIS PARA INTERAGIR', this.textureWidth - BORDER - 8, baseY);
+    } else if (this.highlighted) {
+      ctx.textAlign = 'center';
+      ctx.fillText('PRESSIONE [E] PARA ACESSAR', this.textureWidth / 2, baseY);
+    } else {
+      ctx.textAlign = 'center';
+      ctx.fillText('APROXIME-SE PARA ACESSAR', this.textureWidth / 2, baseY);
+    }
     ctx.restore();
+  }
+
+  private updateMaterialGlow(): void {
+    if (this.sessionActive) {
+      this.material.emissiveColor.set(0.55, 0.7, 1);
+    } else if (this.highlighted) {
+      this.material.emissiveColor.set(0.4, 0.55, 0.85);
+    } else {
+      this.material.emissiveColor.set(0.26, 0.32, 0.48);
+    }
   }
 }

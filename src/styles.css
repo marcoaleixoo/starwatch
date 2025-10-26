@@ -48,8 +48,12 @@ canvas {
   font-family: 'Inter', system-ui, sans-serif;
 }
 
-.overlay-root[data-capture='true'] {
+.overlay-root[data-capture='true'][data-pointer-pass='false'] {
   pointer-events: auto;
+}
+
+.overlay-root[data-pointer-pass='true'] {
+  pointer-events: none;
 }
 
 .overlay-hud-layer {

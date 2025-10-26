@@ -9,7 +9,10 @@ export interface TerminalSystem {
   registerBlock(kind: BlockKind, position: VoxelPosition): void;
   unregisterBlock(kind: BlockKind, position: VoxelPosition): void;
   openTerminal(kind: BlockKind, position: VoxelPosition): boolean;
+  closeActiveTerminal(): void;
+  getActiveTerminal(): { kind: BlockKind; position: VoxelPosition } | null;
   isCapturingInput(): boolean;
+  setHighlightedTerminal(target: { kind: BlockKind; position: VoxelPosition } | null): void;
   destroy(): void;
 }
 
@@ -46,8 +49,17 @@ export function initializeTerminalSystem(options: TerminalSystemOptions): Termin
     openTerminal(kind, position) {
       return manager.tryOpenTerminal(position, kind);
     },
+    closeActiveTerminal() {
+      manager.closeActiveTerminal();
+    },
+    getActiveTerminal() {
+      return manager.getActiveTerminal();
+    },
     isCapturingInput() {
       return manager.isCapturingInput();
+    },
+    setHighlightedTerminal(target) {
+      manager.setHighlightedTerminal(target);
     },
     destroy() {
       manager.destroy();

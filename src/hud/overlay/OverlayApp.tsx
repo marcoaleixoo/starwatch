@@ -54,6 +54,7 @@ export function OverlayApp({ controller, hotbarController, energy, removalHold }
         className="overlay-root"
         tabIndex={-1}
         data-capture={state.captureInput ? 'true' : 'false'}
+        data-pointer-pass={state.pointerPassthrough ? 'true' : 'false'}
       >
         <div className="overlay-hud-layer" data-visible="true">
           <Crosshair />

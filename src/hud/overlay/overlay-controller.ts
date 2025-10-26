@@ -1,5 +1,6 @@
 export interface OverlayState {
   captureInput: boolean;
+  pointerPassthrough: boolean;
 }
 
 type Listener = () => void;
@@ -7,6 +8,7 @@ type Listener = () => void;
 export class OverlayController {
   private state: OverlayState = {
     captureInput: false,
+    pointerPassthrough: false,
   };
 
   private listeners = new Set<Listener>();
@@ -29,6 +31,7 @@ export class OverlayController {
     }
     this.setState({
       captureInput: capture,
+      pointerPassthrough: this.state.pointerPassthrough,
     });
   }
 
@@ -37,15 +40,27 @@ export class OverlayController {
     handler(this.state.captureInput);
   }
 
+  setPointerPassthrough(pointerPassthrough: boolean): void {
+    if (this.state.pointerPassthrough === pointerPassthrough) {
+      return;
+    }
+    this.setState({
+      captureInput: this.state.captureInput,
+      pointerPassthrough,
+    });
+  }
+
   reset(): void {
     this.setState({
       captureInput: false,
+      pointerPassthrough: false,
     });
     this.listeners.clear();
   }
 
   private setState(nextState: OverlayState): void {
     const changedCapture = this.state.captureInput !== nextState.captureInput;
+    const changedPointer = this.state.pointerPassthrough !== nextState.pointerPassthrough;
 
     this.state = nextState;
 
@@ -53,7 +68,7 @@ export class OverlayController {
       this.onCaptureChange(this.state.captureInput);
     }
 
-    if (changedCapture) {
+    if (changedCapture || changedPointer) {
       this.emit();
     }
   }

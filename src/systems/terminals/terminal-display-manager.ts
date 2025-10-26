@@ -35,6 +35,12 @@ interface TerminalManagerOptions {
   overlay: OverlayApi;
 }
 
+interface DisplayEntry {
+  display: TerminalInstance;
+  blockKind: BlockKind;
+  position: VoxelPosition;
+}
+
 const BLOCK_KIND_TO_DISPLAY: Record<BlockKind, TerminalDisplayKind | null> = {
   'starwatch:deck': null,
   'starwatch:solar-panel': 'solar-panel',
@@ -51,14 +57,17 @@ export class TerminalDisplayManager {
   private readonly scene: Scene;
   private readonly energy: EnergySystem;
   private readonly overlay: OverlayApi;
-  private readonly displays = new Map<string, TerminalInstance>();
+  private readonly displays = new Map<string, DisplayEntry>();
 
   private disposeEnergyListener: (() => void) | null = null;
   private activeKey: string | null = null;
+  private activeContext: { blockKind: BlockKind; position: VoxelPosition } | null = null;
+  private highlightedKey: string | null = null;
 
   private readonly handlePointerDown = (event: PointerEvent) => this.onPointerDown(event);
-  private readonly handlePointerMove = (event: PointerEvent) => this.onPointerMove(event);
   private readonly handleKeyDown = (event: KeyboardEvent) => this.onKeyDown(event);
+  private readonly handleAimUpdate = () => this.updateAimHover();
+  private readonly handleFireDown = (event: MouseEvent) => this.onFireDown(event);
 
   constructor(options: TerminalManagerOptions) {
     this.noa = options.noa;
@@ -69,14 +78,24 @@ export class TerminalDisplayManager {
     this.disposeEnergyListener = this.energy.subscribe(() => {
       this.refreshAll();
     });
+    this.noa.on('beforeRender', this.handleAimUpdate);
+    if (this.noa.inputs?.down && typeof this.noa.inputs.down.on === 'function') {
+      this.noa.inputs.down.on('fire', this.handleFireDown);
+    }
   }
 
   destroy(): void {
     this.disposeEnergyListener?.();
     this.disposeEnergyListener = null;
+    this.noa.off('beforeRender', this.handleAimUpdate);
+    if (this.noa.inputs?.down && typeof this.noa.inputs.down.off === 'function') {
+      this.noa.inputs.down.off('fire', this.handleFireDown);
+    }
     this.endSession();
-    for (const display of this.displays.values()) {
-      display.dispose();
+    this.overlay.controller.setPointerPassthrough(false);
+    this.setHighlightKey(null);
+    for (const entry of this.displays.values()) {
+      entry.display.dispose();
     }
     this.displays.clear();
   }
@@ -104,7 +123,14 @@ export class TerminalDisplayManager {
         rendering.addMeshToScene(mesh, false);
       }
     }
-    this.displays.set(key, display);
+    this.displays.set(key, {
+      display,
+      blockKind: kind,
+      position: [position[0], position[1], position[2]] as VoxelPosition,
+    });
+    if (this.highlightedKey === key) {
+      display.setHighlighted(true);
+    }
   }
 
   unregisterBlock(kind: BlockKind, position: VoxelPosition): void {
@@ -116,17 +142,20 @@ export class TerminalDisplayManager {
     if (this.activeKey === key) {
       this.endSession();
     }
-    const display = this.displays.get(key);
-    if (!display) {
+    const entry = this.displays.get(key);
+    if (!entry) {
       return;
     }
-    display.dispose();
+    entry.display.dispose();
     this.displays.delete(key);
+    if (this.highlightedKey === key) {
+      this.highlightedKey = null;
+    }
   }
 
   refreshAll(): void {
-    for (const display of this.displays.values()) {
-      display.refresh();
+    for (const entry of this.displays.values()) {
+      entry.display.refresh();
     }
   }
 
@@ -136,11 +165,12 @@ export class TerminalDisplayManager {
       return false;
     }
     const key = makePositionKey(position, displayKind);
-    const display = this.displays.get(key);
-    if (!display) {
+    const entry = this.displays.get(key);
+    if (!entry) {
       return false;
     }
-    this.beginSession(key, display);
+    this.setHighlightKey(key);
+    this.beginSession(key, entry);
     return true;
   }
 
@@ -148,17 +178,72 @@ export class TerminalDisplayManager {
     return this.activeKey !== null;
   }
 
-  private beginSession(key: string, display: TerminalInstance): void {
+  closeActiveTerminal(): void {
+    this.endSession();
+  }
+
+  setHighlightedTerminal(target: { kind: BlockKind; position: VoxelPosition } | null): void {
+    if (!target) {
+      this.setHighlightKey(null);
+      return;
+    }
+    const displayKind = BLOCK_KIND_TO_DISPLAY[target.kind];
+    if (!displayKind) {
+      this.setHighlightKey(null);
+      return;
+    }
+    const key = makePositionKey(target.position, displayKind);
+    this.setHighlightKey(key);
+  }
+
+  getActiveTerminal(): { kind: BlockKind; position: VoxelPosition } | null {
+    if (!this.activeContext) {
+      return null;
+    }
+    return {
+      kind: this.activeContext.blockKind,
+      position: [
+        this.activeContext.position[0],
+        this.activeContext.position[1],
+        this.activeContext.position[2],
+      ] as VoxelPosition,
+    };
+  }
+
+  private beginSession(key: string, entry: DisplayEntry): void {
     if (this.activeKey === key) {
+      entry.display.setSessionActive(true);
+      this.overlay.controller.setCapture(true);
+      this.overlay.controller.setPointerPassthrough(true);
+      this.activeContext = {
+        blockKind: entry.blockKind,
+        position: [
+          entry.position[0],
+          entry.position[1],
+          entry.position[2],
+        ] as VoxelPosition,
+      };
+      this.setHighlightKey(key);
+      entry.display.setHoverByUV(this.pickCrosshairUV(entry.display));
       return;
     }
     this.endSession();
     this.activeKey = key;
-    display.setSessionActive(true);
+    entry.display.setSessionActive(true);
     this.overlay.controller.setCapture(true);
+    this.overlay.controller.setPointerPassthrough(true);
+    this.activeContext = {
+      blockKind: entry.blockKind,
+      position: [
+        entry.position[0],
+        entry.position[1],
+        entry.position[2],
+      ] as VoxelPosition,
+    };
+    this.setHighlightKey(key);
+    entry.display.setHoverByUV(this.pickCrosshairUV(entry.display));
     const canvas = this.noa.container.canvas;
     canvas.addEventListener('pointerdown', this.handlePointerDown, true);
-    canvas.addEventListener('pointermove', this.handlePointerMove, true);
     window.addEventListener('keydown', this.handleKeyDown, true);
   }
 
@@ -168,15 +253,17 @@ export class TerminalDisplayManager {
     }
     const canvas = this.noa.container.canvas;
     canvas.removeEventListener('pointerdown', this.handlePointerDown, true);
-    canvas.removeEventListener('pointermove', this.handlePointerMove, true);
     window.removeEventListener('keydown', this.handleKeyDown, true);
 
-    const display = this.displays.get(this.activeKey);
-    if (display) {
-      display.setSessionActive(false);
+    const entry = this.displays.get(this.activeKey);
+    if (entry) {
+      entry.display.setHoverByUV(null);
+      entry.display.setSessionActive(false);
     }
     this.activeKey = null;
+    this.activeContext = null;
     this.overlay.controller.setCapture(false);
+    this.overlay.controller.setPointerPassthrough(false);
   }
 
   private resolveOrientation(kind: BlockKind, position: VoxelPosition): BlockOrientation {
@@ -285,20 +372,17 @@ export class TerminalDisplayManager {
   }
 
   private onPointerDown(event: PointerEvent): void {
-    const activeDisplay = this.getActiveDisplay();
-    if (!activeDisplay) {
+    const activeEntry = this.getActiveEntry();
+    if (!activeEntry) {
       return;
     }
-    const pick = this.pickOnDisplay(activeDisplay.display, event);
-    if (!pick || !pick.hit) {
+    const uv = this.pickCrosshairUV(activeEntry.entry.display);
+    if (!uv) {
+      activeEntry.entry.display.setHoverByUV(null);
       return;
     }
-    const coords = pick.getTextureCoordinates();
-    if (!coords) {
-      return;
-    }
-    const handled = activeDisplay.display.handlePointer({
-      uv: { u: coords.x, v: coords.y },
+    const handled = activeEntry.entry.display.handlePointer({
+      uv,
       button: event.button,
     });
     if (handled) {
@@ -307,18 +391,9 @@ export class TerminalDisplayManager {
     }
   }
 
-  private onPointerMove(event: PointerEvent): void {
-    // We only use pointer move to keep Babylon pointerX/Y updated for picks; no hover state for now.
-    const activeDisplay = this.getActiveDisplay();
-    if (!activeDisplay) {
-      return;
-    }
-    this.pickOnDisplay(activeDisplay.display, event);
-  }
-
   private onKeyDown(event: KeyboardEvent): void {
-    const activeDisplay = this.getActiveDisplay();
-    if (!activeDisplay) {
+    const activeEntry = this.getActiveEntry();
+    if (!activeEntry) {
       return;
     }
     if (event.key === 'Escape') {
@@ -326,28 +401,102 @@ export class TerminalDisplayManager {
       this.endSession();
       return;
     }
-    const handled = activeDisplay.display.handleKeyDown(event);
+    const handled = activeEntry.entry.display.handleKeyDown(event);
     if (handled) {
       event.preventDefault();
     }
   }
 
-  private getActiveDisplay(): { key: string; display: TerminalInstance } | null {
+  private getActiveEntry(): { key: string; entry: DisplayEntry } | null {
     if (!this.activeKey) {
       return null;
     }
-    const display = this.displays.get(this.activeKey);
-    if (!display) {
+    const entry = this.displays.get(this.activeKey);
+    if (!entry) {
       return null;
     }
-    return { key: this.activeKey, display };
+    return { key: this.activeKey, entry };
   }
 
-  private pickOnDisplay(display: TerminalInstance, event: PointerEvent) {
+  private pickCrosshairUV(display: TerminalInstance): { u: number; v: number } | null {
     const canvas = this.noa.container.canvas;
     const rect = canvas.getBoundingClientRect();
-    const pointerX = event.clientX - rect.left;
-    const pointerY = event.clientY - rect.top;
-    return this.scene.pick(pointerX, pointerY, (mesh) => mesh === display.getMesh());
+    const pointerX = rect.width / 2;
+    const pointerY = rect.height / 2;
+    const pick = this.scene.pick(pointerX, pointerY, (mesh) => mesh === display.getMesh());
+    if (!pick || !pick.hit) {
+      return null;
+    }
+    const coords = pick.getTextureCoordinates();
+    if (!coords) {
+      return null;
+    }
+    return { u: coords.x, v: coords.y };
+  }
+
+  private setHighlightKey(key: string | null): void {
+    if (this.highlightedKey === key) {
+      if (key) {
+        const entry = this.displays.get(key);
+        entry?.display.setHighlighted(true);
+      }
+      return;
+    }
+    if (this.highlightedKey) {
+      const previous = this.displays.get(this.highlightedKey);
+      if (previous && this.highlightedKey !== this.activeKey) {
+        previous.display.setHighlighted(false);
+      } else if (!previous) {
+        // nothing to do
+      }
+    }
+    this.highlightedKey = null;
+    if (!key) {
+      return;
+    }
+    const entry = this.displays.get(key);
+    if (!entry) {
+      return;
+    }
+    entry.display.setHighlighted(true);
+    this.highlightedKey = key;
+  }
+
+  private updateAimHover(): void {
+    if (!this.activeKey) {
+      return;
+    }
+    const entry = this.displays.get(this.activeKey);
+    if (!entry) {
+      return;
+    }
+    const uv = this.pickCrosshairUV(entry.display);
+    entry.display.setHoverByUV(uv);
+  }
+
+  private onFireDown(event: MouseEvent): void {
+    if (!this.activeKey) {
+      return;
+    }
+    if (!this.overlay.controller.getState().captureInput) {
+      return;
+    }
+    const entry = this.displays.get(this.activeKey);
+    if (!entry) {
+      return;
+    }
+    const uv = this.pickCrosshairUV(entry.display);
+    entry.display.setHoverByUV(uv);
+    if (!uv) {
+      return;
+    }
+    const handled = entry.display.handlePointer({
+      uv,
+      button: 0,
+    });
+    if (handled) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+    }
   }
 }
