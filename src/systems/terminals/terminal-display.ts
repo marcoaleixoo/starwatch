@@ -7,7 +7,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { VoxelPosition } from '../energy/energy-network-manager';
 import type { BlockOrientation } from '../../blocks/types';
-import { orientationToNormal } from './helpers';
+import { orientationToNormal, orientationToYaw } from './helpers';
 import type {
   TerminalDisplayKind,
   TerminalPointerEvent,
@@ -59,7 +59,10 @@ export abstract class BaseTerminalDisplay<TData> {
   protected readonly texture: DynamicTexture;
   protected readonly ctx: CanvasRenderingContext2D;
   protected readonly contentArea: { x: number; y: number; width: number; height: number };
+  protected readonly baseCenter: Vector3;
+  protected readonly mountOffset: number;
 
+  private readonly surfaceNormal: Vector3;
   private readonly material: StandardMaterial;
   private readonly tabRects: TabRect[] = [];
   private readonly decorations: Mesh[] = [];
@@ -81,12 +84,19 @@ export abstract class BaseTerminalDisplay<TData> {
     this.accentColor = options.accentColor;
     this.title = options.title;
 
+    this.baseCenter = new Vector3(
+      options.position[0] + 0.5,
+      options.position[1] + options.elevation,
+      options.position[2] + 0.5,
+    );
+    this.surfaceNormal = orientationToNormal(options.orientation);
+    this.mountOffset = options.mountOffset;
+
     this.mesh = MeshBuilder.CreatePlane(
       `terminal-screen-${options.position.join(':')}`,
       {
         width: options.physicalWidth,
         height: options.physicalHeight,
-        sideOrientation: Mesh.DOUBLESIDE,
       },
       this.scene,
     );
@@ -95,16 +105,10 @@ export abstract class BaseTerminalDisplay<TData> {
     this.mesh.metadata = { terminalScreen: true, key: this.makeKey() };
     this.allMeshes.push(this.mesh);
 
-    const yaw = orientationToYaw(options.orientation);
-    const normal = orientationToNormal(options.orientation);
-    const base = new Vector3(
-      options.position[0] + 0.5,
-      options.position[1] + options.elevation,
-      options.position[2] + 0.5,
-    );
-    const offset = normal.scale(options.mountOffset);
-    this.mesh.position = base.add(offset);
-    this.mesh.rotation = new Vector3(0, yaw, 0);
+    const anchor = this.getSurfacePosition();
+    this.mesh.position = anchor;
+    this.mesh.lookAt(anchor.add(this.surfaceNormal));
+    this.mesh.rotate(Vector3.Up(), Math.PI);
 
     this.texture = new DynamicTexture(
       `terminal-texture-${options.position.join(':')}`,
@@ -113,6 +117,8 @@ export abstract class BaseTerminalDisplay<TData> {
       false,
     );
     this.texture.hasAlpha = true;
+    this.texture.uScale = -1;
+    this.texture.uOffset = 1;
     const context = this.texture.getContext() as CanvasRenderingContext2D;
     context.imageSmoothingEnabled = false;
     this.ctx = context;
@@ -121,7 +127,7 @@ export abstract class BaseTerminalDisplay<TData> {
     this.material.diffuseColor = Color3.White();
     this.material.emissiveColor = new Color3(0.85, 0.9, 1);
     this.material.specularColor = Color3.Black();
-    this.material.backFaceCulling = false;
+    this.material.backFaceCulling = true;
     this.material.disableLighting = true;
     this.material.diffuseTexture = this.texture;
     this.material.emissiveTexture = this.texture;
@@ -157,6 +163,45 @@ export abstract class BaseTerminalDisplay<TData> {
 
   getMeshes(): Mesh[] {
     return this.allMeshes;
+  }
+
+  protected getSurfaceNormal(): Vector3 {
+    return this.surfaceNormal.clone();
+  }
+
+  protected getSurfacePosition(offset = this.mountOffset): Vector3 {
+    const displacement = this.surfaceNormal.clone().scaleInPlace(offset);
+    return this.baseCenter.add(displacement);
+  }
+
+  protected createDecorBox(
+    name: string,
+    size: { width: number; height: number; depth: number },
+    options?: {
+      distance?: number;
+      verticalOffset?: number;
+      color?: Color3;
+      emissive?: Color3;
+      renderingGroupId?: number;
+    },
+  ): Mesh {
+    const mesh = MeshBuilder.CreateBox(name, size, this.scene);
+    mesh.isPickable = false;
+    const anchor = this.getSurfacePosition(options?.distance ?? this.mountOffset - 0.04);
+    mesh.position = new Vector3(anchor.x, anchor.y + (options?.verticalOffset ?? 0), anchor.z);
+    mesh.rotation = new Vector3(0, orientationToYaw(this.orientation), 0);
+    mesh.renderingGroupId = options?.renderingGroupId ?? 2;
+
+    const material = new StandardMaterial(`${name}-mat`, this.scene);
+    const diffuse = options?.color ?? new Color3(0.07, 0.12, 0.22);
+    const emissive = options?.emissive ?? diffuse.scale(0.6);
+    material.diffuseColor = diffuse;
+    material.emissiveColor = emissive;
+    material.disableLighting = true;
+    mesh.material = material;
+
+    this.addDecoration(mesh);
+    return mesh;
   }
 
   refresh(): void {

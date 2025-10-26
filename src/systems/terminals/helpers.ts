@@ -30,4 +30,3 @@ export function orientationToNormal(orientation: BlockOrientation): Vector3 {
       return new Vector3(0, 0, 1);
   }
 }
-

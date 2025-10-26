@@ -1,3 +1,4 @@
+import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { BaseTerminalDisplay, type BaseTerminalDisplayOptions } from './terminal-display';
 import type { BatteryTerminalData } from './types';
 import { clearContent, drawCenteredMessage, drawMetricList, drawProgressBar, type MetricRow, type MetricVariant } from './render-helpers';
@@ -8,6 +9,7 @@ type BatteryOptions = BaseTerminalDisplayOptions<BatteryTerminalData>;
 export class BatteryTerminalDisplay extends BaseTerminalDisplay<BatteryTerminalData> {
   constructor(options: BatteryOptions) {
     super(options);
+    this.createSupport(options);
   }
 
   protected drawContent(activeTabId: string | null, data: BatteryTerminalData): void {
@@ -55,5 +57,53 @@ export class BatteryTerminalDisplay extends BaseTerminalDisplay<BatteryTerminalD
       { label: 'Δ', value: formatDelta(overview.metrics.deltaW), variant: deltaVariant },
     ];
     drawMetricList(ctx, area, rows);
+  }
+
+  private createSupport(options: BatteryOptions): void {
+    const key = options.position.join(':');
+    this.createDecorBox(
+      `battery-terminal-frame-${key}`,
+      {
+        width: options.physicalWidth + 0.14,
+        height: options.physicalHeight + 0.14,
+        depth: 0.08,
+      },
+      {
+        distance: this.mountOffset - 0.04,
+        color: new Color3(0.07, 0.12, 0.22),
+        emissive: new Color3(0.05, 0.08, 0.16),
+        renderingGroupId: 2,
+      },
+    );
+
+    this.createDecorBox(
+      `battery-terminal-bracket-${key}`,
+      {
+        width: 0.2,
+        height: options.physicalHeight + 0.06,
+        depth: 0.18,
+      },
+      {
+        distance: this.mountOffset - 0.16,
+        color: new Color3(0.05, 0.09, 0.15),
+        emissive: new Color3(0.03, 0.05, 0.09),
+        renderingGroupId: 1,
+      },
+    );
+
+    this.createDecorBox(
+      `battery-terminal-backplate-${key}`,
+      {
+        width: options.physicalWidth + 0.22,
+        height: options.physicalHeight + 0.22,
+        depth: 0.06,
+      },
+      {
+        distance: this.mountOffset - 0.24,
+        color: new Color3(0.04, 0.07, 0.12),
+        emissive: new Color3(0.02, 0.04, 0.08),
+        renderingGroupId: 1,
+      },
+    );
   }
 }
