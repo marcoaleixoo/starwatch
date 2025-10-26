@@ -68,6 +68,7 @@ export class TerminalDisplayManager {
   private readonly handleKeyDown = (event: KeyboardEvent) => this.onKeyDown(event);
   private readonly handleAimUpdate = () => this.updateAimHover();
   private readonly handleFireDown = (event: MouseEvent) => this.onFireDown(event);
+  private detachFireListener: (() => void) | null = null;
 
   constructor(options: TerminalManagerOptions) {
     this.noa = options.noa;
@@ -79,8 +80,12 @@ export class TerminalDisplayManager {
       this.refreshAll();
     });
     this.noa.on('beforeRender', this.handleAimUpdate);
-    if (this.noa.inputs?.down && typeof this.noa.inputs.down.on === 'function') {
-      this.noa.inputs.down.on('fire', this.handleFireDown);
+    const fireDown = this.noa.inputs?.down as { on?: (action: string, handler: (...args: any[]) => void) => void; off?: (action: string, handler: (...args: any[]) => void) => void } | undefined;
+    if (fireDown?.on) {
+      fireDown.on('fire', this.handleFireDown);
+      this.detachFireListener = () => {
+        fireDown.off?.('fire', this.handleFireDown);
+      };
     }
   }
 
@@ -88,9 +93,8 @@ export class TerminalDisplayManager {
     this.disposeEnergyListener?.();
     this.disposeEnergyListener = null;
     this.noa.off('beforeRender', this.handleAimUpdate);
-    if (this.noa.inputs?.down && typeof this.noa.inputs.down.off === 'function') {
-      this.noa.inputs.down.off('fire', this.handleFireDown);
-    }
+    this.detachFireListener?.();
+    this.detachFireListener = null;
     this.endSession();
     this.overlay.controller.setPointerPassthrough(false);
     this.setHighlightKey(null);
