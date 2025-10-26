@@ -1,9 +1,4 @@
-export type OverlayModalState =
-  | { id: 'dummy' }
-  | { id: 'terminal'; position: [number, number, number] };
-
 export interface OverlayState {
-  modal: OverlayModalState | null;
   captureInput: boolean;
 }
 
@@ -11,7 +6,6 @@ type Listener = () => void;
 
 export class OverlayController {
   private state: OverlayState = {
-    modal: null,
     captureInput: false,
   };
 
@@ -29,49 +23,28 @@ export class OverlayController {
     return this.state;
   }
 
+  setCapture(capture: boolean): void {
+    if (this.state.captureInput === capture) {
+      return;
+    }
+    this.setState({
+      captureInput: capture,
+    });
+  }
+
   registerCaptureHandler(handler: (capture: boolean) => void): void {
     this.onCaptureChange = handler;
     handler(this.state.captureInput);
   }
 
-  toggleModal(modal: OverlayModalState): void {
-    if (this.state.modal?.id === modal.id) {
-      this.closeModal();
-      return;
-    }
-    this.openModal(modal);
-  }
-
-  openModal(modal: OverlayModalState): void {
-    if (this.state.modal?.id === modal.id && this.state.captureInput) {
-      return;
-    }
-    this.setState({
-      modal,
-      captureInput: true,
-    });
-  }
-
-  closeModal(): void {
-    if (!this.state.modal && !this.state.captureInput) {
-      return;
-    }
-    this.setState({
-      modal: null,
-      captureInput: false,
-    });
-  }
-
   reset(): void {
     this.setState({
-      modal: null,
       captureInput: false,
     });
     this.listeners.clear();
   }
 
   private setState(nextState: OverlayState): void {
-    const changedModal = this.state.modal !== nextState.modal;
     const changedCapture = this.state.captureInput !== nextState.captureInput;
 
     this.state = nextState;
@@ -80,7 +53,7 @@ export class OverlayController {
       this.onCaptureChange(this.state.captureInput);
     }
 
-    if (changedModal || changedCapture) {
+    if (changedCapture) {
       this.emit();
     }
   }

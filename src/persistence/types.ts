@@ -26,6 +26,7 @@ export interface BatterySnapshotEntry {
   position: VoxelPosition;
   storedMJ: number;
   capacityMJ: number;
+  orientation?: BlockOrientation;
 }
 
 export interface ConstructionSnapshot {

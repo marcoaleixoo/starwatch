@@ -2,6 +2,7 @@ import type { Engine } from 'noa-engine';
 import type { HotbarApi } from '../player/hotbar';
 import type { SectorResources } from '../sector';
 import type { EnergySystem } from '../systems/energy';
+import type { TerminalSystem } from '../systems/terminals';
 import type { PersistenceAdapter } from './adapter';
 import type { SectorSnapshot } from './types';
 import { captureSnapshot, restoreSnapshot } from './snapshot';
@@ -12,6 +13,7 @@ interface ManagerContext {
   sector: SectorResources;
   energy: EnergySystem;
   hotbar: HotbarApi;
+  terminals: TerminalSystem;
 }
 
 interface PersistenceManagerOptions {
@@ -60,6 +62,7 @@ export class PersistenceManager {
         sector: this.ctx.sector,
         energy: this.ctx.energy,
         hotbar: this.ctx.hotbar,
+        terminals: this.ctx.terminals,
       },
       snapshot,
     );
@@ -72,6 +75,7 @@ export class PersistenceManager {
         sector: this.ctx.sector,
         energy: this.ctx.energy,
         hotbar: this.ctx.hotbar,
+        terminals: this.ctx.terminals,
       },
       this.meta,
     );

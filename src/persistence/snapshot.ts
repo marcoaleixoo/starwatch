@@ -4,6 +4,7 @@ import { INITIAL_HOTBAR_ITEMS } from '../config/hud-options';
 import type { HotbarItemDefinition } from '../config/hud-options';
 import type { SectorResources } from '../sector';
 import type { EnergySystem } from '../systems/energy';
+import type { TerminalSystem } from '../systems/terminals';
 import { blockMetadataStore } from '../blocks/metadata-store';
 import type { BlockKind, BlockOrientation } from '../blocks/types';
 import type { VoxelPosition } from '../systems/energy/energy-network-manager';
@@ -20,6 +21,7 @@ interface SnapshotContext {
   sector: SectorResources;
   energy: EnergySystem;
   hotbar: HotbarApi;
+  terminals: TerminalSystem;
 }
 
 const HOTBAR_SLOT_LIMIT = 9;
@@ -54,6 +56,7 @@ function captureConstruction(ctx: SnapshotContext): ConstructionSnapshot {
     position: clonePosition(battery.position),
     storedMJ: battery.storedMJ,
     capacityMJ: battery.capacityMJ,
+    orientation: orientationFor(ctx.sector.starwatchBlocks.battery.kind, battery.position),
   }));
 
   const terminals = ctx.energy.listTerminals().map((terminal) => ({
@@ -130,12 +133,24 @@ export function restoreSnapshot(ctx: SnapshotContext, snapshot: SectorSnapshot):
     );
     placeBlock(ctx.noa, ctx.sector.starwatchBlocks.solarPanel.id, panel.position);
     ctx.energy.registerSolarPanel(panel.position);
+    ctx.terminals.registerBlock(ctx.sector.starwatchBlocks.solarPanel.kind, panel.position);
   }
 
   for (const battery of snapshot.construction.batteries) {
+    const orientation = battery.orientation ?? ctx.sector.starwatchBlocks.battery.defaultOrientation;
+    blockMetadataStore.setOrientation(
+      {
+        kind: ctx.sector.starwatchBlocks.battery.kind,
+        x: battery.position[0],
+        y: battery.position[1],
+        z: battery.position[2],
+      },
+      orientation,
+    );
     placeBlock(ctx.noa, ctx.sector.starwatchBlocks.battery.id, battery.position);
     ctx.energy.registerBattery(battery.position);
     ctx.energy.setBatteryStored(battery.position, battery.storedMJ);
+    ctx.terminals.registerBlock(ctx.sector.starwatchBlocks.battery.kind, battery.position);
   }
 
   for (const terminal of snapshot.construction.terminals) {
@@ -151,6 +166,7 @@ export function restoreSnapshot(ctx: SnapshotContext, snapshot: SectorSnapshot):
     );
     placeBlock(ctx.noa, ctx.sector.starwatchBlocks.halTerminal.id, terminal.position);
     ctx.energy.registerTerminal(terminal.position);
+    ctx.terminals.registerBlock(ctx.sector.starwatchBlocks.halTerminal.kind, terminal.position);
   }
 
   rehydrateHotbar(ctx.hotbar, snapshot.hotbar);

@@ -1,11 +1,13 @@
 import type { Engine } from 'noa-engine';
 import type { OverlayApi } from '../../hud/overlay';
 import type { SectorResources } from '../../sector';
+import type { TerminalSystem } from '../terminals';
 
 interface UseSystemDependencies {
   noa: Engine;
   overlay: OverlayApi;
   sector: SectorResources;
+  terminals: TerminalSystem;
 }
 
 const USE_RANGE = 3;
@@ -16,10 +18,12 @@ type TargetedBlock = {
   blockID: number;
 };
 
-export function initializeUseSystem({ noa, overlay, sector }: UseSystemDependencies): void {
+export function initializeUseSystem({ noa, overlay, sector, terminals }: UseSystemDependencies): void {
   const terminalId = sector.starwatchBlocks.halTerminal.id;
+  const batteryId = sector.starwatchBlocks.battery.id;
+  const panelId = sector.starwatchBlocks.solarPanel.id;
 
-  const isOverlayCapturing = (): boolean => overlay.controller.getState().captureInput;
+  const isInputCaptured = (): boolean => overlay.controller.getState().captureInput || terminals.isCapturingInput();
 
   const getTargetedBlock = (): TargetedBlock | null => {
     const targeted = noa.targetedBlock;
@@ -44,16 +48,25 @@ export function initializeUseSystem({ noa, overlay, sector }: UseSystemDependenc
   };
 
   const handleUse = () => {
-    if (isOverlayCapturing()) {
+    if (isInputCaptured()) {
       return;
     }
 
     const targeted = getTargetedBlock();
-    if (!targeted || targeted.blockID !== terminalId) {
+    if (!targeted) {
+      return;
+    }
+
+    if (targeted.blockID !== terminalId && targeted.blockID !== batteryId && targeted.blockID !== panelId) {
       return;
     }
 
     if (computeDistanceSq(targeted.position) > USE_RANGE_SQ) {
+      return;
+    }
+
+    const blockDefinition = sector.starwatchBlocks.byId.get(targeted.blockID);
+    if (!blockDefinition) {
       return;
     }
 
@@ -63,7 +76,7 @@ export function initializeUseSystem({ noa, overlay, sector }: UseSystemDependenc
       targeted.position[2],
     ];
 
-    overlay.controller.openModal({ id: 'terminal', position });
+    terminals.openTerminal(blockDefinition.kind, position);
   };
 
   noa.inputs.bind('use', ['KeyE']);
