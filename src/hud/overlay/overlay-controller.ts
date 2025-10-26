@@ -12,7 +12,7 @@ export class OverlayController {
   };
 
   private listeners = new Set<Listener>();
-  private onCaptureChange?: (capture: boolean) => void;
+  private onCaptureChange?: (state: OverlayState) => void;
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
@@ -35,9 +35,9 @@ export class OverlayController {
     });
   }
 
-  registerCaptureHandler(handler: (capture: boolean) => void): void {
+  registerCaptureHandler(handler: (state: OverlayState) => void): void {
     this.onCaptureChange = handler;
-    handler(this.state.captureInput);
+    handler(this.state);
   }
 
   setPointerPassthrough(pointerPassthrough: boolean): void {
@@ -64,8 +64,8 @@ export class OverlayController {
 
     this.state = nextState;
 
-    if (changedCapture && this.onCaptureChange) {
-      this.onCaptureChange(this.state.captureInput);
+    if ((changedCapture || changedPointer) && this.onCaptureChange) {
+      this.onCaptureChange(this.state);
     }
 
     if (changedCapture || changedPointer) {

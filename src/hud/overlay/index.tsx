@@ -27,9 +27,10 @@ export function initializeOverlay(noa: Engine, deps: OverlayDependencies): Overl
   const root: Root = createRoot(mountNode);
   const removalHold = new RemovalHoldTracker();
 
-  controller.registerCaptureHandler((capture) => {
+  controller.registerCaptureHandler((state) => {
+    const { captureInput, pointerPassthrough } = state;
     const canvas = noa.container.canvas;
-    if (capture) {
+    if (captureInput && !pointerPassthrough) {
       noa.container.setPointerLock(false);
       if (typeof canvas.blur === 'function') {
         canvas.blur();

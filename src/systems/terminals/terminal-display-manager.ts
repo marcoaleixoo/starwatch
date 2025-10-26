@@ -217,8 +217,8 @@ export class TerminalDisplayManager {
   private beginSession(key: string, entry: DisplayEntry): void {
     if (this.activeKey === key) {
       entry.display.setSessionActive(true);
-      this.overlay.controller.setCapture(true);
       this.overlay.controller.setPointerPassthrough(true);
+      this.overlay.controller.setCapture(true);
       this.activeContext = {
         blockKind: entry.blockKind,
         position: [
@@ -234,8 +234,8 @@ export class TerminalDisplayManager {
     this.endSession();
     this.activeKey = key;
     entry.display.setSessionActive(true);
-    this.overlay.controller.setCapture(true);
     this.overlay.controller.setPointerPassthrough(true);
+    this.overlay.controller.setCapture(true);
     this.activeContext = {
       blockKind: entry.blockKind,
       position: [
