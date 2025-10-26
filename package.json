@@ -23,6 +23,7 @@
     "ndarray": "^1.0.19",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "repomix": "^1.8.0",
     "voxel-aabb-sweep": "^0.5.0",
     "voxel-physics-engine": "^0.13.0"
   },
