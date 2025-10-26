@@ -108,15 +108,113 @@ function rehydrateHotbar(hotbar: HotbarApi, snapshot: HotbarSnapshot): void {
   hotbar.controller.setActiveIndex(Math.max(0, Math.min(HOTBAR_SLOT_LIMIT - 1, snapshot.activeIndex)));
 }
 
-function placeBlock(noa: Engine, blockId: number, position: VoxelPosition): void {
-  noa.setBlock(blockId, position[0], position[1], position[2]);
-}
-
 export function restoreSnapshot(ctx: SnapshotContext, snapshot: SectorSnapshot): void {
   blockMetadataStore.clear();
 
+  type PendingPlacement = {
+    blockId: number;
+    position: VoxelPosition;
+  };
+
+  const pendingPlacements = new Map<string, PendingPlacement>();
+
+  const makePlacementKey = (blockId: number, position: VoxelPosition): string => (
+    `${blockId}:${position[0]}:${position[1]}:${position[2]}`
+  );
+
+  const isPositionInChunk = (position: VoxelPosition, chunk: any): boolean => (
+    position[0] >= chunk.x
+    && position[0] < chunk.x + chunk.size
+    && position[1] >= chunk.y
+    && position[1] < chunk.y + chunk.size
+    && position[2] >= chunk.z
+    && position[2] < chunk.z + chunk.size
+  );
+
+  let chunkListenerAttached = false;
+
+  function handleChunkAdded(chunk: any): void {
+    if (!chunk) {
+      return;
+    }
+    tryPlacePending(chunk);
+  }
+
+  function detachChunkListener(): void {
+    if (!chunkListenerAttached) {
+      return;
+    }
+    const worldEmitter = ctx.noa.world as unknown as {
+      off?: (event: string, handler: (chunk: unknown) => void) => void;
+      removeListener?: (event: string, handler: (chunk: unknown) => void) => void;
+    };
+    if (typeof worldEmitter.off === 'function') {
+      worldEmitter.off('chunkAdded', handleChunkAdded);
+    } else if (typeof worldEmitter.removeListener === 'function') {
+      worldEmitter.removeListener('chunkAdded', handleChunkAdded);
+    }
+    chunkListenerAttached = false;
+  }
+
+  function tryPlacePending(chunk?: any): void {
+    if (pendingPlacements.size === 0) {
+      detachChunkListener();
+      return;
+    }
+    const entries = Array.from(pendingPlacements.entries());
+    for (const [key, pending] of entries) {
+      if (chunk && !isPositionInChunk(pending.position, chunk)) {
+        continue;
+      }
+      ctx.noa.setBlock(
+        pending.blockId,
+        pending.position[0],
+        pending.position[1],
+        pending.position[2],
+      );
+      const currentId = ctx.noa.world.getBlockID(
+        pending.position[0],
+        pending.position[1],
+        pending.position[2],
+      );
+      if (currentId === pending.blockId) {
+        pendingPlacements.delete(key);
+      }
+    }
+    if (pendingPlacements.size === 0) {
+      detachChunkListener();
+    }
+  }
+
+  function attachChunkListener(): void {
+    if (chunkListenerAttached || pendingPlacements.size === 0) {
+      return;
+    }
+    const worldEmitter = ctx.noa.world as unknown as {
+      on?: (event: string, handler: (chunk: unknown) => void) => void;
+    };
+    if (typeof worldEmitter.on === 'function') {
+      worldEmitter.on('chunkAdded', handleChunkAdded);
+      chunkListenerAttached = true;
+    }
+  }
+
+  const ensureBlockPlacement = (blockId: number, position: VoxelPosition): void => {
+    ctx.noa.setBlock(blockId, position[0], position[1], position[2]);
+    const currentId = ctx.noa.world.getBlockID(position[0], position[1], position[2]);
+    if (currentId === blockId) {
+      return;
+    }
+    const key = makePlacementKey(blockId, position);
+    pendingPlacements.set(key, {
+      blockId,
+      position: [position[0], position[1], position[2]] as VoxelPosition,
+    });
+    attachChunkListener();
+  };
+
   for (const deck of snapshot.construction.decks) {
-    placeBlock(ctx.noa, ctx.sector.starwatchBlocks.deck.id, deck.position);
+    ensureBlockPlacement(ctx.sector.starwatchBlocks.deck.id, deck.position);
     ctx.energy.networks.addDeck(deck.position);
   }
 
@@ -131,7 +229,7 @@ export function restoreSnapshot(ctx: SnapshotContext, snapshot: SectorSnapshot):
       },
       orientation,
     );
-    placeBlock(ctx.noa, ctx.sector.starwatchBlocks.solarPanel.id, panel.position);
+    ensureBlockPlacement(ctx.sector.starwatchBlocks.solarPanel.id, panel.position);
     ctx.energy.registerSolarPanel(panel.position);
     ctx.terminals.registerBlock(ctx.sector.starwatchBlocks.solarPanel.kind, panel.position);
   }
@@ -147,7 +245,7 @@ export function restoreSnapshot(ctx: SnapshotContext, snapshot: SectorSnapshot):
       },
       orientation,
     );
-    placeBlock(ctx.noa, ctx.sector.starwatchBlocks.battery.id, battery.position);
+    ensureBlockPlacement(ctx.sector.starwatchBlocks.battery.id, battery.position);
     ctx.energy.registerBattery(battery.position);
     ctx.energy.setBatteryStored(battery.position, battery.storedMJ);
     ctx.terminals.registerBlock(ctx.sector.starwatchBlocks.battery.kind, battery.position);
@@ -164,10 +262,17 @@ export function restoreSnapshot(ctx: SnapshotContext, snapshot: SectorSnapshot):
       },
       orientation,
     );
-    placeBlock(ctx.noa, ctx.sector.starwatchBlocks.halTerminal.id, terminal.position);
+    ensureBlockPlacement(ctx.sector.starwatchBlocks.halTerminal.id, terminal.position);
     ctx.energy.registerTerminal(terminal.position);
     ctx.terminals.registerBlock(ctx.sector.starwatchBlocks.halTerminal.kind, terminal.position);
   }
 
   rehydrateHotbar(ctx.hotbar, snapshot.hotbar);
+
+  if (pendingPlacements.size > 0) {
+    attachChunkListener();
+    tryPlacePending();
+  } else {
+    detachChunkListener();
+  }
 }
