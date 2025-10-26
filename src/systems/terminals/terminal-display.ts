@@ -118,8 +118,6 @@ export abstract class BaseTerminalDisplay<TData> {
       false,
     );
     this.texture.hasAlpha = true;
-    this.texture.uScale = -1;
-    this.texture.uOffset = 1;
     const context = this.texture.getContext() as CanvasRenderingContext2D;
     context.imageSmoothingEnabled = false;
     this.ctx = context;
