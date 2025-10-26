@@ -8,7 +8,7 @@ export interface TerminalInteractionOptions {
 
 export const TERMINAL_INTERACTION_OPTIONS: TerminalInteractionOptions = {
   useRange: 3,
-  proximityRange: 1.75,
+  proximityRange: 2.05,
   disengageRange: 2.4,
   disengageGraceTicks: 6,
 };
