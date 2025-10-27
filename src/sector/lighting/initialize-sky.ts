@@ -4,20 +4,24 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { ShaderMaterial } from '@babylonjs/core/Materials/shaderMaterial';
+import type { Effect } from '@babylonjs/core/Materials/effect';
 import type { Observer } from '@babylonjs/core/Misc/observable';
 
 import {
   SKY_CLEAR_COLOR,
+  STARFIELD_BACKGROUND_INTENSITY,
   STARFIELD_COLOR_A,
   STARFIELD_COLOR_B,
   STARFIELD_DENSITY,
   STARFIELD_INTENSITY,
   STARFIELD_RADIUS_METERS,
+  STARFIELD_STAR_PROBABILITY,
+  STARFIELD_STAR_RADIUS_MAX,
+  STARFIELD_STAR_RADIUS_MIN,
   STARFIELD_TWINKLE_BASE_SPEED,
-  STARFIELD_THRESHOLD_HIGH,
-  STARFIELD_THRESHOLD_LOW,
 } from '../../config/sky-options';
 import { ensureStarfieldShader } from './starfield-shader';
+import { initializeNearStarfield } from './near-starfield';
 
 const SKY_MESH_NAME = 'starwatch:sky-dome';
 
@@ -38,6 +42,9 @@ export function initializeSky(noa: Engine): void {
   const material = getOrCreateSkyMaterial(scene);
 
   mesh.material = material;
+  if (!mesh.metadata?.noa_added_to_scene) {
+    noa.rendering.addMeshToScene(mesh, false, [0, 0, 0]);
+  }
 
   material.setFloat('uDensity', STARFIELD_DENSITY);
   material.setFloat('uIntensity', STARFIELD_INTENSITY);
@@ -45,12 +52,23 @@ export function initializeSky(noa: Engine): void {
   material.setColor3('uColorA', Color3.FromArray(STARFIELD_COLOR_A));
   material.setColor3('uColorB', Color3.FromArray(STARFIELD_COLOR_B));
   material.setFloat('uTime', 0);
-  material.setFloat('uThresholdLow', STARFIELD_THRESHOLD_LOW);
-  material.setFloat('uThresholdHigh', STARFIELD_THRESHOLD_HIGH);
+  material.setFloat('uStarProbability', STARFIELD_STAR_PROBABILITY);
+  material.setFloat('uStarRadiusMin', STARFIELD_STAR_RADIUS_MIN);
+  material.setFloat('uStarRadiusMax', STARFIELD_STAR_RADIUS_MAX);
+  material.setFloat('uBackgroundIntensity', STARFIELD_BACKGROUND_INTENSITY);
 
-  attachMaterialUpdater(scene, material);
+  attachMaterialUpdater(noa, scene, mesh, material);
 
   if (import.meta.env.DEV && typeof window !== 'undefined') {
+    material.onError = (_effect: Effect, error: string) => {
+      console.error('[starwatch:sky] erro ao compilar starfield distante', error);
+    };
+    material.onCompiled = () => {
+      console.log('[starwatch:sky] starfield distante compilado');
+    };
+    material.forceCompilation(mesh, () => {
+      console.log('[starwatch:sky] starfield distante compilado (force)');
+    });
     console.log('[starwatch:sky] starfield inicializado', {
       density: STARFIELD_DENSITY,
       intensity: STARFIELD_INTENSITY,
@@ -66,6 +84,8 @@ export function initializeSky(noa: Engine): void {
       },
     };
   }
+
+  initializeNearStarfield(noa);
 }
 
 function getOrCreateSkyMesh(scene: Scene, noa: Engine): Mesh {
@@ -92,7 +112,6 @@ function getOrCreateSkyMesh(scene: Scene, noa: Engine): Mesh {
   mesh.infiniteDistance = true;
   mesh.renderingGroupId = 0;
 
-  mesh.parent = noa.rendering.camera;
   mesh.position.set(0, 0, 0);
   mesh.scaling.copyFromFloats(STARFIELD_RADIUS_METERS, STARFIELD_RADIUS_METERS, STARFIELD_RADIUS_METERS);
 
@@ -123,8 +142,10 @@ function getOrCreateSkyMaterial(scene: Scene): ShaderMaterial {
         'uBaseSpeed',
         'uColorA',
         'uColorB',
-        'uThresholdLow',
-        'uThresholdHigh',
+        'uStarProbability',
+        'uStarRadiusMin',
+        'uStarRadiusMax',
+        'uBackgroundIntensity',
       ],
       needAlphaBlending: false,
       needAlphaTesting: false,
@@ -144,7 +165,7 @@ function getOrCreateSkyMaterial(scene: Scene): ShaderMaterial {
   return material;
 }
 
-function attachMaterialUpdater(scene: Scene, material: ShaderMaterial): void {
+function attachMaterialUpdater(noa: Engine, scene: Scene, mesh: Mesh, material: ShaderMaterial): void {
   if (beforeRenderObserver) {
     scene.onBeforeRenderObservable.remove(beforeRenderObserver);
     beforeRenderObserver = undefined;
@@ -154,5 +175,9 @@ function attachMaterialUpdater(scene: Scene, material: ShaderMaterial): void {
     const delta = scene.getEngine().getDeltaTime() * 0.001;
     timeAccumulator += delta;
     material.setFloat('uTime', timeAccumulator);
+    const cameraPosition = noa.camera.getPosition();
+    mesh.position.set(cameraPosition[0], cameraPosition[1], cameraPosition[2]);
+    mesh.rotationQuaternion = null;
+    mesh.rotation.set(0, 0, 0);
   });
 }

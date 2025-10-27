@@ -1,21 +1,53 @@
 /**
  * Parâmetros globais da estrela central (fonte de luz dominante).
- * Ajuste estes valores para recalibrar render, HUDs e simulação que dependem da luz.
- * Os números usam o mesmo sistema de coordenadas/metragem do NOA (1 = 1 bloco ≈ 1 m).
+ * Use estes valores para manter coerência entre o lore (escala astronômica),
+ * a renderização (proxy visual perto da câmera) e as simulações (energia, calor).
+ * O sistema de coordenadas segue a convenção NOA: 1 unidade = 1 bloco ≈ 1 m.
  */
-export const STAR_DIRECTION: [number, number, number] = [0, 1, 0.1];
 
 /**
- * Distância virtual do astro em unidades do mundo. Mantemos muito longe para preservar a
- * sensação de fonte remota sem quebrar paralaxe.
+ * Posição física fixa do centro da estrela. Ancoramos o astro ~2 000 km acima do hub
+ * com leve inclinação no eixo Z para gerar sombras diagonais.
  */
-export const STAR_DISTANCE_METERS = 30;
+export const STAR_PHYSICAL_POSITION_METERS: [number, number, number] = [0, 2_000_000, 200_000];
 
 /**
- * Raio visual usado para dimensionar o mesh emissivo do sol. Ajuste para controlar o tamanho
- * aparente na tela (ângulo ≈ 2 * atan(R / distância)).
+ * Raio físico do astro. Usado quando carregamos o mesh real durante aproximações.
  */
-export const STAR_VISUAL_RADIUS_METERS = 6;
+export const STAR_PHYSICAL_RADIUS_METERS = 20_000;
+
+/**
+ * Distância física até o centro da estrela (derivada da posição). Útil para HUD e sistemas.
+ */
+export const STAR_PHYSICAL_DISTANCE_METERS = Math.hypot(
+  STAR_PHYSICAL_POSITION_METERS[0],
+  STAR_PHYSICAL_POSITION_METERS[1],
+  STAR_PHYSICAL_POSITION_METERS[2],
+);
+
+/**
+ * Limite em que trocamos o proxy visual pelo mesh físico (100 km do astro).
+ * Mantém o z-buffer saudável enquanto o jogador está longe.
+ */
+export const STAR_APPROACH_DISTANCE_METERS = 100_000;
+
+/**
+ * Distância virtual usada para posicionar o proxy visual (billboard) do sol.
+ * Mantemos dentro de 1 km para não degradar a precisão do depth buffer.
+ */
+export const STAR_VISUAL_DISTANCE_METERS = 800;
+
+/**
+ * Ângulo aparente alvo em graus (0.53° ≈ Sol visto da Terra). Ajuste para alterar o tamanho
+ * observado no céu sem mexer na distância visual.
+ */
+export const STAR_VISUAL_APERTURE_DEGREES = 0.53;
+
+/**
+ * Raio visual do proxy. Calculado a partir do ângulo aparente e da distância visual.
+ */
+export const STAR_VISUAL_RADIUS_METERS =
+  Math.tan((STAR_VISUAL_APERTURE_DEGREES * Math.PI) / 360) * STAR_VISUAL_DISTANCE_METERS;
 
 /**
  * Intensidade da luz direcional emitida pelo astro. Valores >1 aumentam brilho especular.
@@ -43,9 +75,14 @@ export const STAR_GLOW_INTENSITY = 1.1;
 export const STAR_SHADOW_RANGE: [number, number] = [-256, 512];
 
 /**
- * Margem adicionada ao far plane da câmera para garantir que o sol permaneça visível.
+ * Margem adicionada ao far plane da câmera para garantir que o proxy permaneça visível.
  */
-export const STAR_CAMERA_FAR_PLANE_PADDING = 200;
+export const STAR_CAMERA_FAR_PLANE_PADDING = 400;
+
+/**
+ * Margem adicional aplicada quando exibimos o mesh físico (aproximação real).
+ */
+export const STAR_CAMERA_PHYSICAL_PADDING = 25_000;
 
 /**
  * Intensidade adicional aplicada diretamente à cor emissiva do mesh.

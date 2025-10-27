@@ -142,14 +142,15 @@
 * **Nave inicial:** ~**30 m** (≈ 100 blocos); 3–4 rooms.
 * **Asteroide:** **1–3 km**, agrupado em clusters.
 * **Setor:** **30–60 min** de travessia a ~800 m/s (≈ 2 880 km/h).
-* **Estrela:** escala ~1:1000; referência visual.
+* **Estrela central:** posição física fixa a ~2 000 km do hub (`[0, 2 000 km, 200 km]`), raio 20 km; renderizada via proxy a 800 m (0,53° de abertura) que acompanha a câmera. A <100 km carregamos o mesh físico e expandimos `camera.maxZ` para permitir aproximações reais sem perder precisão.
+* **Firmamento:** base procedural (shader) + camada de estrelas instanciadas a 12 km com cintilância/parallax leve; parâmetros em `src/config/sky-options.ts`.
 
 ---
 
 ## 9. Mundo: Galaxy View, Setores & FOW
 
 * **Galaxy View:** grade procedural de milhares de setores conectados por rotas de hiperespaço. Viagens **em tempo real** (15–60 min; nave/tech dependente).
-* **Spawn padrão:** frota surge em órbita segura (~1 000 km da estrela local), com anéis minerais mapeados pelo HAL.
+* **Spawn padrão:** frota surge em órbita segura (~2 000 km da estrela local), com anéis minerais mapeados pelo HAL.
 * **Fog of War:** revelar por exploração ativa (naves) ou sensores de longo alcance.
 * **Variedade:** níveis de perigo, riqueza mineral, anomalias, densidade de asteroides.
 
@@ -159,8 +160,8 @@
 
 ### Escala e Zonas
 
-* **Raio útil:** ~2 000 km em torno da estrela; jogador spawna a ≈1 000 km (3 330 000 blocos) da coroa solar.
-* **Zona letal:** raio ≤50 km; aproximação prolongada sobreaquece a nave (failstate futuro).
+* **Raio útil:** ~2 000 km em torno da estrela; jogador spawna a ≈2 000 km (2 000 000 blocos) do núcleo solar, alinhado com a plataforma inicial no (0,0,0).
+* **Zona letal:** raio ≤50 km; aproximação <100 km ativa o mesh físico do astro e ajusta `camera.maxZ`; prolongar voo abaixo de 50 km superaquece a nave (failstate futuro).
 * **Faixas de conteúdo:**
   * **Anel interno (100–400 km):** maior densidade de asteroides comuns (ferro, cobre, silício) + infraestrutura inicial.
   * **Anel médio (400–1 200 km):** mistura equilibrada; POIs principais, ruínas, tráfego comercial.
@@ -169,7 +170,7 @@
 
 ### Asteroides e Fenômenos
 
-* **Estrela Central:** cor/tipo/intensidade variam; alguns setores “escuros” exigem reatores.
+* **Estrela Central:** cor/tipo/intensidade variam; posição física fixa (`[0, 2 000 km, 200 km]`), raio 20 km. Proxy visual a 800 m mantém o disco pequeno; sistemas (energia, HUD, física) usam a posição real.
 * **Planetas (decorativos v1):** gasosos/rochosos/gelados — marcos visuais.
 * **Aglomerados Procedurais:** geração determinística por chunk; 30–60 clusters ativos próximos, rehidratados conforme o jogador avança entre anéis.
 * **Fenômenos:** nebulosas (interferência/radar), campos de gelo, cinturões de detritos.
