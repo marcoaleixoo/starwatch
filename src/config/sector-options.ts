@@ -22,14 +22,28 @@ export const PLATFORM_HEIGHT = 0;
 export const PLAYER_SPAWN_POSITION: [number, number, number] = [0.5, 2.5, 0.5];
 
 /**
- * Altura média das rochas (asteroides) do anel distante.
+ * Faixa vertical absoluta (eixo Y) onde clusters de asteroides podem surgir.
+ * O gerador distribui deterministicamente cada cluster dentro desse intervalo.
  */
-export const ASTEROID_LAYER_ALTITUDE = 52;
+export const ASTEROID_ALTITUDE_RANGE = {
+  min: -24,
+  max: 160,
+} as const;
 
 /**
- * Variação máxima (para cima/baixo) da altura dos asteroides.
+ * Mistura de hash espacial versus jitter local usada para amostrar o fator dentro da faixa de altitude.
+ * `hashedWeight` garante consistência determinística a longas distâncias; `jitterWeight` quebra padrões visuais.
  */
-export const ASTEROID_HEIGHT_VARIATION = 12;
+export const ASTEROID_ALTITUDE_RANDOMIZATION = {
+  hashedWeight: 0.6,
+  jitterWeight: 0.4,
+} as const;
+
+/**
+ * Expoente aplicado ao fator de altitude para concentrar clusters nos extremos do intervalo.
+ * Valores < 1 empurram mais asteroides para altitudes extremas, valores > 1 favorecem alturas medianas.
+ */
+export const ASTEROID_ALTITUDE_BIAS_EXPONENT = 0.37;
 
 /**
  * Raio interno a partir do qual começam os asteroides.
