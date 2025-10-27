@@ -23,9 +23,11 @@ const PROXIMITY_RANGE_SQ = proximityRange * proximityRange;
 const DISENGAGE_RANGE_SQ = disengageRange * disengageRange;
 
 type TargetedBlock = {
-  position: number[];
+  position: [number, number, number];
   blockID: number;
 };
+
+type NearbyBlock = TargetedBlock & { distanceSq: number };
 
 export function initializeUseSystem({ noa, overlay, sector, terminals }: UseSystemDependencies): void {
   const terminalId = sector.starwatchBlocks.halTerminal.id;
@@ -48,7 +50,7 @@ export function initializeUseSystem({ noa, overlay, sector, terminals }: UseSyst
     return data?.position ?? null;
   };
 
-  const distanceSqToBlock = (playerPos: number[], blockPosition: number[]): number => {
+  const distanceSqToBlock = (playerPos: number[], blockPosition: [number, number, number]): number => {
     const dx = playerPos[0] - (blockPosition[0] + 0.5);
     const dy = playerPos[1] - (blockPosition[1] + 0.5);
     const dz = playerPos[2] - (blockPosition[2] + 0.5);
@@ -61,7 +63,11 @@ export function initializeUseSystem({ noa, overlay, sector, terminals }: UseSyst
       return null;
     }
     return {
-      position: targeted.position,
+      position: [
+        targeted.position[0],
+        targeted.position[1],
+        targeted.position[2],
+      ],
       blockID: targeted.blockID,
     };
   };
@@ -70,7 +76,7 @@ export function initializeUseSystem({ noa, overlay, sector, terminals }: UseSyst
     playerPos: number[],
     maxDistance: number,
     maxDistanceSq: number,
-  ): TargetedBlock | null => {
+  ): NearbyBlock | null => {
     let best: { position: [number, number, number]; blockID: number; distanceSq: number; priority: number } | null = null;
 
     const radius = Math.ceil(maxDistance);
@@ -118,6 +124,7 @@ export function initializeUseSystem({ noa, overlay, sector, terminals }: UseSyst
       ? {
           position: best.position,
           blockID: best.blockID,
+          distanceSq: best.distanceSq,
         }
       : null;
   };
@@ -275,6 +282,10 @@ export function initializeUseSystem({ noa, overlay, sector, terminals }: UseSyst
 
     const definition = sector.starwatchBlocks.byId.get(nearby.blockID);
     if (!definition) {
+      return;
+    }
+
+    if (nearby.distanceSq > DISENGAGE_RANGE_SQ) {
       return;
     }
 
