@@ -4,6 +4,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { ShaderMaterial } from '@babylonjs/core/Materials/shaderMaterial';
+import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import type { Effect } from '@babylonjs/core/Materials/effect';
 import type { Observer } from '@babylonjs/core/Misc/observable';
 
@@ -14,6 +15,8 @@ import {
   STARFIELD_COLOR_B,
   STARFIELD_DENSITY,
   STARFIELD_INTENSITY,
+  STARFIELD_NEBULA_CONTRAST,
+  STARFIELD_NEBULA_INTENSITY,
   STARFIELD_RADIUS_METERS,
   STARFIELD_STAR_PROBABILITY,
   STARFIELD_STAR_RADIUS_MAX,
@@ -24,8 +27,10 @@ import { ensureStarfieldShader } from './starfield-shader';
 import { initializeNearStarfield } from './near-starfield';
 
 const SKY_MESH_NAME = 'starwatch:sky-dome';
+const NEBULA_TEXTURE_URL = new URL('../../assets/sky/hazy_nebulae_1.png', import.meta.url).href;
 
 let skyMaterial: ShaderMaterial | undefined;
+let nebulaTexture: Texture | undefined;
 let timeAccumulator = 0;
 let beforeRenderObserver: Observer<Scene> | undefined;
 
@@ -46,6 +51,10 @@ export function initializeSky(noa: Engine): void {
     noa.rendering.addMeshToScene(mesh, false, [0, 0, 0]);
   }
 
+  const texture = ensureNebulaTexture(scene);
+  material.setTexture('uNebulaTexture', texture);
+  material.setFloat('uNebulaIntensity', STARFIELD_NEBULA_INTENSITY);
+  material.setFloat('uNebulaContrast', STARFIELD_NEBULA_CONTRAST);
   material.setFloat('uDensity', STARFIELD_DENSITY);
   material.setFloat('uIntensity', STARFIELD_INTENSITY);
   material.setFloat('uBaseSpeed', STARFIELD_TWINKLE_BASE_SPEED);
@@ -73,6 +82,7 @@ export function initializeSky(noa: Engine): void {
       density: STARFIELD_DENSITY,
       intensity: STARFIELD_INTENSITY,
       radius: STARFIELD_RADIUS_METERS,
+      nebula: NEBULA_TEXTURE_URL,
     });
     (window as any).starwatchSky = {
       mesh,
@@ -81,6 +91,7 @@ export function initializeSky(noa: Engine): void {
         density: STARFIELD_DENSITY,
         intensity: STARFIELD_INTENSITY,
         radius: STARFIELD_RADIUS_METERS,
+        nebulaTexture: NEBULA_TEXTURE_URL,
       },
     };
   }
@@ -142,11 +153,14 @@ function getOrCreateSkyMaterial(scene: Scene): ShaderMaterial {
         'uBaseSpeed',
         'uColorA',
         'uColorB',
+        'uNebulaIntensity',
+        'uNebulaContrast',
         'uStarProbability',
         'uStarRadiusMin',
         'uStarRadiusMax',
         'uBackgroundIntensity',
       ],
+      samplers: ['uNebulaTexture'],
       needAlphaBlending: false,
       needAlphaTesting: false,
     },
@@ -180,4 +194,18 @@ function attachMaterialUpdater(noa: Engine, scene: Scene, mesh: Mesh, material: 
     mesh.rotationQuaternion = null;
     mesh.rotation.set(0, 0, 0);
   });
+}
+
+function ensureNebulaTexture(scene: Scene): Texture {
+  if (nebulaTexture && nebulaTexture.getScene() === scene) {
+    return nebulaTexture;
+  }
+
+  nebulaTexture?.dispose();
+  nebulaTexture = new Texture(NEBULA_TEXTURE_URL, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  nebulaTexture.wrapU = Texture.WRAP_ADDRESSMODE;
+  nebulaTexture.wrapV = Texture.CLAMP_ADDRESSMODE;
+  nebulaTexture.gammaSpace = true;
+
+  return nebulaTexture;
 }

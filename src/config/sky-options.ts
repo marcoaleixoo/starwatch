@@ -12,7 +12,7 @@ export const STARFIELD_RADIUS_METERS = 8_000;
 /**
  * Controla a densidade de estrelas no shader. Valores mais altos = mais pontos brilhantes.
  */
-export const STARFIELD_DENSITY = 140;
+export const STARFIELD_DENSITY = 100;
 
 /**
  * Fator global aplicado ao brilho das estrelas.
@@ -40,12 +40,22 @@ export const STARFIELD_STAR_PROBABILITY = 0.12;
  * Raio mínimo/máximo (em unidades da célula) para as estrelas renderizadas no shader.
  */
 export const STARFIELD_STAR_RADIUS_MIN = 0.08;
-export const STARFIELD_STAR_RADIUS_MAX = 0.22;
+export const STARFIELD_STAR_RADIUS_MAX = 0.12;
 
 /**
  * Intensidade base aplicada ao glow de fundo antes das estrelas. Ajuda a evitar céu completamente preto.
  */
 export const STARFIELD_BACKGROUND_INTENSITY = 0.015;
+
+/**
+ * Intensidade máxima aplicada à textura de nebulosa ao misturar com o fundo procedural.
+ */
+export const STARFIELD_NEBULA_INTENSITY = 0.65;
+
+/**
+ * Exponente aplicado após a amostragem para controlar contraste (gamma-like).
+ */
+export const STARFIELD_NEBULA_CONTRAST = 1.4;
 
 /**
  * Quantidade de estrelas "próximas" (instâncias finas) que adicionam paralaxe visível.

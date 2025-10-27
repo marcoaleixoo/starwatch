@@ -36,6 +36,9 @@ export function ensureStarfieldShader(): void {
     uniform float uBaseSpeed;
     uniform vec3 uColorA;
     uniform vec3 uColorB;
+    uniform float uNebulaIntensity;
+    uniform float uNebulaContrast;
+    uniform sampler2D uNebulaTexture;
     uniform float uStarProbability;
     uniform float uStarRadiusMin;
     uniform float uStarRadiusMax;
@@ -65,27 +68,36 @@ export function ensureStarfieldShader(): void {
       float horizonMix = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
       vec3 background = mix(uColorA, uColorB, pow(horizonMix, 1.3)) * uBackgroundIntensity;
 
+      float twoPi = 6.2831853;
+      float v = clamp(dir.y, -1.0, 1.0);
+      vec2 nebulaUV = vec2(0.5 + atan(dir.z, dir.x) / twoPi, 0.5 - asin(v) / 3.1415927);
+      vec3 nebulaSample = texture(uNebulaTexture, nebulaUV).rgb;
+      float contrast = max(uNebulaContrast, 0.001);
+      vec3 nebula = pow(max(nebulaSample, vec3(0.0001)), vec3(1.0 / contrast)) * uNebulaIntensity;
+
+      vec3 baseColor = background + nebula;
+
       if (chance > uStarProbability) {
-        gl_FragColor = vec4(background, 1.0);
+        gl_FragColor = vec4(baseColor, 1.0);
         return;
       }
 
       vec3 local = fract(samplePos) - 0.5;
-    vec2 plane = projectToPlane(local, dir);
+      vec2 plane = projectToPlane(local, dir);
 
-    float radiusSeed = hash(cell + 11.0);
-    float radius = mix(uStarRadiusMin, uStarRadiusMax, radiusSeed);
+      float radiusSeed = hash(cell + 11.0);
+      float radius = mix(uStarRadiusMin, uStarRadiusMax, radiusSeed);
 
-    float dist = length(plane);
-    float gaussian = exp(-dist * dist / (radius * radius * 0.6));
+      float dist = length(plane);
+      float gaussian = exp(-dist * dist / (radius * radius * 0.6));
 
-    float flickerSeed = hash(cell + 17.0);
-    float flickerPhase = hash(cell + 29.0) * 6.2831853;
-    float flicker = 0.7 + 0.3 * sin(uTime * (uBaseSpeed + flickerSeed * 3.0) + flickerPhase);
+      float flickerSeed = hash(cell + 17.0);
+      float flickerPhase = hash(cell + 29.0) * twoPi;
+      float flicker = 0.7 + 0.3 * sin(uTime * (uBaseSpeed + flickerSeed * 3.0) + flickerPhase);
 
       vec3 starColor = mix(uColorA, uColorB, hash(cell + 5.0));
 
-    vec3 color = background + starColor * gaussian * flicker * uIntensity;
+      vec3 color = baseColor + starColor * gaussian * flicker * uIntensity;
       gl_FragColor = vec4(color, 1.0);
     }
   `;
