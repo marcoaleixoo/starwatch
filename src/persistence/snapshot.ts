@@ -14,7 +14,9 @@ import {
   type SnapshotContextMeta,
   type HotbarSnapshot,
   type ConstructionSnapshot,
+  type MicroblockSnapshotEntry,
 } from './types';
+import { getActiveMicroblockStore } from '../systems/building/microblock-store';
 
 interface SnapshotContext {
   noa: Engine;
@@ -64,11 +66,22 @@ function captureConstruction(ctx: SnapshotContext): ConstructionSnapshot {
     orientation: orientationFor(ctx.sector.starwatchBlocks.halTerminal.kind, terminal.position),
   }));
 
+  const microblocks: MicroblockSnapshotEntry[] = blockMetadataStore.listMicroblocks().map((entry) => ({
+    position: clonePosition(entry.position),
+    scaleId: entry.scaleId,
+    cells: entry.cells.map(({ index, state }) => ({
+      index,
+      kind: state.kind,
+      levels: state.levels.map((level) => ({ orientation: level.orientation })),
+    })),
+  }));
+
   return {
     decks,
     solarPanels,
     batteries,
     terminals,
+    microblocks,
   };
 }
 
@@ -109,6 +122,8 @@ function rehydrateHotbar(hotbar: HotbarApi, snapshot: HotbarSnapshot): void {
 }
 
 export function restoreSnapshot(ctx: SnapshotContext, snapshot: SectorSnapshot): void {
+  const microblockStore = getActiveMicroblockStore();
+  microblockStore?.clear();
   blockMetadataStore.clear();
 
   type PendingPlacement = {
@@ -265,6 +280,28 @@ export function restoreSnapshot(ctx: SnapshotContext, snapshot: SectorSnapshot):
     ensureBlockPlacement(ctx.sector.starwatchBlocks.halTerminal.id, terminal.position);
     ctx.energy.registerTerminal(terminal.position);
     ctx.terminals.registerBlock(ctx.sector.starwatchBlocks.halTerminal.kind, terminal.position);
+  }
+
+  const deckDefinition = ctx.sector.starwatchBlocks.deck;
+  const deckMicroHostId = ctx.sector.starwatchBlocks.deckMicroHost.id;
+
+  for (const entry of snapshot.construction.microblocks ?? []) {
+    const basePosition = clonePosition(entry.position);
+    ensureBlockPlacement(deckMicroHostId, basePosition);
+    ctx.energy.networks.addDeck(basePosition);
+    ctx.terminals.registerBlock(deckDefinition.kind, basePosition);
+
+    for (const cell of entry.cells) {
+      for (const level of cell.levels) {
+        const orientation = level.orientation ?? deckDefinition.defaultOrientation;
+        microblockStore?.add(basePosition, {
+          definition: deckDefinition,
+          scaleId: entry.scaleId,
+          cellIndex: cell.index,
+          orientation,
+        });
+      }
+    }
   }
 
   rehydrateHotbar(ctx.hotbar, snapshot.hotbar);

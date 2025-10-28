@@ -19,12 +19,14 @@ Quando o jogador pressiona `Q`, o `BuildState` avança a escala compatível e av
 
 ## Microblocos (v0)
 
-- As subdivisões são armazenadas no `blockMetadataStore` usando `setMicroblockCell`.
-- A renderização usa instâncias Babylon independentes no `MicroblockStore`. Não há colisão física ainda (a engine continua reportando o voxel como vazio), então o caso de uso atual é puramente visual/iterativo.
+- As subdivisões são armazenadas no `blockMetadataStore` usando `pushMicroblockLevel`.
+- A renderização usa instâncias Babylon independentes no `MicroblockStore`, reaproveitando o mesmo atlas do Deck Condutivo e aplicando brilho/emissivo para destacar os painéis. Ainda não integramos ao mesher do NOA.
 - Remoção rápida (`KeyX`) procura a subcélula usando o `resolvePlacementCenter` com o `scaleId` registrado. O hold (`Mouse1`) continua removendo apenas blocos "cheios".
 - Se o voxel já possuir um bloco 1×1 do mesmo tipo, selecionar uma escala micro converte o voxel para o bloco host `starwatch:deck-micro-host` e reaproveita o condutor existente.
 - Com o host ativo (visual translúcido), o jogador pode mirar tanto o topo quanto as laterais para selecionar subcélulas (o cálculo usa o ponto de impacto do raycast para decidir em qual quadrante posicionar) e as peças aparecem como painéis rasos azuis sobre o deck.
+- Cada subcélula mantém uma pilha (até 8 níveis). Inserções sempre colocam o painel no topo e removê-lo (`KeyX`) faz pop LIFO. A altura física é controlada por `MICROBLOCK_PANEL_THICKNESS` em `src/config/microblock-options.ts`.
 - Quando o último microbloco é removido, o host volta a ser um deck padrão (sem derrubar a rede elétrica).
+- O estado completo (pilhas, orientações) é persistido via snapshot (`PersistenceManager`), restaurando o host e cada painel individualmente.
 - A rede elétrica (`EnergyNetworkManager`) trata `starwatch:deck` e `starwatch:deck-micro-host` como o mesmo condutor, então a conectividade permanece estável durante as conversões.
 
 ### Pontos em aberto
@@ -56,5 +58,6 @@ Execute `VITE_DEBUG_BUILDING=1 pnpm dev` para habilitar logs `[building] placeme
 - **Host separado simplifica integração:** manter `starwatch:deck-micro-host` como bloco de gameplay evita mexer no NOA. Ele persiste a colisão e integra com a rede de energia, enquanto o painel azul é só visual.
 - **Logs direcionados ajudam:** o modo `VITE_DEBUG_BUILDING` mostrou que o microbloco estava sendo registrado (contador/motivo), então o bug era só visual. Sem esses logs teríamos continuado caçando problema na lógica.
 - **Iterar fora da engine é mais seguro:** confirmar comportamento primeiro na camada Starwatch evita refatorações na engine vendorizada. Se no futuro quisermos um mesher nativo de subvoxels, já temos requisitos claros (posicionamento por célula, altura custom, material emissivo, colisão opcional).
+- **Persistência incremental:** snapshots agora carregam pilhas completas (incluindo orientação e escala), mantendo o host e cada painel posicionados após o reload.
 
 Próximos passos imediatos para o "Deck Condutivo Micro" (nome provisório do painel azul): definir textura própria, colisão empilhável e persistência das microcélulas.

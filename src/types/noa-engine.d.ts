@@ -61,9 +61,19 @@ declare module 'noa-engine' {
     };
     playerEntity: number;
     entities: {
-      getPositionData(id: number): { width: number; height: number; position: [number, number, number] };
+      getPositionData(id: number): {
+        width: number;
+        height: number;
+        position: [number, number, number];
+        _localPosition: number[] | Float32Array;
+        _renderPosition: number[] | Float32Array;
+        _extents: number[] | Float32Array;
+      } | null;
       getMovement(id: number): { maxSpeed: number; moveForce: number };
+      getPhysics(id: number): { body: any } | null;
       addComponent(id: number, name: string, data: Record<string, unknown>): void;
+      add(position?: [number, number, number], width?: number, height?: number, mesh?: any, meshOffset?: any, doPhysics?: boolean, shadow?: boolean): number;
+      deleteEntity(id: number): void;
       names: Record<string, string>;
     };
     version: string;

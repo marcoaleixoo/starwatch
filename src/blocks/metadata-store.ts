@@ -17,9 +17,13 @@ function makeKey(coord: OrientationKey): string {
 
 interface MicroblockKey extends BlockCoordinate {}
 
+export interface MicroblockCellLevelState {
+  orientation: BlockOrientation;
+}
+
 export interface MicroblockCellState {
   kind: BlockKind;
-  orientation: BlockOrientation;
+  levels: MicroblockCellLevelState[];
 }
 
 export interface MicroblockEntry {
@@ -47,27 +51,42 @@ class BlockMetadataStore {
     this.orientations.delete(makeKey(coord));
   }
 
-  setMicroblockCell(coord: MicroblockKey, scaleId: GridScaleId, cellIndex: number, state: MicroblockCellState): void {
+  pushMicroblockLevel(
+    coord: MicroblockKey,
+    scaleId: GridScaleId,
+    cellIndex: number,
+    state: { kind: BlockKind; level: MicroblockCellLevelState },
+  ): number {
     const key = makeMicroblockKey(coord);
     const entry = this.microblocks.get(key);
     if (entry && entry.scaleId !== scaleId) {
       const nextEntry: MicroblockEntry = {
         scaleId,
-        cells: new Map([[cellIndex, state]]),
+        cells: new Map([[cellIndex, { kind: state.kind, levels: [state.level] }]]),
       };
       this.microblocks.set(key, nextEntry);
-      return;
+      return 0;
     }
     if (!entry) {
       const nextEntry: MicroblockEntry = {
         scaleId,
-        cells: new Map([[cellIndex, state]]),
+        cells: new Map([[cellIndex, { kind: state.kind, levels: [state.level] }]]),
       };
       this.microblocks.set(key, nextEntry);
-      return;
+      return 0;
     }
     entry.scaleId = scaleId;
-    entry.cells.set(cellIndex, state);
+    const cell = entry.cells.get(cellIndex);
+    if (!cell) {
+      entry.cells.set(cellIndex, {
+        kind: state.kind,
+        levels: [state.level],
+      });
+      return 0;
+    }
+    cell.kind = state.kind;
+    cell.levels.push(state.level);
+    return cell.levels.length - 1;
   }
 
   getMicroblockEntry(coord: MicroblockKey): MicroblockEntry | null {
@@ -78,20 +97,36 @@ class BlockMetadataStore {
     }
     return {
       scaleId: entry.scaleId,
-      cells: new Map(entry.cells),
+      cells: new Map(
+        Array.from(entry.cells.entries()).map(([index, value]) => [
+          index,
+          {
+            kind: value.kind,
+            levels: value.levels.map((level) => ({ ...level })),
+          },
+        ]),
+      ),
     };
   }
 
-  deleteMicroblockCell(coord: MicroblockKey, cellIndex: number): void {
+  popMicroblockLevel(coord: MicroblockKey, cellIndex: number): MicroblockCellLevelState | null {
     const key = makeMicroblockKey(coord);
     const entry = this.microblocks.get(key);
     if (!entry) {
-      return;
+      return null;
     }
-    entry.cells.delete(cellIndex);
+    const cell = entry.cells.get(cellIndex);
+    if (!cell || cell.levels.length === 0) {
+      return null;
+    }
+    const removed = cell.levels.pop() ?? null;
+    if (cell.levels.length === 0) {
+      entry.cells.delete(cellIndex);
+    }
     if (entry.cells.size === 0) {
       this.microblocks.delete(key);
     }
+    return removed;
   }
 
   deleteMicroblockEntry(coord: MicroblockKey): void {
@@ -138,7 +173,10 @@ class BlockMetadataStore {
         scaleId: entry.scaleId,
         cells: Array.from(entry.cells.entries()).map(([index, state]) => ({
           index,
-          state,
+          state: {
+            kind: state.kind,
+            levels: state.levels.map((level) => ({ ...level })),
+          },
         })),
       });
     }

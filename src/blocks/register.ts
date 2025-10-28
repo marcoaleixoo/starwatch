@@ -2,8 +2,11 @@ import type { Engine } from 'noa-engine';
 import type { SectorMaterials } from '../sector/materials';
 import type { BlockCatalog, BlockDefinition, BlockKind } from './types';
 import type { GridScaleId } from '../config/build-options';
+import { MICROBLOCK_PANEL_SCALE_PADDING, MICROBLOCK_PANEL_THICKNESS } from '../config/microblock-options';
 
 const DECK_SCALES: GridScaleId[] = ['grid:full', 'grid:half', 'grid:quarter'];
+const HALF_CELL_SIZE = (1 / 2) * MICROBLOCK_PANEL_SCALE_PADDING;
+const QUARTER_CELL_SIZE = (1 / 4) * MICROBLOCK_PANEL_SCALE_PADDING;
 
 function registerSimpleBlock(
   noa: Engine,
@@ -47,8 +50,8 @@ export function registerStarwatchBlocks(
         supportedScales: DECK_SCALES,
         shapes: {
           'grid:full': { size: [1, 1, 1] },
-          'grid:half': { size: [0.98, 0.2, 0.98], offset: [0, 0.6, 0] },
-          'grid:quarter': { size: [0.6, 0.2, 0.6], offset: [0, 0.6, 0] },
+          'grid:half': { size: [HALF_CELL_SIZE, MICROBLOCK_PANEL_THICKNESS, HALF_CELL_SIZE] },
+          'grid:quarter': { size: [QUARTER_CELL_SIZE, MICROBLOCK_PANEL_THICKNESS, QUARTER_CELL_SIZE] },
         },
       },
     },

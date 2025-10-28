@@ -15,6 +15,7 @@ let cachedDeckMaterial: StandardMaterial | undefined;
 export interface RegisteredMaterial {
   name: string;
   solarOpacity: number;
+  renderMaterial?: StandardMaterial;
 }
 
 export interface AsteroidMaterialDescriptor {
@@ -42,16 +43,19 @@ interface RegisterMaterialOptions {
 }
 
 function registerMaterial(noa: Engine, name: string, options: RegisterMaterialOptions): RegisteredMaterial {
-  noa.registry.registerMaterial(name, {
+  const registryOptions: Record<string, unknown> = {
     color: options.color,
     textureURL: options.textureURL,
     atlasIndex: options.atlasIndex,
     renderMaterial: options.renderMaterial,
-  });
+  };
+
+  noa.registry.registerMaterial(name, registryOptions);
 
   return {
     name,
     solarOpacity: options.solarOpacity,
+    renderMaterial: options.renderMaterial,
   };
 }
 

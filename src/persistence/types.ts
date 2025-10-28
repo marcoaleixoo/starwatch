@@ -1,7 +1,8 @@
-import type { BlockOrientation } from '../blocks/types';
+import type { BlockKind, BlockOrientation } from '../blocks/types';
+import type { GridScaleId } from '../config/build-options';
 import type { VoxelPosition } from '../systems/energy/energy-network-manager';
 
-export const SNAPSHOT_SCHEMA_VERSION = 1;
+export const SNAPSHOT_SCHEMA_VERSION = 2;
 
 export interface SnapshotPlayer {
   id: string;
@@ -29,11 +30,28 @@ export interface BatterySnapshotEntry {
   orientation?: BlockOrientation;
 }
 
+export interface MicroblockLevelSnapshot {
+  orientation?: BlockOrientation;
+}
+
+export interface MicroblockCellSnapshot {
+  index: number;
+  kind: BlockKind;
+  levels: MicroblockLevelSnapshot[];
+}
+
+export interface MicroblockSnapshotEntry {
+  position: VoxelPosition;
+  scaleId: GridScaleId;
+  cells: MicroblockCellSnapshot[];
+}
+
 export interface ConstructionSnapshot {
   decks: DeckSnapshotEntry[];
   solarPanels: OrientedBlockSnapshotEntry[];
   batteries: BatterySnapshotEntry[];
   terminals: OrientedBlockSnapshotEntry[];
+  microblocks: MicroblockSnapshotEntry[];
 }
 
 export interface HotbarSnapshot {

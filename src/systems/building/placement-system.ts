@@ -8,8 +8,9 @@ import type { EnergySystem } from '../energy';
 import type { TerminalSystem } from '../terminals';
 import { GhostRenderer } from './ghost-renderer';
 import { BuildState } from './build-state';
-import { BUILD_INPUT_BINDINGS, DEFAULT_GRID_SCALE_ID, getGridScaleOption, type GridScaleId } from '../../config/build-options';
-import { MicroblockStore } from './microblock-store';
+import { BUILD_INPUT_BINDINGS, DEFAULT_GRID_SCALE_ID, GRID_SCALE_OPTIONS, getGridScaleOption, type GridScaleId } from '../../config/build-options';
+import { MicroblockStore, MAX_MICRO_LEVELS_PER_CELL, setActiveMicroblockStore } from './microblock-store';
+import { MICROBLOCK_PANEL_SCALE_PADDING, MICROBLOCK_PANEL_THICKNESS } from '../../config/microblock-options';
 
 const ORIENTATIONS: BlockOrientation[] = ['north', 'east', 'south', 'west'];
 const REMOVE_HOLD_DURATION_MS = 1000;
@@ -87,7 +88,8 @@ interface PlacementPreview {
   target: PlacementTarget;
   base: [number, number, number];
   center: [number, number, number];
-  position: [number, number, number];
+  renderPosition: [number, number, number];
+  renderSize: [number, number, number];
   rotationY: number;
   available: boolean;
   cellIndex: number;
@@ -169,6 +171,19 @@ function resolveBaseCoordinate(
   if (targetedBlockId !== 0) {
     return [target.position[0], target.position[1], target.position[2]];
   }
+  const derivedBase: [number, number, number] = [
+    Math.floor(target.hitPosition[0]),
+    Math.floor(target.hitPosition[1] - 1),
+    Math.floor(target.hitPosition[2]),
+  ];
+  const microEntry = blockMetadataStore.getMicroblockEntry({
+    x: derivedBase[0],
+    y: derivedBase[1],
+    z: derivedBase[2],
+  });
+  if (microEntry) {
+    return derivedBase;
+  }
   return [target.adjacent[0], target.adjacent[1], target.adjacent[2]];
 }
 
@@ -249,6 +264,10 @@ function evaluatePlacement(
   }
   const rotationY = orientationToRadians(orientation);
   const position = applyOffset(centerInfo.center, shape.offset, rotationY);
+  const divisions = GRID_SCALE_OPTIONS[scaleId]?.divisions ?? 1;
+  const cellSize = 1 / divisions;
+  const renderPosition: [number, number, number] = [position[0], position[1], position[2]];
+  let renderSize: [number, number, number] = [...shape.size];
 
   let available = false;
   const existingBlockId = noa.world.getBlockID(base[0], base[1], base[2]);
@@ -259,12 +278,13 @@ function evaluatePlacement(
     z: base[2],
   });
   let availabilityReason = 'ok';
+  const existingCellLevels = microEntry?.cells.get(centerInfo.cellIndex)?.levels ?? [];
   if (scaleId === DEFAULT_GRID_SCALE_ID) {
     if (!canPlaceFullBlock(base)) {
       available = false;
       availabilityReason = 'blocked-solid';
     } else {
-      available = !microEntry || microEntry.cells.size === 0;
+      available = (!microEntry || microEntry.cells.size === 0) && existingCellLevels.length === 0;
       if (!available) {
         availabilityReason = 'micro-occupied';
       }
@@ -282,17 +302,26 @@ function evaluatePlacement(
         available = false;
         availabilityReason = 'host-incompatible';
       } else {
-        if (!microEntry) {
+        if (!microEntry || microEntry.cells.size === 0) {
           available = true;
           availabilityReason = 'empty';
         } else if (microEntry.scaleId !== scaleId) {
           available = microEntry.cells.size === 0;
           availabilityReason = available ? 'rescale-permitted' : 'rescale-occupied';
         } else {
-          available = !microEntry.cells.has(centerInfo.cellIndex);
+          available = existingCellLevels.length < MAX_MICRO_LEVELS_PER_CELL;
           availabilityReason = available ? 'slot-free' : 'slot-occupied';
         }
       }
+      const nextLevelIndex = Math.min(existingCellLevels.length, MAX_MICRO_LEVELS_PER_CELL);
+      renderSize = [
+        cellSize * MICROBLOCK_PANEL_SCALE_PADDING,
+        MICROBLOCK_PANEL_THICKNESS,
+        cellSize * MICROBLOCK_PANEL_SCALE_PADDING,
+      ];
+      renderPosition[0] = base[0] + (centerInfo.center[0] - base[0]);
+      renderPosition[2] = base[2] + (centerInfo.center[2] - base[2]);
+      renderPosition[1] = base[1] + 1 + nextLevelIndex * MICROBLOCK_PANEL_THICKNESS + MICROBLOCK_PANEL_THICKNESS / 2;
     }
   }
 
@@ -308,6 +337,7 @@ function evaluatePlacement(
     existingKind: existingDefinition?.kind ?? null,
     hasMicro: !!microEntry,
     microCellCount: microEntry?.cells.size ?? 0,
+    levelCount: existingCellLevels.length,
   });
 
   return {
@@ -318,7 +348,8 @@ function evaluatePlacement(
     target,
     base,
     center: centerInfo.center,
-    position,
+    renderPosition,
+    renderSize,
     rotationY,
     available,
     cellIndex: centerInfo.cellIndex,
@@ -329,7 +360,8 @@ function evaluatePlacement(
 export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy, terminals }: PlacementSystemDependencies): void {
   const ghostRenderer = new GhostRenderer(noa);
   const buildState = new BuildState();
-  const microblockStore = new MicroblockStore(noa);
+  const microblockStore = new MicroblockStore(noa, sector.materials.deck.renderMaterial ?? null);
+  setActiveMicroblockStore(microblockStore);
   const deckDefinition = sector.starwatchBlocks.deck;
   const deckMicroHostId = sector.starwatchBlocks.deckMicroHost.id;
   const deckBlockId = sector.starwatchBlocks.deck.id;
@@ -425,6 +457,17 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
     let base: [number, number, number] = [target.adjacent[0], target.adjacent[1], target.adjacent[2]];
     let entry = getMicroEntry(base);
     if (!entry) {
+      const derived: [number, number, number] = [
+        Math.floor(target.hitPosition[0]),
+        Math.floor(target.hitPosition[1] - 1),
+        Math.floor(target.hitPosition[2]),
+      ];
+      entry = getMicroEntry(derived);
+      if (entry) {
+        base = derived;
+      }
+    }
+    if (!entry) {
       base = [target.position[0], target.position[1], target.position[2]];
       entry = getMicroEntry(base);
     }
@@ -438,11 +481,16 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
       return false;
     }
     const cellState = entry.cells.get(centerInfo.cellIndex);
-    if (!cellState) {
+    const levels = cellState?.levels ?? [];
+    if (!cellState || levels.length === 0) {
       logPlacement('remove-micro-skip', { reason: 'cell-empty', base, cellIndex: centerInfo.cellIndex });
       return false;
     }
-    microblockStore.remove(base, centerInfo.cellIndex);
+    const removed = microblockStore.remove(base, centerInfo.cellIndex);
+    if (!removed) {
+      logPlacement('remove-micro-skip', { reason: 'store-reject', base, cellIndex: centerInfo.cellIndex });
+      return false;
+    }
     const updated = getMicroEntry(base);
     if (!updated || updated.cells.size === 0) {
       const currentId = noa.world.getBlockID(base[0], base[1], base[2]);
@@ -455,7 +503,8 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
     logPlacement('remove-micro', {
       base,
       cellIndex: centerInfo.cellIndex,
-      remaining: updated?.cells.size ?? 0,
+      remainingLevels: updated?.cells.get(centerInfo.cellIndex)?.levels.length ?? 0,
+      cellsRemaining: updated?.cells.size ?? 0,
       kind: cellState.kind,
     });
     return true;
@@ -584,9 +633,6 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
         scaleId: preview.scaleId,
         cellIndex: preview.cellIndex,
         orientation: preview.orientation,
-        size: preview.shape.size,
-        position: preview.position,
-        rotationY: preview.rotationY,
       });
       const afterEntry = getMicroEntry(preview.base);
       if (preview.definition.kind === 'starwatch:deck') {
@@ -717,8 +763,8 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
     ghostRenderer.render({
       definition,
       scaleId,
-      size: shape.size,
-      position: preview.position,
+      size: preview.renderSize,
+      position: preview.renderPosition,
       rotationY: preview.rotationY,
       valid: preview.available,
     });
