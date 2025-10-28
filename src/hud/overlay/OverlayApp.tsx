@@ -5,13 +5,16 @@ import type { HotbarController } from '../../player/hotbar-controller';
 import { HotbarHud } from '../components/hotbar-hud';
 import type { EnergySystem } from '../../systems/energy';
 import type { RemovalHoldTracker } from '../removal-hold-tracker';
+import type { BuildScaleTracker } from '../build-scale-tracker';
 import { Crosshair } from '../components/crosshair';
+import { BuildScaleIndicator } from '../components/build-scale-indicator';
 
 interface OverlayAppProps {
   controller: OverlayController;
   hotbarController: HotbarController;
   energy: EnergySystem;
   removalHold: RemovalHoldTracker;
+  buildScale: BuildScaleTracker;
 }
 
 function useOverlayState(controller: OverlayController): OverlayState {
@@ -21,7 +24,7 @@ function useOverlayState(controller: OverlayController): OverlayState {
   );
 }
 
-export function OverlayApp({ controller, hotbarController, energy, removalHold }: OverlayAppProps): JSX.Element {
+export function OverlayApp({ controller, hotbarController, energy, removalHold, buildScale }: OverlayAppProps): JSX.Element {
   const state = useOverlayState(controller);
   const focusRef = useRef<HTMLDivElement>(null);
 
@@ -43,8 +46,9 @@ export function OverlayApp({ controller, hotbarController, energy, removalHold }
       state,
       energy,
       removal: removalHold,
+      buildScale,
     }),
-    [controller, state, energy, removalHold],
+    [controller, state, energy, removalHold, buildScale],
   );
 
   return (
@@ -59,6 +63,7 @@ export function OverlayApp({ controller, hotbarController, energy, removalHold }
         <div className="overlay-hud-layer" data-visible="true">
           <Crosshair />
           <HotbarHud controller={hotbarController} />
+          <BuildScaleIndicator />
         </div>
       </div>
     </OverlayContext.Provider>

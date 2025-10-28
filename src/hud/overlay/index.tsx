@@ -5,10 +5,12 @@ import { OverlayApp } from './OverlayApp';
 import type { HotbarController } from '../../player/hotbar-controller';
 import type { EnergySystem } from '../../systems/energy';
 import { RemovalHoldTracker } from '../removal-hold-tracker';
+import { BuildScaleTracker } from '../build-scale-tracker';
 
 export interface OverlayApi {
   controller: OverlayController;
   removalHold: RemovalHoldTracker;
+  buildScale: BuildScaleTracker;
   destroy(): void;
 }
 
@@ -26,6 +28,7 @@ export function initializeOverlay(noa: Engine, deps: OverlayDependencies): Overl
   const controller = new OverlayController();
   const root: Root = createRoot(mountNode);
   const removalHold = new RemovalHoldTracker();
+  const buildScale = new BuildScaleTracker();
 
   controller.registerCaptureHandler((state) => {
     const { captureInput, pointerPassthrough } = state;
@@ -49,12 +52,14 @@ export function initializeOverlay(noa: Engine, deps: OverlayDependencies): Overl
       hotbarController={deps.hotbarController}
       energy={deps.energy}
       removalHold={removalHold}
+      buildScale={buildScale}
     />,
   );
 
   const api: OverlayApi = {
     controller,
     removalHold,
+    buildScale,
     destroy() {
       controller.reset();
       root.unmount();

@@ -221,6 +221,35 @@ canvas {
   color: rgba(226, 240, 255, 0.95);
 }
 
+.build-scale-indicator {
+  position: absolute;
+  right: 36px;
+  bottom: 128px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: rgba(12, 18, 32, 0.72);
+  border: 1px solid rgba(102, 140, 255, 0.45);
+  color: #e6ecff;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 120ms ease-out, transform 120ms ease-out;
+}
+
+.build-scale-indicator[data-visible='true'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.build-scale-indicator__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .lookat-badge .value.is-positive {
   color: #7ef0c6;
 }

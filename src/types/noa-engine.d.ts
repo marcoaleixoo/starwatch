@@ -6,6 +6,16 @@ declare module 'noa-engine' {
     setPaused(paused: boolean): void;
     render(dt: number): void;
     tick(dt: number): void;
+    pick(
+      pos?: [number, number, number] | null,
+      dir?: [number, number, number] | null,
+      dist?: number | null,
+      blockTestFunction?: ((id: number) => boolean) | null,
+    ): {
+      position: number[];
+      normal: number[];
+      _localPosition: number[];
+    } | null;
     targetedBlock: {
       position: number[];
       normal: number[];

@@ -26,6 +26,7 @@ export interface AsteroidMaterialDescriptor {
 export interface SectorMaterials {
   dirt: RegisteredMaterial;
   deck: RegisteredMaterial;
+  deckMicroHost: RegisteredMaterial;
   solarPanel: RegisteredMaterial;
   battery: RegisteredMaterial;
   terminal: RegisteredMaterial;
@@ -109,9 +110,17 @@ export function registerSectorMaterials(noa: Engine): SectorMaterials {
     solarOpacity: 1,
   });
 
+  const deckRenderMaterial = ensureDeckRenderMaterial(noa);
+
   const deck = registerMaterial(noa, 'deck-metal', {
     textureURL: DECK_ALBEDO_URL,
-    renderMaterial: ensureDeckRenderMaterial(noa),
+    renderMaterial: deckRenderMaterial,
+    solarOpacity: 1,
+  });
+
+  const deckMicroHost = registerMaterial(noa, 'deck-micro-host', {
+    textureURL: DECK_ALBEDO_URL,
+    renderMaterial: deckRenderMaterial,
     solarOpacity: 1,
   });
 
@@ -146,6 +155,7 @@ export function registerSectorMaterials(noa: Engine): SectorMaterials {
   return {
     dirt,
     deck,
+    deckMicroHost,
     solarPanel,
     battery,
     terminal,

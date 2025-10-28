@@ -43,6 +43,7 @@ interface DisplayEntry {
 
 const BLOCK_KIND_TO_DISPLAY: Record<BlockKind, TerminalDisplayKind | null> = {
   'starwatch:deck': null,
+  'starwatch:deck-micro-host': null,
   'starwatch:solar-panel': 'solar-panel',
   'starwatch:battery': 'battery',
   'starwatch:hal-terminal': 'hal-terminal',

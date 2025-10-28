@@ -6,5 +6,6 @@ Todos os parâmetros ajustáveis do jogo vivem em arquivos `*-options.ts` neste 
 - `render-options.ts`: draw distance, tamanho de chunk e distâncias de add/remove.
 - `sector-options.ts`: plataforma inicial e cinturão de nuvens/asteroides do setor atual.
 - `player-options.ts`: limites de zoom e parâmetros de movimentação do jogador.
+- `build-options.ts`: escalas de grid e bindings de input do sistema de construção.
 
 Novas features devem introduzir seu próprio arquivo `foo-options.ts` e importar as constantes correspondentes a partir dele.

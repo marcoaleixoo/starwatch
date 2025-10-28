@@ -114,6 +114,7 @@ export function initializeEnergySystem(noa: Engine, sector: SectorResources): En
   const panelSamples = PANEL_SAMPLE_OFFSETS.slice(0, sampleCount);
   const solarOpacityByBlockId = buildSolarOpacityLookup(sector);
   const deckBlockId = sector.starwatchBlocks.deck.id;
+  const deckMicroHostId = sector.starwatchBlocks.deckMicroHost.id;
 
   let tickAccumulator = 0;
 
@@ -126,7 +127,8 @@ export function initializeEnergySystem(noa: Engine, sector: SectorResources): En
     for (let i = 0; i < size; i += 1) {
       for (let j = 0; j < size; j += 1) {
         for (let k = 0; k < size; k += 1) {
-          if (voxels.get(i, j, k) !== deckBlockId) continue;
+          const blockId = voxels.get(i, j, k);
+          if (blockId !== deckBlockId && blockId !== deckMicroHostId) continue;
           const worldX = chunk.x + i;
           const worldY = chunk.y + j;
           const worldZ = chunk.z + k;
@@ -151,7 +153,7 @@ export function initializeEnergySystem(noa: Engine, sector: SectorResources): En
       const ny = position[1] + offset[1];
       const nz = position[2] + offset[2];
       const blockId = noa.world.getBlockID(nx, ny, nz);
-      if (blockId === deckBlockId) {
+      if (blockId === deckBlockId || blockId === deckMicroHostId) {
         const networkId = networks.getNetworkIdForPosition([nx, ny, nz]);
         if (networkId !== null) {
           return networkId;
