@@ -6,10 +6,10 @@
  */
 
 /**
- * Posição física fixa do centro da estrela. Ancoramos o astro ~2 000 km acima do hub
- * com leve inclinação no eixo Z para gerar sombras diagonais.
+ * Posição física fixa do centro da estrela. Mantemos o astro deslocado ~1 700 km do hub,
+ * com altitude equivalente ao sol das 16h para gerar sombras alongadas.
  */
-export const STAR_PHYSICAL_POSITION_METERS: [number, number, number] = [0, 2_000_000, 200_000];
+export const STAR_PHYSICAL_POSITION_METERS: [number, number, number] = [1_500_000, 700_000, 200_000];
 
 /**
  * Raio físico do astro. Usado quando carregamos o mesh real durante aproximações.
