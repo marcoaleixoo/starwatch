@@ -5,10 +5,10 @@ import { Color3 } from '@babylonjs/core/Maths/math.color';
 import terrainAtlasUrl from './assets/terrain_atlas.png';
 import { ASTEROID_VARIANTS } from '../config/sector-options';
 
-const DECK_ALBEDO_URL = new URL('../../assets/metalgrid4-bl/metalgrid4_basecolor.png', import.meta.url).href;
-const DECK_NORMAL_URL = new URL('../../assets/metalgrid4-bl/metalgrid4_normal-ogl.png', import.meta.url).href;
-const DECK_AO_URL = new URL('../../assets/metalgrid4-bl/metalgrid4_AO.png', import.meta.url).href;
-const DECK_METALLIC_URL = new URL('../../assets/metalgrid4-bl/metalgrid4_metallic.png', import.meta.url).href;
+const DECK_ALBEDO_URL = new URL('../../assets/metalgrid3-bl/metalgrid3_basecolor.png', import.meta.url).href;
+const DECK_NORMAL_URL = new URL('../../assets/metalgrid3-bl/metalgrid3_normal-ogl.png', import.meta.url).href;
+const DECK_AO_URL = new URL('../../assets/metalgrid3-bl/metalgrid3_AO.png', import.meta.url).href;
+const DECK_METALLIC_URL = new URL('../../assets/metalgrid3-bl/metalgrid3_metallic.png', import.meta.url).href;
 
 let cachedDeckMaterial: StandardMaterial | undefined;
 
