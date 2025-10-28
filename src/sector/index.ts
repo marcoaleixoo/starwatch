@@ -5,6 +5,8 @@ import { installChunkGenerator } from './chunk-generator';
 import { CHUNK_ADD_DISTANCE, CHUNK_REMOVE_DISTANCE } from '../config/render-options';
 import { registerStarwatchBlocks } from '../blocks/register';
 import type { BlockCatalog } from '../blocks/types';
+import { initializeStar } from './lighting/initialize-star';
+import { initializeSky } from './lighting/initialize-sky';
 
 export interface SectorResources {
   materials: SectorMaterials;
@@ -17,6 +19,8 @@ export function initializeSector(noa: Engine): SectorResources {
   const terrainBlocks = registerSectorBlocks(noa, materials);
   const starwatchBlocks = registerStarwatchBlocks(noa, materials, terrainBlocks.nextBlockId);
   installChunkGenerator(noa, terrainBlocks, starwatchBlocks);
+  initializeSky(noa);
+  initializeStar(noa);
 
   noa.world.setAddRemoveDistance(CHUNK_ADD_DISTANCE, CHUNK_REMOVE_DISTANCE);
   console.log('[starwatch] distâncias de chunk configuradas');

@@ -8,8 +8,9 @@ import {
   ASTEROID_CLUSTER_SIZE,
   ASTEROID_CLUSTER_SPREAD,
   ASTEROID_DENSITY_THRESHOLD,
-  ASTEROID_HEIGHT_VARIATION,
-  ASTEROID_LAYER_ALTITUDE,
+  ASTEROID_ALTITUDE_RANGE,
+  ASTEROID_ALTITUDE_RANDOMIZATION,
+  ASTEROID_ALTITUDE_BIAS_EXPONENT,
   ASTEROID_MAJOR_RADIUS,
   ASTEROID_MINOR_RADIUS,
   ASTEROID_RING_INNER_RADIUS,
@@ -20,8 +21,10 @@ import type { ChunkGenerationContext } from './types';
 import type { AsteroidBlockDescriptor } from '../blocks';
 
 export function generateAsteroidField(ctx: ChunkGenerationContext): void {
-  if (ctx.bounds.maxY < ASTEROID_LAYER_ALTITUDE - ASTEROID_HEIGHT_VARIATION) return;
-  if (ctx.bounds.minY > ASTEROID_LAYER_ALTITUDE + ASTEROID_HEIGHT_VARIATION) return;
+  const altitudeMin = ASTEROID_ALTITUDE_RANGE.min - ASTEROID_VERTICAL_RADIUS;
+  const altitudeMax = ASTEROID_ALTITUDE_RANGE.max + ASTEROID_VERTICAL_RADIUS;
+  if (ctx.bounds.maxY < altitudeMin) return;
+  if (ctx.bounds.minY > altitudeMax) return;
 
   const variants = ctx.blocks.asteroidVariants;
   if (variants.length === 0) return;
@@ -67,7 +70,17 @@ export function generateAsteroidField(ctx: ChunkGenerationContext): void {
 
         const clusterCenterX = Math.round(baseCenterX + Math.cos(clusterAngle) * clusterDistance);
         const clusterCenterZ = Math.round(baseCenterZ + Math.sin(clusterAngle) * clusterDistance);
-        const clusterCenterY = ASTEROID_LAYER_ALTITUDE + Math.round((baseRng() - 0.5) * 2 * ASTEROID_HEIGHT_VARIATION);
+        const heightSeed = hash3D(clusterCenterX, clusterCenterZ, clusterIndex);
+        const heightRng = createSeededRng(heightSeed);
+        const randomizationWeightSum = ASTEROID_ALTITUDE_RANDOMIZATION.hashedWeight + ASTEROID_ALTITUDE_RANDOMIZATION.jitterWeight;
+        const hashedFactor = ASTEROID_ALTITUDE_RANDOMIZATION.hashedWeight > 0 ? heightRng() : 0;
+        const jitterFactor = ASTEROID_ALTITUDE_RANDOMIZATION.jitterWeight > 0 ? baseRng() : 0;
+        const rawFactor = randomizationWeightSum > 0
+          ? (hashedFactor * ASTEROID_ALTITUDE_RANDOMIZATION.hashedWeight + jitterFactor * ASTEROID_ALTITUDE_RANDOMIZATION.jitterWeight)
+            / randomizationWeightSum
+          : heightRng();
+        const altitudeFactor = applyAltitudeBias(clamp01(rawFactor));
+        const clusterCenterY = Math.round(lerp(ASTEROID_ALTITUDE_RANGE.min, ASTEROID_ALTITUDE_RANGE.max, altitudeFactor));
 
         const clusterRadius = Math.hypot(clusterCenterX, clusterCenterZ);
         if (clusterRadius < ASTEROID_RING_INNER_RADIUS || clusterRadius > ASTEROID_RING_OUTER_RADIUS) {
@@ -153,4 +166,21 @@ function sampleAsteroidDensity(x: number, z: number): number {
   const b = sampleAsteroidNoise(z + 51.37, 120) * 0.25;
   const c = sampleAsteroidNoise(x - z - 97.53, 90) * 0.15;
   return a + b + c;
+}
+
+function clamp01(value: number): number {
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
+function lerp(min: number, max: number, t: number): number {
+  return min + (max - min) * t;
+}
+
+function applyAltitudeBias(factor: number): number {
+  const centered = factor * 2 - 1;
+  const sign = Math.sign(centered) || 1;
+  const magnitude = Math.pow(Math.abs(centered), ASTEROID_ALTITUDE_BIAS_EXPONENT);
+  return clamp01(0.5 + 0.5 * sign * magnitude);
 }

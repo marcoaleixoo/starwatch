@@ -8,6 +8,10 @@ Este diretório concentra o setup do NOA para o setor atual.
   que `blocks/register.ts` possa atribuir IDs contínuos aos blocos de gameplay.
 - `index.ts` é o ponto de entrada: registra materiais, blocos, instala o worldgen e devolve o
   catálogo (`SectorResources`) usado pelo restante da aplicação.
+- `lighting/initialize-sky.ts` configura o céu escuro + starfield conforme constantes em
+  `src/config/sky-options.ts`.
+- `lighting/initialize-star.ts` mantém a estrela central (DirectionalLight + mesh emissivo)
+  alinhada com as constantes em `src/config/star-options.ts`.
 
 ## Como testar
 

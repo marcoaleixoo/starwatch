@@ -18,6 +18,7 @@ declare module 'noa-engine' {
       registerBlock(id: number, options: Record<string, unknown>): number;
       getBlockID?(name: string): number | undefined;
     };
+    globalToLocal(global: [number, number, number], precise: [number, number, number] | null, local: [number, number, number]): [number, number, number];
     world: {
       on(event: string, handler: (...args: any[]) => void): void;
       setChunkData(requestID: number, voxelData: any, voxelIDs?: any, fillID?: number): void;
@@ -28,6 +29,7 @@ declare module 'noa-engine' {
     };
     camera: {
       zoomDistance: number;
+      getPosition(): [number, number, number];
     };
     container: {
       setPointerLock(lock?: boolean): void;
@@ -39,6 +41,7 @@ declare module 'noa-engine' {
       getScene(): any;
       light: any;
       camera: any;
+      addMeshToScene(mesh: any, isStatic?: boolean, pos?: [number, number, number], containingChunk?: any): void;
     };
     inputs: {
       bind(action: string, bindings: string | string[]): void;
