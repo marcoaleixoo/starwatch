@@ -11,6 +11,7 @@ import { BuildState } from './build-state';
 import { BUILD_INPUT_BINDINGS, DEFAULT_GRID_SCALE_ID, GRID_SCALE_OPTIONS, getGridScaleOption, type GridScaleId } from '../../config/build-options';
 import { MicroblockStore, MAX_MICRO_LEVELS_PER_CELL, setActiveMicroblockStore } from './microblock-store';
 import { MICROBLOCK_PANEL_SCALE_PADDING, MICROBLOCK_PANEL_THICKNESS } from '../../config/microblock-options';
+import { MicroblockHighlight } from './microblock-highlight';
 
 const ORIENTATIONS: BlockOrientation[] = ['north', 'east', 'south', 'west'];
 const REMOVE_HOLD_DURATION_MS = 1000;
@@ -361,6 +362,7 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
   const ghostRenderer = new GhostRenderer(noa);
   const buildState = new BuildState();
   const microblockStore = new MicroblockStore(noa, sector.materials.deck.renderMaterial ?? null);
+  const microHighlight = new MicroblockHighlight(noa);
   setActiveMicroblockStore(microblockStore);
   const deckDefinition = sector.starwatchBlocks.deck;
   const deckMicroHostId = sector.starwatchBlocks.deckMicroHost.id;
@@ -452,6 +454,78 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
 
   const getMicroEntry = (coord: [number, number, number]) =>
     blockMetadataStore.getMicroblockEntry({ x: coord[0], y: coord[1], z: coord[2] });
+
+  const resolveMicroHoverHighlight = (target: PlacementTarget) => {
+    const candidates: Array<[number, number, number]> = [
+      [target.adjacent[0], target.adjacent[1], target.adjacent[2]],
+      [
+        Math.floor(target.hitPosition[0]),
+        Math.floor(target.hitPosition[1] - 1),
+        Math.floor(target.hitPosition[2]),
+      ],
+      [target.position[0], target.position[1], target.position[2]],
+    ];
+
+    const visited = new Set<string>();
+    let closest: {
+      position: [number, number, number];
+      size: [number, number, number];
+      distanceSq: number;
+    } | null = null;
+
+    for (const base of candidates) {
+      const key = `${base[0]}:${base[1]}:${base[2]}`;
+      if (visited.has(key)) {
+        continue;
+      }
+      visited.add(key);
+      const entry = getMicroEntry(base);
+      if (!entry) {
+        continue;
+      }
+      const centerInfo = resolvePlacementCenter(target, entry.scaleId, base);
+      if (!centerInfo) {
+        continue;
+      }
+      const cellState = entry.cells.get(centerInfo.cellIndex);
+      if (!cellState || cellState.levels.length === 0) {
+        continue;
+      }
+      const divisions = GRID_SCALE_OPTIONS[entry.scaleId]?.divisions ?? 1;
+      const cellSize = 1 / Math.max(divisions, 1);
+      const topIndex = cellState.levels.length - 1;
+      const centerX = base[0] + (centerInfo.center[0] - base[0]);
+      const centerZ = base[2] + (centerInfo.center[2] - base[2]);
+      const centerY = base[1] + 1 + topIndex * MICROBLOCK_PANEL_THICKNESS + MICROBLOCK_PANEL_THICKNESS / 2;
+      const descriptor = {
+        position: [centerX, centerY, centerZ] as [number, number, number],
+        size: [
+          cellSize * MICROBLOCK_PANEL_SCALE_PADDING,
+          MICROBLOCK_PANEL_THICKNESS,
+          cellSize * MICROBLOCK_PANEL_SCALE_PADDING,
+        ] as [number, number, number],
+      };
+      const dx = target.hitPosition[0] - descriptor.position[0];
+      const dy = target.hitPosition[1] - descriptor.position[1];
+      const dz = target.hitPosition[2] - descriptor.position[2];
+      const distanceSq = dx * dx + dy * dy + dz * dz;
+      if (!closest || distanceSq < closest.distanceSq) {
+        closest = {
+          ...descriptor,
+          distanceSq,
+        };
+      }
+    }
+
+    if (!closest) {
+      return null;
+    }
+
+    return {
+      position: closest.position,
+      size: closest.size,
+    };
+  };
 
   const tryRemoveMicroblock = (target: PlacementTarget): boolean => {
     let base: [number, number, number] = [target.adjacent[0], target.adjacent[1], target.adjacent[2]];
@@ -720,17 +794,26 @@ export function initializePlacementSystem({ noa, overlay, hotbar, sector, energy
   noa.on('beforeRender', () => {
     if (overlay.controller.getState().captureInput) {
       hideGhost();
-      return;
-    }
-
-    const definition = getActiveBlockDefinition(hotbar, sector.starwatchBlocks);
-    if (!definition) {
-      hideGhost();
+      microHighlight.hide();
       return;
     }
 
     const target = getPlacementTarget(noa);
     if (!target) {
+      hideGhost();
+      microHighlight.hide();
+      return;
+    }
+
+    const highlightDescriptor = resolveMicroHoverHighlight(target);
+    if (highlightDescriptor) {
+      microHighlight.show(highlightDescriptor);
+    } else {
+      microHighlight.hide();
+    }
+
+    const definition = getActiveBlockDefinition(hotbar, sector.starwatchBlocks);
+    if (!definition) {
       hideGhost();
       return;
     }
